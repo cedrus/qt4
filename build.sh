@@ -32,9 +32,9 @@ MAKE_FLAGS="-j`sysctl hw.ncpu | awk '// {print $2*1.5}'`"
 
 make $MAKE_FLAGS
 
-#make install
+make install
 
-#defaults write ~/.MacOSX/environment QTDIR "$DEST_DIR"
+defaults write ~/.MacOSX/environment QTDIR "$DEST_DIR"
 
 echo "---------------------------------------------------"
 echo "If you do not already have a QTDIR environment variable, you will need to"
