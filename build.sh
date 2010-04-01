@@ -26,15 +26,15 @@ then
 	exit $?;
 fi
 
-./configure -opensource -cocoa -no-framework -arch "ppc x86 x86_64" -sdk /Developer/SDKs/MacOSX10.5.sdk -debug-and-release -prefix $DEST_DIR -qt-sql-odbc -qt-sql-sqlite -buildkey Cedrus-Qt-4.6.2 -no-sql-mysql
+CC="gcc-4.0" CXX="g++-4.0" ./configure -opensource -framework -universal -sdk /Developer/SDKs/MacOSX10.4u.sdk -debug-and-release -prefix $DEST_DIR -qt-sql-odbc -qt-sql-sqlite -buildkey Cedrus-Qt-4.6.2 -no-sql-mysql -no-qt3support
 
 MAKE_FLAGS="-j`sysctl hw.ncpu | awk '// {print $2*1.5}'`"
 
 make $MAKE_FLAGS
 
-make install
+#make install
 
-defaults write ~/.MacOSX/environment QTDIR "$DEST_DIR"
+#defaults write ~/.MacOSX/environment QTDIR "$DEST_DIR"
 
 echo "---------------------------------------------------"
 echo "If you do not already have a QTDIR environment variable, you will need to"
