@@ -209,3 +209,16 @@ qtc-debugging-helper
 src/corelib/lib
 src/network/lib
 src/xml/lib/
+
+bin/macdeployqt
+src/3rdparty/webkit/JavaScriptCore/libJavaScriptCore.la
+src/3rdparty/webkit/JavaScriptCore/libJavaScriptCore_debug.la
+src/3rdparty/webkit/JavaScriptCore/pkgconfig/
+src/GPATH
+src/GRTAGS
+src/GSYMS
+src/GTAGS
+tools/macdeployqt/macchangeqt/macchangeqt
+tools/qtestlib/chart/chart
+macdeployqt
+
