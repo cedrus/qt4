@@ -12,6 +12,6 @@ Set APPVER=5.01
 
 configure.exe -buildkey Cedrus-Qt-4.6.3 -debug-and-release -opensource -platform win32-msvc2005 -webkit -phonon -phonon-backend -mmx -3dnow -sse -sse2 -vcproj 
 
-nmake //NOLOGOO
+nmake /NOLOGOO
 
 %EXTERNAL_SDKS%\setx\setx.exe QTDIR %~dp0 -m
