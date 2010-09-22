@@ -154,6 +154,10 @@ char *qstrcpy(char *dst, const char *src)
     This function assumes that \a dst is at least \a len characters
     long.
 
+    \note When compiling with Visual C++ compiler version 14.00
+    (Visual C++ 2005) or later, internally the function strncpy_s
+    will be used.
+
     \sa qstrcpy()
 */
 
@@ -1061,6 +1065,11 @@ QByteArray &QByteArray::operator=(const char *str)
     \internal
 */
 
+/*! \fn bool QByteArray::isSharedWith(const QByteArray &other) const
+
+    \internal
+*/
+
 /*! \fn char QByteArray::at(int i) const
 
     Returns the character at index position \a i in the byte array.
@@ -1796,10 +1805,28 @@ QByteArray &QByteArray::replace(int pos, int len, const QByteArray &after)
 /*! \fn QByteArray &QByteArray::replace(int pos, int len, const char *after)
 
     \overload
+
+    Replaces \a len bytes from index position \a pos with the zero terminated
+    string \a after.
+
+    Notice: this can change the length of the byte array.
 */
 QByteArray &QByteArray::replace(int pos, int len, const char *after)
 {
-    int alen = qstrlen(after);
+    return replace(pos,len,after,qstrlen(after));
+}
+
+/*! \fn QByteArray &QByteArray::replace(int pos, int len, const char *after, int alen)
+
+    \overload
+
+    Replaces \a len bytes from index position \a pos with \a alen bytes
+    from the string \a after. \a after is allowed to have '\0' characters.
+
+    \since 4.7
+*/
+QByteArray &QByteArray::replace(int pos, int len, const char *after, int alen)
+{
     if (len == alen && (pos + len <= d->size)) {
         detach();
         memcpy(d->data + pos, after, len*sizeof(char));
@@ -2659,7 +2686,7 @@ void QByteArray::clear()
     Writes byte array \a ba to the stream \a out and returns a reference
     to the stream.
 
-    \sa {Format of the QDataStream operators}
+    \sa {Serializing Qt Data Types}
 */
 
 QDataStream &operator<<(QDataStream &out, const QByteArray &ba)
@@ -2676,7 +2703,7 @@ QDataStream &operator<<(QDataStream &out, const QByteArray &ba)
     Reads a byte array into \a ba from the stream \a in and returns a
     reference to the stream.
 
-    \sa {Format of the QDataStream operators}
+    \sa {Serializing Qt Data Types}
 */
 
 QDataStream &operator>>(QDataStream &in, QByteArray &ba)
@@ -3792,7 +3819,7 @@ QByteArray QByteArray::number(double n, char f, int prec)
     accepting a \c{const char *} expected to be '\\0'-terminated will
     fail.
 
-    \sa data(), constData()
+    \sa setRawData(), data(), constData()
 */
 
 QByteArray QByteArray::fromRawData(const char *data, int size)
@@ -3809,6 +3836,37 @@ QByteArray QByteArray::fromRawData(const char *data, int size)
     x->alloc = x->size = size;
     *x->array = '\0';
     return QByteArray(x, 0, 0);
+}
+
+/*!
+    \since 4.7
+
+    Resets the QByteArray to use the first \a size bytes of the
+    \a data array. The bytes are \e not copied. The QByteArray will
+    contain the \a data pointer. The caller guarantees that \a data
+    will not be deleted or modified as long as this QByteArray and any
+    copies of it exist that have not been modified.
+
+    This function can be used instead of fromRawData() to re-use
+    existings QByteArray objects to save memory re-allocations.
+
+    \sa fromRawData(), data(), constData()
+*/
+QByteArray &QByteArray::setRawData(const char *data, uint size)
+{
+    if (d->ref != 1 || d->alloc) {
+        *this = fromRawData(data, size);
+    } else {
+        if (data) {
+            d->data = const_cast<char *>(data);
+        } else {
+            d->data = d->array;
+            size = 0;
+        }
+        d->alloc = d->size = size;
+        *d->array = '\0';
+    }
+    return *this;
 }
 
 /*!
@@ -4203,12 +4261,6 @@ QByteArray QByteArray::toPercentEncoding(const QByteArray &exclude, const QByteA
 
     \note QByteArray uses implicit sharing so if you modify a copy, only the
     copy is changed.
-*/
-
-/*!
-    \fn QByteArray& QByteArray::setRawData(const char *a, uint n)
-
-    Use fromRawData() instead.
 */
 
 /*!

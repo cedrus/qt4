@@ -58,6 +58,8 @@
 
 QT_BEGIN_NAMESPACE
 
+class QImageReader;
+
 class Q_GUI_EXPORT QPixmapData
 {
 public:
@@ -73,7 +75,7 @@ public:
     };
 #endif
     enum ClassId { RasterClass, X11Class, MacClass, DirectFBClass,
-                   OpenGLClass, OpenVGClass, CustomClass = 1024 };
+                   OpenGLClass, OpenVGClass, RuntimeClass, CustomClass = 1024 };
 
     QPixmapData(PixelType pixelType, int classId);
     virtual ~QPixmapData();
@@ -83,6 +85,8 @@ public:
     virtual void resize(int width, int height) = 0;
     virtual void fromImage(const QImage &image,
                            Qt::ImageConversionFlags flags) = 0;
+    virtual void fromImageReader(QImageReader *imageReader,
+                                 Qt::ImageConversionFlags flags);
 
     virtual bool fromFile(const QString &filename, const char *format,
                           Qt::ImageConversionFlags flags);
@@ -102,6 +106,7 @@ public:
     virtual void setAlphaChannel(const QPixmap &alphaChannel);
     virtual QPixmap alphaChannel() const;
     virtual QImage toImage() const = 0;
+    virtual QImage toImage(const QRect &rect) const;
     virtual QPaintEngine* paintEngine() const = 0;
 
     inline int serialNumber() const { return ser_no; }
@@ -133,7 +138,10 @@ public:
 
     static QPixmapData *create(int w, int h, PixelType type);
 
+    virtual QPixmapData *runtimeData() const { return 0; }
+
 protected:
+
     void setSerialNumber(int serNo);
     int w;
     int h;

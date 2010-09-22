@@ -41,6 +41,7 @@
 
 #include "msvc_objectmodel.h"
 #include "msvc_vcproj.h"
+#include "msvc_vcxproj.h"
 #include <qstringlist.h>
 #include <qfileinfo.h>
 
@@ -672,6 +673,12 @@ bool VCCLCompilerTool::parseOption(const char* option)
             RuntimeLibrary = rtMultiThreaded;
             if(third == 'd')
                 RuntimeLibrary = rtMultiThreadedDebug;
+            break;
+        } else if (second == 'P') {
+            if (config->CompilerVersion >= NET2005)
+                AdditionalOptions += option;
+            else
+                warn_msg(WarnLogic, "/MP option is not supported in Visual C++ < 2005, ignoring.");
             break;
         }
         found = false; break;

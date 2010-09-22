@@ -70,6 +70,10 @@
 #include "qmessagebox.h"
 #include <QtGui/qgraphicsproxywidget.h>
 
+#ifdef QT_GRAPHICSSYSTEM_RUNTIME
+#include "private/qgraphicssystem_runtime_p.h"
+#endif
+
 #include "qinputcontext.h"
 #include "qkeymapper_p.h"
 
@@ -77,7 +81,7 @@
 #include <private/qt_x11_p.h>
 #endif
 
-#if defined(Q_WS_X11) || defined(Q_WS_S60)
+#if defined(Q_WS_X11) || defined(Q_OS_SYMBIAN)
 #include "qinputcontextfactory.h"
 #endif
 
@@ -122,15 +126,19 @@ extern bool qt_wince_is_pocket_pc();  //qguifunctions_wince.cpp
 static void initResources()
 {
 #if defined(Q_WS_WINCE)
+    Q_INIT_RESOURCE_EXTERN(qstyle_wince)
     Q_INIT_RESOURCE(qstyle_wince);
 #elif defined(Q_OS_SYMBIAN)
+    Q_INIT_RESOURCE_EXTERN(qstyle_s60)
     Q_INIT_RESOURCE(qstyle_s60);
 #else
+    Q_INIT_RESOURCE_EXTERN(qstyle)
     Q_INIT_RESOURCE(qstyle);
 #endif
-
+    Q_INIT_RESOURCE_EXTERN(qmessagebox)
     Q_INIT_RESOURCE(qmessagebox);
 #if !defined(QT_NO_PRINTDIALOG)
+    Q_INIT_RESOURCE_EXTERN(qprintdialog)
     Q_INIT_RESOURCE(qprintdialog);
 #endif
 
@@ -138,7 +146,7 @@ static void initResources()
 
 QT_BEGIN_NAMESPACE
 
-Q_DECL_IMPORT extern void qt_call_post_routines();
+Q_CORE_EXPORT void qt_call_post_routines();
 
 int QApplicationPrivate::app_compile_version = 0x040000; //we don't know exactly, but it's at least 4.0.0
 
@@ -179,8 +187,19 @@ QApplicationPrivate::QApplicationPrivate(int &argc, char **argv, QApplication::T
     directPainters = 0;
 #endif
 
+#ifndef QT_NO_GESTURES
     gestureManager = 0;
     gestureWidget = 0;
+#endif // QT_NO_GESTURES
+
+#if defined(Q_WS_X11) || defined(Q_WS_WIN)
+    move_cursor = 0;
+    copy_cursor = 0;
+    link_cursor = 0;
+#endif
+#if defined(Q_WS_WIN)
+    ignore_cursor = 0;
+#endif
 
     if (!self)
         self = this;
@@ -429,6 +448,7 @@ QPalette *QApplicationPrivate::set_pal = 0;        // default palette set by pro
 
 QGraphicsSystem *QApplicationPrivate::graphics_system = 0; // default graphics system
 QString QApplicationPrivate::graphics_system_name;         // graphics system id - for delayed initialization
+bool QApplicationPrivate::runtime_graphics_system = false;
 
 Q_GLOBAL_STATIC(QMutex, applicationFontMutex)
 QFont *QApplicationPrivate::app_font = 0;        // default application font
@@ -454,7 +474,7 @@ int qt_antialiasing_threshold = -1;
 static int drag_time = 500;
 #ifdef Q_OS_SYMBIAN
 // The screens are a bit too small to for your thumb when using only 4 pixels drag distance.
-static int drag_distance = 8;
+static int drag_distance = 12;
 #else
 static int drag_distance = 4;
 #endif
@@ -485,9 +505,7 @@ inline bool QApplicationPrivate::isAlien(QWidget *widget)
 {
     if (!widget)
         return false;
-#if defined(Q_WS_MAC) // Fake alien behavior on the Mac :)
-    return !widget->isWindow() && widget->window()->testAttribute(Qt::WA_DontShowOnScreen);
-#elif defined(Q_WS_QWS)
+#if defined(Q_WS_QWS)
     return !widget->isWindow()
 # ifdef Q_BACKINGSTORE_SUBSURFACES
         && !(widget->d_func()->maybeTopData() && widget->d_func()->maybeTopData()->windowSurface)
@@ -655,7 +673,8 @@ void QApplicationPrivate::process_cmdline()
         \o  -geometry \e geometry, sets the client geometry of the first window
             that is shown.
         \o  -fn or \c -font \e font, defines the application font. The font
-            should be specified using an X logical font description.
+            should be specified using an X logical font description. Note that
+            this option is ignored when Qt is built with fontconfig support enabled.
         \o  -bg or \c -background \e color, sets the default background color
             and an application palette (light and dark shades are calculated).
         \o  -fg or \c -foreground \e color, sets the default foreground color.
@@ -763,6 +782,9 @@ void QApplicationPrivate::construct(
 
     qt_is_gui_used = (qt_appType != QApplication::Tty);
     process_cmdline();
+    // the environment variable has the lowest precedence of runtime graphicssystem switches
+    if (graphics_system_name.isEmpty())
+        graphics_system_name = QString::fromLocal8Bit(qgetenv("QT_GRAPHICSSYSTEM"));
     // Must be called before initialize()
     qt_init(this, qt_appType
 #ifdef Q_WS_X11
@@ -775,6 +797,10 @@ void QApplicationPrivate::construct(
 #ifdef QT_EVAL
     extern void qt_gui_eval_init(uint);
     qt_gui_eval_init(application_type);
+#endif
+
+#if defined(Q_OS_SYMBIAN) && !defined(QT_NO_SYSTEMLOCALE)
+    symbianInit();
 #endif
 
 #ifndef QT_NO_LIBRARY
@@ -1032,6 +1058,15 @@ QApplication::~QApplication()
 #ifndef QT_NO_CLIPBOARD
     delete qt_clipboard;
     qt_clipboard = 0;
+#endif
+
+#if defined(Q_WS_X11) || defined(Q_WS_WIN)
+    delete d->move_cursor; d->move_cursor = 0;
+    delete d->copy_cursor; d->copy_cursor = 0;
+    delete d->link_cursor; d->link_cursor = 0;
+#endif
+#if defined(Q_WS_WIN)
+    delete d->ignore_cursor; d->ignore_cursor = 0;
 #endif
 
     delete QWidgetPrivate::mapper;
@@ -1530,10 +1565,18 @@ QStyle* QApplication::setStyle(const QString& style)
     on-screen widgets and QPixmaps. The available systems are \c{"native"},
     \c{"raster"} and \c{"opengl"}.
 
-    This function call overrides both the application commandline
-    \c{-graphicssystem} switch and the configure \c{-graphicssystem} switch.
+    There are several ways to set the graphics backend, in order of decreasing
+    precedence:
+    \list
+        \o the application commandline \c{-graphicssystem} switch
+        \o QApplication::setGraphicsSystem()
+        \o the QT_GRAPHICSSYSTEM environment variable
+        \o the Qt configure \c{-graphicssystem} switch
+    \endlist
+    If the highest precedence switch sets an invalid name, the error will be
+    ignored and the default backend will be used.
 
-    \warning This function must be called before the QApplication constructor
+    \warning This function is only effective before the QApplication constructor
     is called.
 
     \note The \c{"opengl"} option is currently experimental.
@@ -1541,7 +1584,14 @@ QStyle* QApplication::setStyle(const QString& style)
 
 void QApplication::setGraphicsSystem(const QString &system)
 {
-    QApplicationPrivate::graphics_system_name = system;
+#ifdef QT_GRAPHICSSYSTEM_RUNTIME
+    if (QApplicationPrivate::graphics_system_name == QLatin1String("runtime")) {
+        QRuntimeGraphicsSystem *r =
+                static_cast<QRuntimeGraphicsSystem *>(QApplicationPrivate::graphics_system);
+        r->setGraphicsSystem(system);
+    } else
+#endif
+        QApplicationPrivate::graphics_system_name = system;
 }
 
 /*!
@@ -2194,15 +2244,17 @@ void QApplication::closeAllWindows()
 {
     bool did_close = true;
     QWidget *w;
-    while((w = activeModalWidget()) && did_close) {
-        if(!w->isVisible())
+    while ((w = activeModalWidget()) && did_close) {
+        if (!w->isVisible() || w->data->is_closing)
             break;
         did_close = w->close();
     }
     QWidgetList list = QApplication::topLevelWidgets();
     for (int i = 0; did_close && i < list.size(); ++i) {
         w = list.at(i);
-        if (w->isVisible() && w->windowType() != Qt::Desktop) {
+        if (w->isVisible()
+            && w->windowType() != Qt::Desktop
+            && !w->data->is_closing) {
             did_close = w->close();
             list = QApplication::topLevelWidgets();
             i = -1;
@@ -2291,6 +2343,22 @@ static bool qt_detectRTLLanguage()
                          " languages or to 'RTL' in right-to-left languages (such as Hebrew"
                          " and Arabic) to get proper widget layout.") == QLatin1String("RTL"));
 }
+#if defined(Q_WS_MAC)
+static const char *application_menu_strings[] = {
+    QT_TRANSLATE_NOOP("MAC_APPLICATION_MENU","Services"),
+    QT_TRANSLATE_NOOP("MAC_APPLICATION_MENU","Hide %1"),
+    QT_TRANSLATE_NOOP("MAC_APPLICATION_MENU","Hide Others"),
+    QT_TRANSLATE_NOOP("MAC_APPLICATION_MENU","Show All"),
+    QT_TRANSLATE_NOOP("MAC_APPLICATION_MENU","Preferences..."),
+    QT_TRANSLATE_NOOP("MAC_APPLICATION_MENU","Quit %1"),
+    QT_TRANSLATE_NOOP("MAC_APPLICATION_MENU","About %1")
+    };
+QString qt_mac_applicationmenu_string(int type)
+{
+    return qApp->translate("MAC_APPLICATION_MENU",
+                           application_menu_strings[type]);
+}
+#endif
 #endif
 
 /*!\reimp
@@ -2319,12 +2387,28 @@ bool QApplication::event(QEvent *e)
 #ifndef QT_NO_TRANSLATION
         setLayoutDirection(qt_detectRTLLanguage()?Qt::RightToLeft:Qt::LeftToRight);
 #endif
+#if defined(QT_MAC_USE_COCOA)
+        qt_mac_post_retranslateAppMenu();
+#endif
         QWidgetList list = topLevelWidgets();
         for (int i = 0; i < list.size(); ++i) {
             QWidget *w = list.at(i);
             if (!(w->windowType() == Qt::Desktop))
                 postEvent(w, new QEvent(QEvent::LanguageChange));
         }
+#ifndef Q_OS_WIN
+    } else if (e->type() == QEvent::LocaleChange) {
+        // on Windows the event propagation is taken care by the
+        // WM_SETTINGCHANGE event handler.
+        QWidgetList list = topLevelWidgets();
+        for (int i = 0; i < list.size(); ++i) {
+            QWidget *w = list.at(i);
+            if (!(w->windowType() == Qt::Desktop)) {
+                if (!w->testAttribute(Qt::WA_SetLocale))
+                    w->d_func()->setLocale_helper(QLocale(), true);
+            }
+        }
+#endif
     } else if (e->type() == QEvent::Timer) {
         QTimerEvent *te = static_cast<QTimerEvent*>(e);
         Q_ASSERT(te != 0);
@@ -2452,6 +2536,13 @@ void QApplication::setActiveWindow(QWidget* act)
         sendSpontaneousEvent(w, &windowActivate);
         sendSpontaneousEvent(w, &activationChange);
     }
+
+#ifdef QT_MAC_USE_COCOA
+    // In case the user clicked on a child window, we need to
+    // reestablish the stacking order of the window so
+    // it pops in front of other child windows in cocoa:
+    qt_cocoaStackChildWindowOnTopOfOtherChildren(window);
+#endif
 
     for(int i = 0; i < toBeDeactivated.size(); ++i) {
         QWidget *w = toBeDeactivated.at(i);
@@ -2687,7 +2778,7 @@ void QApplicationPrivate::dispatchEnterLeave(QWidget* enter, QWidget* leave) {
             qt_win_set_cursor(cursorWidget, true);
 #elif defined(Q_WS_X11)
             qt_x11_enforce_cursor(cursorWidget, true);
-#elif defined(Q_WS_S60)
+#elif defined(Q_OS_SYMBIAN)
             qt_symbian_set_cursor(cursorWidget, true);
 #endif
         }
@@ -2993,7 +3084,7 @@ bool QApplicationPrivate::sendMouseEvent(QWidget *receiver, QMouseEvent *event,
     return result;
 }
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11) || defined(Q_WS_QWS)
+#if defined(Q_WS_WIN) || defined(Q_WS_X11) || defined(Q_WS_QWS) || defined(Q_WS_MAC)
 /*
     This function should only be called when the widget changes visibility, i.e.
     when the \a widget is shown, hidden or deleted. This function does nothing
@@ -3053,7 +3144,7 @@ void QApplicationPrivate::sendSyntheticEnterLeave(QWidget *widget)
     sendMouseEvent(widgetUnderCursor, &e, widgetUnderCursor, tlw, &qt_button_down, qt_last_mouse_receiver);
 #endif // QT_NO_CURSOR
 }
-#endif // Q_WS_WIN || Q_WS_X11
+#endif // Q_WS_WIN || Q_WS_X11 || Q_WS_MAC
 
 /*!
     Returns the desktop widget (also called the root window).
@@ -3460,7 +3551,7 @@ int QApplication::startDragDistance()
 
 void QApplication::setLayoutDirection(Qt::LayoutDirection direction)
 {
-    if (layout_direction == direction)
+    if (layout_direction == direction || direction == Qt::LayoutDirectionAuto)
         return;
 
     layout_direction = direction;
@@ -3636,6 +3727,7 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
 #endif // !QT_NO_WHEELEVENT || !QT_NO_TABLETEVENT
     }
 
+#ifndef QT_NO_GESTURES
     // walk through parents and check for gestures
     if (d->gestureManager) {
         switch (e->type()) {
@@ -3680,7 +3772,7 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
             }
         }
     }
-
+#endif // QT_NO_GESTURES
 
     // User input and window activation makes tooltips sleep
     switch (e->type()) {
@@ -4185,6 +4277,7 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
         res = d->notify_helper(receiver, e);
         break;
 
+#ifndef QT_NO_GESTURES
     case QEvent::NativeGesture:
     {
         // only propagate the first gesture event (after the GID_BEGIN)
@@ -4263,6 +4356,7 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
         }
         break;
     }
+#endif // QT_NO_GESTURES
     default:
         res = d->notify_helper(receiver, e);
         break;
@@ -5212,18 +5306,21 @@ bool QApplication::keypadNavigationEnabled()
     This function replaces the QInputContext instance used by the application
     with \a inputContext.
 
+    Qt takes ownership of the given \a inputContext.
+
     \sa inputContext()
 */
 void QApplication::setInputContext(QInputContext *inputContext)
 {
-    Q_D(QApplication);
-    Q_UNUSED(d);// only static members being used.
+    if (inputContext == QApplicationPrivate::inputContext)
+        return;
     if (!inputContext) {
         qWarning("QApplication::setInputContext: called with 0 input context");
         return;
     }
-    delete d->inputContext;
-    d->inputContext = inputContext;
+    delete QApplicationPrivate::inputContext;
+    QApplicationPrivate::inputContext = inputContext;
+    QApplicationPrivate::inputContext->setParent(this);
 }
 
 /*!
@@ -5248,10 +5345,20 @@ QInputContext *QApplication::inputContext() const
             qic = QInputContextFactory::create(QLatin1String("xim"), that);
         that->d_func()->inputContext = qic;
     }
-#elif defined(Q_WS_S60)
+#elif defined(Q_OS_SYMBIAN)
     if (!d->inputContext) {
         QApplication *that = const_cast<QApplication *>(this);
-        that->d_func()->inputContext = QInputContextFactory::create(QString::fromLatin1("coefep"), that);
+        const QStringList keys = QInputContextFactory::keys();
+        // Try hbim and coefep first, then try others.
+        if (keys.contains(QLatin1String("hbim"))) {
+            that->d_func()->inputContext = QInputContextFactory::create(QLatin1String("hbim"), that);
+        } else if (keys.contains(QLatin1String("coefep"))) {
+            that->d_func()->inputContext = QInputContextFactory::create(QLatin1String("coefep"), that);
+        } else {
+            for (int c = 0; c < keys.size() && !d->inputContext; ++c) {
+                that->d_func()->inputContext = QInputContextFactory::create(keys[c], that);
+            }
+        }
     }
 #endif
     return d->inputContext;
@@ -5683,12 +5790,240 @@ Q_GUI_EXPORT void qt_translateRawTouchEvent(QWidget *window,
     QApplicationPrivate::translateRawTouchEvent(window, deviceType, touchPoints);
 }
 
+#ifndef QT_NO_GESTURES
 QGestureManager* QGestureManager::instance()
 {
-    QApplicationPrivate *qAppPriv = QApplicationPrivate::instance();
-    if (!qAppPriv->gestureManager)
-        qAppPriv->gestureManager = new QGestureManager(qApp);
-    return qAppPriv->gestureManager;
+    if (QApplicationPrivate *qAppPriv = QApplicationPrivate::instance()) {
+        if (!qAppPriv->gestureManager)
+            qAppPriv->gestureManager = new QGestureManager(qApp);
+        return qAppPriv->gestureManager;
+    }
+    return 0;
+}
+#endif // QT_NO_GESTURES
+
+// These pixmaps approximate the images in the Windows User Interface Guidelines.
+
+// XPM
+
+static const char * const move_xpm[] = {
+"11 20 3 1",
+".        c None",
+#if defined(Q_WS_WIN)
+"a        c #000000",
+"X        c #FFFFFF", // Windows cursor is traditionally white
+#else
+"a        c #FFFFFF",
+"X        c #000000", // X11 cursor is traditionally black
+#endif
+"aa.........",
+"aXa........",
+"aXXa.......",
+"aXXXa......",
+"aXXXXa.....",
+"aXXXXXa....",
+"aXXXXXXa...",
+"aXXXXXXXa..",
+"aXXXXXXXXa.",
+"aXXXXXXXXXa",
+"aXXXXXXaaaa",
+"aXXXaXXa...",
+"aXXaaXXa...",
+"aXa..aXXa..",
+"aa...aXXa..",
+"a.....aXXa.",
+"......aXXa.",
+".......aXXa",
+".......aXXa",
+"........aa."};
+
+#ifdef Q_WS_WIN
+/* XPM */
+static const char * const ignore_xpm[] = {
+"24 30 3 1",
+".        c None",
+"a        c #000000",
+"X        c #FFFFFF",
+"aa......................",
+"aXa.....................",
+"aXXa....................",
+"aXXXa...................",
+"aXXXXa..................",
+"aXXXXXa.................",
+"aXXXXXXa................",
+"aXXXXXXXa...............",
+"aXXXXXXXXa..............",
+"aXXXXXXXXXa.............",
+"aXXXXXXaaaa.............",
+"aXXXaXXa................",
+"aXXaaXXa................",
+"aXa..aXXa...............",
+"aa...aXXa...............",
+"a.....aXXa..............",
+"......aXXa.....XXXX.....",
+".......aXXa..XXaaaaXX...",
+".......aXXa.XaaaaaaaaX..",
+"........aa.XaaaXXXXaaaX.",
+"...........XaaaaX..XaaX.",
+"..........XaaXaaaX..XaaX",
+"..........XaaXXaaaX.XaaX",
+"..........XaaX.XaaaXXaaX",
+"..........XaaX..XaaaXaaX",
+"...........XaaX..XaaaaX.",
+"...........XaaaXXXXaaaX.",
+"............XaaaaaaaaX..",
+".............XXaaaaXX...",
+"...............XXXX....."};
+#endif
+
+/* XPM */
+static const char * const copy_xpm[] = {
+"24 30 3 1",
+".        c None",
+"a        c #000000",
+"X        c #FFFFFF",
+#if defined(Q_WS_WIN) // Windows cursor is traditionally white
+"aa......................",
+"aXa.....................",
+"aXXa....................",
+"aXXXa...................",
+"aXXXXa..................",
+"aXXXXXa.................",
+"aXXXXXXa................",
+"aXXXXXXXa...............",
+"aXXXXXXXXa..............",
+"aXXXXXXXXXa.............",
+"aXXXXXXaaaa.............",
+"aXXXaXXa................",
+"aXXaaXXa................",
+"aXa..aXXa...............",
+"aa...aXXa...............",
+"a.....aXXa..............",
+"......aXXa..............",
+".......aXXa.............",
+".......aXXa.............",
+"........aa...aaaaaaaaaaa",
+#else
+"XX......................",
+"XaX.....................",
+"XaaX....................",
+"XaaaX...................",
+"XaaaaX..................",
+"XaaaaaX.................",
+"XaaaaaaX................",
+"XaaaaaaaX...............",
+"XaaaaaaaaX..............",
+"XaaaaaaaaaX.............",
+"XaaaaaaXXXX.............",
+"XaaaXaaX................",
+"XaaXXaaX................",
+"XaX..XaaX...............",
+"XX...XaaX...............",
+"X.....XaaX..............",
+"......XaaX..............",
+".......XaaX.............",
+".......XaaX.............",
+"........XX...aaaaaaaaaaa",
+#endif
+".............aXXXXXXXXXa",
+".............aXXXXXXXXXa",
+".............aXXXXaXXXXa",
+".............aXXXXaXXXXa",
+".............aXXaaaaaXXa",
+".............aXXXXaXXXXa",
+".............aXXXXaXXXXa",
+".............aXXXXXXXXXa",
+".............aXXXXXXXXXa",
+".............aaaaaaaaaaa"};
+
+/* XPM */
+static const char * const link_xpm[] = {
+"24 30 3 1",
+".        c None",
+"a        c #000000",
+"X        c #FFFFFF",
+#if defined(Q_WS_WIN) // Windows cursor is traditionally white
+"aa......................",
+"aXa.....................",
+"aXXa....................",
+"aXXXa...................",
+"aXXXXa..................",
+"aXXXXXa.................",
+"aXXXXXXa................",
+"aXXXXXXXa...............",
+"aXXXXXXXXa..............",
+"aXXXXXXXXXa.............",
+"aXXXXXXaaaa.............",
+"aXXXaXXa................",
+"aXXaaXXa................",
+"aXa..aXXa...............",
+"aa...aXXa...............",
+"a.....aXXa..............",
+"......aXXa..............",
+".......aXXa.............",
+".......aXXa.............",
+"........aa...aaaaaaaaaaa",
+#else
+"XX......................",
+"XaX.....................",
+"XaaX....................",
+"XaaaX...................",
+"XaaaaX..................",
+"XaaaaaX.................",
+"XaaaaaaX................",
+"XaaaaaaaX...............",
+"XaaaaaaaaX..............",
+"XaaaaaaaaaX.............",
+"XaaaaaaXXXX.............",
+"XaaaXaaX................",
+"XaaXXaaX................",
+"XaX..XaaX...............",
+"XX...XaaX...............",
+"X.....XaaX..............",
+"......XaaX..............",
+".......XaaX.............",
+".......XaaX.............",
+"........XX...aaaaaaaaaaa",
+#endif
+".............aXXXXXXXXXa",
+".............aXXXaaaaXXa",
+".............aXXXXaaaXXa",
+".............aXXXaaaaXXa",
+".............aXXaaaXaXXa",
+".............aXXaaXXXXXa",
+".............aXXaXXXXXXa",
+".............aXXXaXXXXXa",
+".............aXXXXXXXXXa",
+".............aaaaaaaaaaa"};
+
+QPixmap QApplicationPrivate::getPixmapCursor(Qt::CursorShape cshape)
+{
+#if defined(Q_WS_X11) || defined(Q_WS_WIN)
+    if (!move_cursor) {
+        move_cursor = new QPixmap((const char **)move_xpm);
+        copy_cursor = new QPixmap((const char **)copy_xpm);
+        link_cursor = new QPixmap((const char **)link_xpm);
+#ifdef Q_WS_WIN
+        ignore_cursor = new QPixmap((const char **)ignore_xpm);
+#endif
+    }
+
+    switch (cshape) {
+    case Qt::DragMoveCursor:
+        return *move_cursor;
+    case Qt::DragCopyCursor:
+        return *copy_cursor;
+    case Qt::DragLinkCursor:
+        return *link_cursor;
+#ifdef Q_WS_WIN
+    case Qt::ForbiddenCursor:
+        return *ignore_cursor;
+#endif
+    default:
+        break;
+    }
+#endif
+    return QPixmap();
 }
 
 QT_END_NAMESPACE

@@ -26,8 +26,8 @@
 #ifndef CanvasRenderingContext2D_h
 #define CanvasRenderingContext2D_h
 
+#include "AffineTransform.h"
 #include "CanvasRenderingContext.h"
-#include "TransformationMatrix.h"
 #include "FloatSize.h"
 #include "Font.h"
 #include "GraphicsTypes.h"
@@ -178,6 +178,7 @@ namespace WebCore {
         PassRefPtr<CanvasPattern> createPattern(HTMLImageElement*, const String& repetitionType, ExceptionCode&);
         PassRefPtr<CanvasPattern> createPattern(HTMLCanvasElement*, const String& repetitionType, ExceptionCode&);
         
+        PassRefPtr<ImageData> createImageData(PassRefPtr<ImageData> imageData, ExceptionCode&) const;
         PassRefPtr<ImageData> createImageData(float width, float height, ExceptionCode&) const;
         PassRefPtr<ImageData> getImageData(float sx, float sy, float sw, float sh, ExceptionCode&) const;
         void putImageData(ImageData*, float dx, float dy, ExceptionCode&);
@@ -218,7 +219,7 @@ namespace WebCore {
             String m_shadowColor;
             float m_globalAlpha;
             CompositeOperator m_globalComposite;
-            TransformationMatrix m_transform;
+            AffineTransform m_transform;
             bool m_invertibleCTM;
             
             // Text state.

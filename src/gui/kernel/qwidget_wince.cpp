@@ -46,7 +46,7 @@
 QT_BEGIN_NAMESPACE
 
 const QString qt_reg_winclass(QWidget *w);                // defined in qapplication_win.cpp
-extern "C" LRESULT CALLBACK QtWndProc(HWND, UINT, WPARAM, LPARAM);
+extern "C" LRESULT QT_WIN_CALLBACK QtWndProc(HWND, UINT, WPARAM, LPARAM);
 
 //#define TABLET_DEBUG
 #define PACKETDATA  (PK_X | PK_Y | PK_BUTTONS | PK_NORMAL_PRESSURE | PK_TANGENT_PRESSURE \
@@ -63,6 +63,7 @@ typedef BOOL        (API *PtrWTGet)(HCTX, LPLOGCONTEXT);
 typedef int     (API *PtrWTQueueSizeGet)(HCTX);
 typedef BOOL    (API *PtrWTQueueSizeSet)(HCTX, int);
 
+#ifndef QT_NO_TABLETEVENT
 static void qt_tablet_init_wce();
 static void qt_tablet_cleanup_wce();
 
@@ -135,6 +136,7 @@ static void qt_tablet_cleanup_wce() {
     delete qt_tablet_widget;
     qt_tablet_widget = 0;
 }
+#endif // QT_NO_TABLETEVENT
 
 
 // The internal qWinRequestConfig, defined in qapplication_win.cpp, stores move,
@@ -358,8 +360,10 @@ void QWidgetPrivate::create_sys(WId window, bool initializeWindow, bool destroyO
         DestroyWindow(destroyw);
     }
 
+#ifndef QT_NO_TABLETEVENT
     if (q != qt_tablet_widget && QWidgetPrivate::mapper)
         qt_tablet_init_wce();
+#endif // QT_NO_TABLETEVENT
 
     if (q->testAttribute(Qt::WA_DropSiteRegistered))
         registerDropSite(true);
@@ -494,6 +498,7 @@ void QWidget::setWindowState(Qt::WindowStates newstate)
                 int style = GetWindowLong(internalWinId(), GWL_STYLE) | WS_BORDER | WS_POPUP | WS_CAPTION;
                 SetWindowLong(internalWinId(), GWL_STYLE, style);
                 SetWindowLong(internalWinId(), GWL_EXSTYLE, GetWindowLong (internalWinId(), GWL_EXSTYLE) & ~ WS_EX_NODRAG);
+                qt_wince_unmaximize(this);
             }
             if (isVisible() && newstate & Qt::WindowMaximized)
                 qt_wince_maximize(this);
@@ -586,7 +591,7 @@ void QWidgetPrivate::setWindowOpacity_sys(qreal level) {
 }
 
 // The procedure does nothing, but is required for mousegrabbing to work
-LRESULT CALLBACK qJournalRecordProc(int nCode, WPARAM wParam, LPARAM lParam) {
+LRESULT QT_WIN_CALLBACK qJournalRecordProc(int nCode, WPARAM wParam, LPARAM lParam) {
     Q_UNUSED(nCode);
     Q_UNUSED(wParam);
     Q_UNUSED(lParam);

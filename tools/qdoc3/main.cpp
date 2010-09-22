@@ -44,7 +44,6 @@
 */
 
 #include <qglobal.h>
-#include <QtCore>
 #include <stdlib.h>
 #include "apigenerator.h"
 #include "codemarker.h"
@@ -69,8 +68,15 @@
 #include "qscodeparser.h"
 #include "sgmlgenerator.h"
 #include "webxmlgenerator.h"
+#include "ditaxmlgenerator.h"
 #include "tokenizer.h"
 #include "tree.h"
+#include <qdebug.h>
+
+#include "qtranslator.h"
+#ifndef QT_BOOTSTRAPPED
+#  include "qcoreapplication.h"
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -99,6 +105,7 @@ static bool showInternal = false;
 static bool obsoleteLinks = false;
 static QStringList defines;
 static QHash<QString, Tree *> trees;
+static QString appArg; // application
 
 /*!
   Find the Tree for language \a lang and return a pointer to it.
@@ -151,7 +158,9 @@ static void printVersion()
  */
 static void processQdocconfFile(const QString &fileName)
 {
+#ifndef QT_NO_TRANSLATION
     QList<QTranslator *> translators;
+#endif
 
     /*
       The Config instance represents the configuration data for qdoc.
@@ -184,6 +193,24 @@ static void processQdocconfFile(const QString &fileName)
     config.load(fileName);
 
     /*
+      Set the application to which qdoc will create the output.
+      The two applications are:
+
+      creator: additional formatting for viewing in
+      the Creator application.
+
+      online: full-featured online version with search and
+      links to Qt topics
+    */
+    if (appArg.isEmpty()) {
+        qDebug() << "Warning: Application flag not specified on"
+                 << "command line. Options are -creator (default)"
+                 << "and -online.";
+        appArg = "creator";
+    }
+    config.setStringList(CONFIG_APPLICATION, QStringList(appArg));
+
+    /*
       Add the defines to the configuration variables.
      */
     QStringList defs = defines + config.getStringList(CONFIG_DEFINES);
@@ -207,6 +234,7 @@ static void processQdocconfFile(const QString &fileName)
     CodeParser::initialize(config);
     Generator::initialize(config);
 
+#ifndef QT_NO_TRANSLATION
     /*
       Load the language translators, if the configuration specifies any.
      */
@@ -221,6 +249,7 @@ static void processQdocconfFile(const QString &fileName)
 	translators.append(translator);
 	++fn;
     }
+#endif
 
     //QSet<QString> outputLanguages = config.getStringSet(CONFIG_OUTPUTLANGUAGES);
 
@@ -337,8 +366,9 @@ static void processQdocconfFile(const QString &fileName)
       Generate the XML tag file, if it was requested.
      */
     QString tagFile = config.getString(CONFIG_TAGFILE);
-    if (!tagFile.isEmpty())
+    if (!tagFile.isEmpty()) {
         tree->generateTagFile(tagFile);
+    }
 
     tree->setVersion("");
     Generator::terminate();
@@ -350,9 +380,16 @@ static void processQdocconfFile(const QString &fileName)
     Location::terminate();
     QDir::setCurrent(prevCurrentDir);
 
-    foreach (QTranslator *translator, translators)
-        delete translator;
+#ifndef QT_NO_TRANSLATION
+    qDeleteAll(translators);
+#endif
+#ifdef DEBUG_SHUTDOWN_CRASH    
+    qDebug() << "main(): Delete tree";
+#endif    
     delete tree;
+#ifdef DEBUG_SHUTDOWN_CRASH    
+    qDebug() << "main(): Tree deleted";
+#endif
 }
 
 QT_END_NAMESPACE
@@ -361,7 +398,9 @@ int main(int argc, char **argv)
 {
     QT_USE_NAMESPACE
 
+#ifndef QT_BOOTSTRAPPED
     QCoreApplication app(argc, argv);
+#endif
     QString cf = "qsauncompress \1 \2";
     PolyArchiveExtractor qsaExtractor(QStringList() << "qsa",cf);
     cf = "tar -C \2 -xf \1";
@@ -408,6 +447,7 @@ int main(int argc, char **argv)
     ManGenerator manGenerator;
     SgmlGenerator smglGenerator;
     WebXMLGenerator webxmlGenerator;
+    DitaXmlGenerator ditaxmlGenerator;
 
     QStringList qdocFiles;
     QString opt;
@@ -441,12 +481,16 @@ int main(int argc, char **argv)
         else if (opt == "-obsoletelinks") {
             obsoleteLinks = true;
         }
+	else if (opt == "-creator")
+		appArg = "creator";
+	else if (opt == "-online")
+		appArg = "online";
         else {
 	    qdocFiles.append(opt);
 	}
     }
 
-    if (qdocFiles.isEmpty()) {
+	if (qdocFiles.isEmpty()) {
         printHelp();
         return EXIT_FAILURE;
     }
@@ -454,8 +498,10 @@ int main(int argc, char **argv)
     /*
       Main loop.
      */
-    foreach (QString qf, qdocFiles)
+    foreach (QString qf, qdocFiles) {
+        //qDebug() << "PROCESSING:" << qf;
 	processQdocconfFile(qf);
+    }
 
     qDeleteAll(trees);
     return EXIT_SUCCESS;

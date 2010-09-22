@@ -39,8 +39,6 @@
 **
 ****************************************************************************/
 
-#include "qstylehelper_p.h"
-
 #include <qstyleoption.h>
 #include <qpainter.h>
 #include <qpixmapcache.h>
@@ -54,6 +52,9 @@
 #include <private/qt_cocoa_helpers_mac_p.h>
 #endif
 
+#include "qstylehelper_p.h"
+#include <qstringbuilder.h>
+
 QT_BEGIN_NAMESPACE
 
 namespace QStyleHelper {
@@ -61,17 +62,18 @@ namespace QStyleHelper {
 QString uniqueName(const QString &key, const QStyleOption *option, const QSize &size)
 {
     const QStyleOptionComplex *complexOption = qstyleoption_cast<const QStyleOptionComplex *>(option);
-    QString tmp = QString::fromLatin1("%1-%2-%3-%4-%5-%6x%7").arg(key).arg(uint(option->state)).arg(option->direction)
-                   .arg(complexOption ? uint(complexOption->activeSubControls) : uint(0))
-                   .arg(option->palette.cacheKey()).arg(size.width()).arg(size.height());
+    QString tmp = key % HexString<uint>(option->state)
+                      % HexString<uint>(option->direction)
+                      % HexString<uint>(complexOption ? uint(complexOption->activeSubControls) : 0u)
+                      % HexString<quint64>(option->palette.cacheKey())
+                      % HexString<uint>(size.width())
+                      % HexString<uint>(size.height());
+
 #ifndef QT_NO_SPINBOX
     if (const QStyleOptionSpinBox *spinBox = qstyleoption_cast<const QStyleOptionSpinBox *>(option)) {
-        tmp.append(QLatin1Char('-'));
-        tmp.append(QString::number(spinBox->buttonSymbols));
-        tmp.append(QLatin1Char('-'));
-        tmp.append(QString::number(spinBox->stepEnabled));
-        tmp.append(QLatin1Char('-'));
-        tmp.append(QLatin1Char(spinBox->frame ? '1' : '0'));
+        tmp = tmp % HexString<uint>(spinBox->buttonSymbols)
+                  % HexString<uint>(spinBox->stepEnabled)
+                  % QLatin1Char(spinBox->frame ? '1' : '0'); ;
     }
 #endif // QT_NO_SPINBOX
     return tmp;

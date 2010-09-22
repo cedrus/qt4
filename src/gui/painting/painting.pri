@@ -91,6 +91,8 @@ SOURCES += \
 
         HEADERS +=                                      \
                 painting/qpaintengine_raster_p.h        \
+                painting/qdrawhelper_p.h                \
+                painting/qblendfunctions_p.h            \
                 painting/qrasterdefs_p.h                \
                 painting/qgrayraster_p.h
 
@@ -116,12 +118,14 @@ embedded {
 } else {
     HEADERS += \
         painting/qgraphicssystem_raster_p.h \
+        painting/qgraphicssystem_runtime_p.h \
         painting/qgraphicssystemfactory_p.h \
         painting/qgraphicssystemplugin_p.h \
         painting/qwindowsurface_raster_p.h \
 
     SOURCES += \
         painting/qgraphicssystem_raster.cpp \
+        painting/qgraphicssystem_runtime.cpp \
         painting/qgraphicssystemfactory.cpp \
         painting/qgraphicssystemplugin.cpp \
         painting/qwindowsurface_raster.cpp \
@@ -230,7 +234,7 @@ contains(QMAKE_MAC_XARCH, no) {
         IWMMXT_SOURCES += painting/qdrawhelper_iwmmxt.cpp
     }
 
-    win32-g++|!win32:!*-icc* {
+    win32-g++*|!win32:!*-icc* {
         mmx {
             mmx_compiler.commands = $$QMAKE_CXX -c -Winline
 
@@ -379,17 +383,23 @@ symbian {
         QMAKE_CXXFLAGS.ARMCC *= -O3
 }
 
-neon {
+neon:*-g++* {
     DEFINES += QT_HAVE_NEON
     HEADERS += painting/qdrawhelper_neon_p.h
     SOURCES += painting/qdrawhelper_neon.cpp
     QMAKE_CXXFLAGS *= -mfpu=neon
+
+    DRAWHELPER_NEON_ASM_FILES = ../3rdparty/pixman/pixman-arm-neon-asm.S painting/qdrawhelper_neon_asm.S
+
+    neon_compiler.commands = $$QMAKE_CXX -c
+    neon_compiler.commands += $(CXXFLAGS) $(INCPATH) ${QMAKE_FILE_IN} -o ${QMAKE_FILE_OUT}
+    neon_compiler.dependency_type = TYPE_C
+    neon_compiler.output = ${QMAKE_VAR_OBJECTS_DIR}${QMAKE_FILE_BASE}$${first(QMAKE_EXT_OBJ)}
+    neon_compiler.input = DRAWHELPER_NEON_ASM_FILES
+    neon_compiler.variable_out = OBJECTS
+    neon_compiler.name = compiling[neon] ${QMAKE_FILE_IN}
+    silent:neon_compiler.commands = @echo compiling[neon] ${QMAKE_FILE_IN} && $$neon_compiler.commands
+    QMAKE_EXTRA_COMPILERS += neon_compiler
 }
 
-contains(QT_CONFIG, zlib) {
-   INCLUDEPATH += ../3rdparty/zlib
-} else:!contains(QT_CONFIG, no-zlib) {
-   unix:LIBS_PRIVATE += -lz
-#  win32:LIBS += libz.lib
-}
-
+include($$PWD/../../3rdparty/zlib_dependency.pri)

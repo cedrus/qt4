@@ -34,24 +34,30 @@
 namespace WebCore {
 
 RGBA32Buffer::RGBA32Buffer()
-    : m_status(FrameEmpty)
-    , m_hasAlpha(false)
+    : m_hasAlpha(false) 
     , m_size()
+    , m_status(FrameEmpty)
     , m_duration(0)
     , m_disposalMethod(DisposeNotSpecified)
 {
 }
 
-// The image must not have format 8888 pre multiplied...
-void RGBA32Buffer::setDecodedImage(const QImage& image)
+RGBA32Buffer& RGBA32Buffer::operator=(const RGBA32Buffer& other)
 {
-    m_image = image;
-    m_size = image.size();
-    m_hasAlpha = image.hasAlphaChannel();
+    if (this == &other)
+        return *this;
+
+    copyBitmapData(other);
+    setRect(other.rect());
+    setStatus(other.status());
+    setDuration(other.duration());
+    setDisposalMethod(other.disposalMethod());
+    return *this;
 }
 
 void RGBA32Buffer::clear()
 {
+    m_pixmap = QPixmap();
     m_image = QImage();
     m_status = FrameEmpty;
     // NOTE: Do not reset other members here; clearFrameBufferCache()
@@ -62,7 +68,11 @@ void RGBA32Buffer::clear()
 
 void RGBA32Buffer::zeroFill()
 {
-    m_image.fill(0);
+    if (m_pixmap.isNull() && !m_image.isNull()) {
+        m_pixmap = QPixmap(m_image.width(), m_image.height());
+        m_image = QImage();
+    }
+    m_pixmap.fill(QColor(0, 0, 0, 0));
 }
 
 void RGBA32Buffer::copyBitmapData(const RGBA32Buffer& other)
@@ -71,6 +81,7 @@ void RGBA32Buffer::copyBitmapData(const RGBA32Buffer& other)
         return;
 
     m_image = other.m_image;
+    m_pixmap = other.m_pixmap;
     m_size = other.m_size;
     m_hasAlpha = other.m_hasAlpha;
 }
@@ -82,12 +93,10 @@ bool RGBA32Buffer::setSize(int newWidth, int newHeight)
     ASSERT(width() == 0 && height() == 0);
 
     m_size = IntSize(newWidth, newHeight);
-    m_image = QImage(newWidth, newHeight, QImage::Format_ARGB32_Premultiplied);
-    if (m_image.isNull()) {
-        // Allocation failure, maybe the bitmap was too big.
-        setStatus(FrameComplete);
+    m_image = QImage();
+    m_pixmap = QPixmap(newWidth, newHeight);
+    if (m_pixmap.isNull())
         return false;
-    }
 
     // Zero the image.
     zeroFill();
@@ -97,10 +106,11 @@ bool RGBA32Buffer::setSize(int newWidth, int newHeight)
 
 QPixmap* RGBA32Buffer::asNewNativeImage() const
 {
-    QPixmap pix = QPixmap::fromImage(m_image);
-    m_image = QImage();
-
-    return new QPixmap(pix);
+    if (m_pixmap.isNull() && !m_image.isNull()) {
+        m_pixmap = QPixmap::fromImage(m_image);
+        m_image = QImage();
+    }
+    return new QPixmap(m_pixmap);
 }
 
 bool RGBA32Buffer::hasAlpha() const
@@ -118,17 +128,13 @@ void RGBA32Buffer::setStatus(FrameStatus status)
     m_status = status;
 }
 
-RGBA32Buffer& RGBA32Buffer::operator=(const RGBA32Buffer& other)
+// The image must not have format 8888 pre multiplied...
+void RGBA32Buffer::setPixmap(const QPixmap& pixmap)
 {
-    if (this == &other)
-        return *this;
-
-    copyBitmapData(other);
-    setRect(other.rect());
-    setStatus(other.status());
-    setDuration(other.duration());
-    setDisposalMethod(other.disposalMethod());
-    return *this;
+    m_pixmap = pixmap;
+    m_image = QImage();
+    m_size = pixmap.size();
+    m_hasAlpha = pixmap.hasAlphaChannel();
 }
 
 int RGBA32Buffer::width() const

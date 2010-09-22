@@ -62,6 +62,7 @@ QT_BEGIN_NAMESPACE
 QT_MODULE(Gui)
 
 class QImageWriter;
+class QImageReader;
 class QColor;
 class QVariant;
 class QX11Info;
@@ -134,12 +135,15 @@ public:
 
     QImage toImage() const;
     static QPixmap fromImage(const QImage &image, Qt::ImageConversionFlags flags = Qt::AutoColor);
+    static QPixmap fromImageReader(QImageReader *imageReader, Qt::ImageConversionFlags flags = Qt::AutoColor);
 
     bool load(const QString& fileName, const char *format = 0, Qt::ImageConversionFlags flags = Qt::AutoColor);
     bool loadFromData(const uchar *buf, uint len, const char* format = 0, Qt::ImageConversionFlags flags = Qt::AutoColor);
     inline bool loadFromData(const QByteArray &data, const char* format = 0, Qt::ImageConversionFlags flags = Qt::AutoColor);
     bool save(const QString& fileName, const char* format = 0, int quality = -1) const;
     bool save(QIODevice* device, const char* format = 0, int quality = -1) const;
+
+    bool convertFromImage(const QImage &img, Qt::ImageConversionFlags flags = Qt::AutoColor);
 
 #if defined(Q_WS_WIN)
     enum HBitmapFormat {
@@ -224,8 +228,6 @@ public:
     QT3_SUPPORT QPixmap &operator=(const QImage &);
     inline QT3_SUPPORT QImage convertToImage() const { return toImage(); }
     QT3_SUPPORT bool convertFromImage(const QImage &, ColorMode mode);
-    QT3_SUPPORT bool convertFromImage(const QImage &img, Qt::ImageConversionFlags flags = Qt::AutoColor)
-        { (*this) = fromImage(img, flags); return !isNull(); }
     inline QT3_SUPPORT operator QImage() const { return toImage(); }
     inline QT3_SUPPORT QPixmap xForm(const QMatrix &matrix) const { return transformed(QTransform(matrix)); }
     inline QT3_SUPPORT bool selfMask() const { return false; }
@@ -271,9 +273,7 @@ private:
     friend class QX11PaintEngine;
     friend class QCoreGraphicsPaintEngine;
     friend class QWidgetPrivate;
-    friend class QRasterPaintEngine;
     friend class QRasterBuffer;
-    friend class QPixmapCacheEntry;
 #if !defined(QT_NO_DATASTREAM)
     friend Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QPixmap &);
 #endif

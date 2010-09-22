@@ -157,6 +157,7 @@ private slots:
     void invokeQueuedMetaMember();
     void invokeCustomTypes();
     void invokeMetaConstructor();
+    void invokeTypedefTypes();
     void qtMetaObjectInheritance();
     void normalizedSignature_data();
     void normalizedSignature();
@@ -170,6 +171,8 @@ private slots:
 
     void stdSet();
     void classInfo();
+
+    void metaMethod();
 
 signals:
     void value6Changed();
@@ -513,6 +516,19 @@ void tst_QMetaObject::invokeMetaMember()
     QVERIFY(QMetaObject::invokeMethod(&obj, "sig1", Q_RETURN_ARG(QString, exp), Q_ARG(QString, "hehe")));
     QCOMPARE(exp, QString("yessir"));
     QCOMPARE(obj.slotResult, QString("sl1:hehe"));
+
+    QTest::ignoreMessage(QtWarningMsg, "QMetaObject::invokeMethod: No such method QtTestObject::doesNotExist()");
+    QVERIFY(!QMetaObject::invokeMethod(&obj, "doesNotExist"));
+    QTest::ignoreMessage(QtWarningMsg, "QMetaObject::invokeMethod: No such method QtTestObject::sl1(QString)(QString)");
+    QVERIFY(!QMetaObject::invokeMethod(&obj, "sl1(QString)", Q_ARG(QString, "arg")));
+    QTest::ignoreMessage(QtWarningMsg, "QMetaObject::invokeMethod: No such method QtTestObject::sl3(QString)");
+    QVERIFY(!QMetaObject::invokeMethod(&obj, "sl3", Q_ARG(QString, "arg")));
+    QTest::ignoreMessage(QtWarningMsg, "QMetaObject::invokeMethod: No such method QtTestObject::sl1(QString,QString,QString)");
+    QVERIFY(!QMetaObject::invokeMethod(&obj, "sl1", Q_ARG(QString, "arg"), Q_ARG(QString, "arg"), Q_ARG(QString, "arg")));
+
+    //should not have changed since last test.
+    QCOMPARE(exp, QString("yessir"));
+    QCOMPARE(obj.slotResult, QString("sl1:hehe"));
 }
 
 void tst_QMetaObject::invokeQueuedMetaMember()
@@ -585,6 +601,8 @@ struct MyType
     int i1, i2, i3;
 };
 
+typedef QString CustomString;
+
 class QtTestCustomObject: public QObject
 {
     Q_OBJECT
@@ -593,6 +611,9 @@ public:
 
 public slots:
     void sl1(MyType myType);
+
+signals:
+    void sig_custom(const CustomString &string);
 
 public:
     int sum;
@@ -651,6 +672,20 @@ void tst_QMetaObject::invokeMetaConstructor()
     }
 }
 
+void tst_QMetaObject::invokeTypedefTypes()
+{
+    qRegisterMetaType<CustomString>("CustomString");
+    QtTestCustomObject obj;
+    QSignalSpy spy(&obj, SIGNAL(sig_custom(CustomString)));
+
+    QCOMPARE(spy.count(), 0);
+    CustomString arg("hello");
+    QVERIFY(QMetaObject::invokeMethod(&obj, "sig_custom", Q_ARG(CustomString, arg)));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).count(), 1);
+    QCOMPARE(spy.at(0).at(0), QVariant(arg));
+}
+
 void tst_QMetaObject::normalizedSignature_data()
 {
     QTest::addColumn<QString>("signature");
@@ -664,7 +699,7 @@ void tst_QMetaObject::normalizedSignature_data()
     QTest::newRow("const rettype") << "const QString *foo()" << "const QString*foo()";
     QTest::newRow("const ref") << "const QString &foo()" << "const QString&foo()";
     QTest::newRow("reference") << "QString &foo()" << "QString&foo()";
-    QTest::newRow("const2") << "void foo(QString const *)" << "void foo(const QString*)";
+    QTest::newRow("const1") << "void foo(QString const *)" << "void foo(const QString*)";
     QTest::newRow("const2") << "void foo(QString * const)" << "void foo(QString*const)";
     QTest::newRow("const3") << "void foo(QString const &)" << "void foo(QString)";
     QTest::newRow("const4") << "void foo(const int)" << "void foo(int)";
@@ -672,7 +707,13 @@ void tst_QMetaObject::normalizedSignature_data()
                             << "void foo(int,int,int,int)";
     QTest::newRow("const6") << "void foo(QList<const int>)" << "void foo(QList<const int>)";
     QTest::newRow("const7") << "void foo(QList<const int*>)" << "void foo(QList<const int*>)";
-    QTest::newRow("const7") << "void foo(QList<int const*>)" << "void foo(QList<const int*>)";
+    QTest::newRow("const8") << "void foo(QList<int const*>)" << "void foo(QList<const int*>)";
+    QTest::newRow("const9") << "void foo(const Foo<Bar>)" << "void foo(Foo<Bar>)";
+    QTest::newRow("const10") << "void foo(Foo<Bar>const)" << "void foo(Foo<Bar>)";
+    QTest::newRow("const11") << "void foo(Foo<Bar> *const)" << "void foo(Foo<Bar>*const)";
+    QTest::newRow("const12") << "void foo(Foo<Bar>const*const *const)" << "void foo(Foo<Bar>*const*const)";
+    QTest::newRow("const13") << "void foo(const Foo<Bar>&)" << "void foo(Foo<Bar>)";
+    QTest::newRow("const14") << "void foo(Foo<Bar>const&)" << "void foo(Foo<Bar>)";
 }
 
 void tst_QMetaObject::normalizedSignature()
@@ -699,8 +740,18 @@ void tst_QMetaObject::normalizedType_data()
     QTest::newRow("template5") << "QList< ::Foo::Bar>" << "QList< ::Foo::Bar>";
     QTest::newRow("template6") << "QList<::Foo::Bar>" << "QList<::Foo::Bar>";
     QTest::newRow("template7") << "QList<QList<int> >" << "QList<QList<int> >";
+    QTest::newRow("template8") << "QMap<const int, const short*>" << "QMap<const int,const short*>";
+    QTest::newRow("template9") << "QPair<const QPair<int, int const *> , QPair<QHash<int, const char*>  >  >" << "QPair<const QPair<int,const int*>,QPair<QHash<int,const char*> > >";
     QTest::newRow("value1") << "const QString &" << "QString";
     QTest::newRow("value2") << "QString const &" << "QString";
+    QTest::newRow("constInName1") << "constconst" << "constconst";
+    QTest::newRow("constInName2") << "constconst*" << "constconst*";
+    QTest::newRow("constInName3") << "const constconst&" << "constconst";
+    QTest::newRow("constInName4") << "constconst const*const" << "constconst*const";
+    QTest::newRow("class") << "const class foo&" << "foo";
+    QTest::newRow("struct") << "const struct foo*" << "const foo*";
+    QTest::newRow("struct2") << "struct foo const*" << "const foo*";
+    QTest::newRow("enum") << "enum foo" << "foo";
 }
 
 void tst_QMetaObject::normalizedType()
@@ -837,6 +888,55 @@ void tst_QMetaObject::classInfo()
     QCOMPARE(index, 0);
     QVERIFY(index <= b.metaObject()->classInfoOffset());
     QCOMPARE(QLatin1String(b.metaObject()->classInfo(index).value()), QLatin1String("Christopher Pike"));
+}
+
+void tst_QMetaObject::metaMethod()
+{
+    QString str("foo");
+    QString ret("bar");
+    QMetaMethod method;
+    QVERIFY(!method.invoke(this));
+    QVERIFY(!method.invoke(this, Q_ARG(QString, str)));
+    QVERIFY(!method.invoke(this, Q_RETURN_ARG(QString, ret), Q_ARG(QString, str)));
+    QCOMPARE(str, QString("foo"));
+    QCOMPARE(ret, QString("bar"));
+
+
+    QtTestObject obj;
+    QString t1("1"); QString t2("2"); QString t3("3"); QString t4("4"); QString t5("5");
+    QString t6("6"); QString t7("7"); QString t8("8"); QString t9("9"); QString t10("X");
+
+    int index = QtTestObject::staticMetaObject.indexOfMethod("sl5(QString,QString,QString,QString,QString)");
+    QVERIFY(index > 0);
+    method = QtTestObject::staticMetaObject.method(index);
+    //wrong args
+    QVERIFY(!method.invoke(&obj, Q_ARG(QString, "1"), Q_ARG(QString, "2"), Q_ARG(QString, "3"), Q_ARG(QString, "4")));
+    //QVERIFY(!method.invoke(&obj, Q_ARG(QString, "1"), Q_ARG(QString, "2"), Q_ARG(QString, "3"), Q_ARG(QString, "4"), Q_ARG(QString, "5"), Q_ARG(QString, "6")));
+    //QVERIFY(!method.invoke(&obj, Q_ARG(QString, "1"), Q_ARG(QString, "2"), Q_ARG(QString, "3"), Q_ARG(QString, "4"), Q_ARG(int, 5)));
+    QVERIFY(!method.invoke(&obj, Q_RETURN_ARG(QString, ret), Q_ARG(QString, "1"), Q_ARG(QString, "2"), Q_ARG(QString, "3"), Q_ARG(QString, "4"), Q_ARG(QString, "5")));
+
+    //wrong object
+    //QVERIFY(!method.invoke(this, Q_ARG(QString, "1"), Q_ARG(QString, "2"), Q_ARG(QString, "3"), Q_ARG(QString, "4"), Q_ARG(QString, "5")));
+    QVERIFY(!method.invoke(0, Q_ARG(QString, "1"), Q_ARG(QString, "2"), Q_ARG(QString, "3"), Q_ARG(QString, "4"), Q_ARG(QString, "5")));
+    QCOMPARE(ret, QString("bar"));
+    QCOMPARE(obj.slotResult, QString());
+
+    QVERIFY(method.invoke(&obj, Q_ARG(QString, "1"), Q_ARG(QString, "2"), Q_ARG(QString, "3"), Q_ARG(QString, "4"), Q_ARG(QString, "5")));
+    QCOMPARE(obj.slotResult, QString("sl5:12345"));
+
+    index = QtTestObject::staticMetaObject.indexOfMethod("sl13(QList<QString>)");
+    QVERIFY(index > 0);
+    QMetaMethod sl13 = QtTestObject::staticMetaObject.method(index);
+    QList<QString> returnValue, argument;
+    argument << QString("one") << QString("two") << QString("three");
+    //wrong object
+    //QVERIFY(!sl13.invoke(this, Q_RETURN_ARG(QList<QString>, returnValue), Q_ARG(QList<QString>, argument)));
+    QVERIFY(!sl13.invoke(0,  Q_RETURN_ARG(QList<QString>, returnValue), Q_ARG(QList<QString>, argument)));
+    QCOMPARE(returnValue, QList<QString>());
+
+    QVERIFY(sl13.invoke(&obj, Q_RETURN_ARG(QList<QString>, returnValue), Q_ARG(QList<QString>, argument)));
+    QCOMPARE(returnValue, argument);
+    QCOMPARE(obj.slotResult, QString("sl13"));
 }
 
 QTEST_MAIN(tst_QMetaObject)

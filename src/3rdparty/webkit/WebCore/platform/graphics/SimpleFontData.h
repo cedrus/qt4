@@ -26,16 +26,17 @@
 
 #include "FontData.h"
 #include "FontPlatformData.h"
+#include "GlyphMetricsMap.h"
 #include "GlyphPageTreeNode.h"
-#include "GlyphWidthMap.h"
-#include "TextRenderingMode.h"
+#include "TypesettingFeatures.h"
 #include <wtf/OwnPtr.h>
 
 #if USE(ATSUI)
 typedef struct OpaqueATSUStyle* ATSUStyle;
 #endif
 
-#if PLATFORM(WIN) && !PLATFORM(WINCE)
+#if (PLATFORM(WIN) && !OS(WINCE)) \
+    || (OS(WINDOWS) && PLATFORM(WX))
 #include <usp10.h>
 #endif
 
@@ -57,9 +58,9 @@ class FontDescription;
 class FontPlatformData;
 class SharedBuffer;
 class SVGFontData;
-class WidthMap;
 
 enum Pitch { UnknownPitch, FixedPitch, VariablePitch };
+enum GlyphMetricsMode { GlyphBoundingBox, GlyphWidthOnly };
 
 class SimpleFontData : public FontData {
 public:
@@ -80,13 +81,14 @@ public:
     float xHeight() const { return m_xHeight; }
     unsigned unitsPerEm() const { return m_unitsPerEm; }
 
-    float widthForGlyph(Glyph) const;
-    float platformWidthForGlyph(Glyph) const;
+    float widthForGlyph(Glyph glyph) const { return metricsForGlyph(glyph, GlyphWidthOnly).horizontalAdvance; }
+    GlyphMetrics metricsForGlyph(Glyph, GlyphMetricsMode = GlyphBoundingBox) const;
+    GlyphMetrics platformMetricsForGlyph(Glyph, GlyphMetricsMode) const;
 
     float spaceWidth() const { return m_spaceWidth; }
     float adjustedSpaceWidth() const { return m_adjustedSpaceWidth; }
 
-#if PLATFORM(CG) || PLATFORM(CAIRO)
+#if PLATFORM(CG) || PLATFORM(CAIRO) || (OS(WINDOWS) && PLATFORM(WX))
     float syntheticBoldOffset() const { return m_syntheticBoldOffset; }
 #endif
 
@@ -115,13 +117,13 @@ public:
     virtual String description() const;
 #endif
 
-#if PLATFORM(MAC)
+#if PLATFORM(MAC) || (PLATFORM(CHROMIUM) && OS(DARWIN))
     NSFont* getNSFont() const { return m_platformData.font(); }
 #endif
 
 #if USE(CORE_TEXT)
     CTFontRef getCTFont() const;
-    CFDictionaryRef getCFStringAttributes(TextRenderingMode) const;
+    CFDictionaryRef getCFStringAttributes(TypesettingFeatures) const;
 #endif
 
 #if USE(ATSUI)
@@ -138,9 +140,9 @@ public:
     QFont getQtFont() const { return m_platformData.font(); }
 #endif
 
-#if PLATFORM(WIN)
+#if PLATFORM(WIN) || (OS(WINDOWS) && PLATFORM(WX))
     bool isSystemFont() const { return m_isSystemFont; }
-#if !PLATFORM(WINCE)    // disable unused members to save space
+#if !OS(WINCE) // disable unused members to save space
     SCRIPT_FONTPROPERTIES* scriptFontProperties() const;
     SCRIPT_CACHE* scriptCache() const { return &m_scriptCache; }
 #endif
@@ -162,10 +164,11 @@ private:
 
     void commonInit();
 
-#if PLATFORM(WIN) && !PLATFORM(WINCE)
+#if (PLATFORM(WIN) && !OS(WINCE)) \
+    || (OS(WINDOWS) && PLATFORM(WX))
     void initGDIFont();
     void platformCommonDestroy();
-    float widthForGDIGlyph(Glyph glyph) const;
+    GlyphMetrics metricsForGDIGlyph(Glyph glyph) const;
 #endif
 
     int m_ascent;
@@ -179,7 +182,7 @@ private:
 
     FontPlatformData m_platformData;
 
-    mutable GlyphWidthMap m_glyphToWidthMap;
+    mutable GlyphMetricsMap m_glyphToMetricsMap;
 
     bool m_treatAsFixedPitch;
 
@@ -198,7 +201,7 @@ private:
 
     mutable SimpleFontData* m_smallCapsFontData;
 
-#if PLATFORM(CG) || PLATFORM(CAIRO)
+#if PLATFORM(CG) || PLATFORM(CAIRO) || (OS(WINDOWS) && PLATFORM(WX))
     float m_syntheticBoldOffset;
 #endif
 
@@ -211,8 +214,7 @@ private:
 
 #if USE(ATSUI)
 public:
-    mutable ATSUStyle m_ATSUStyle;
-    mutable bool m_ATSUStyleInitialized;
+    mutable HashMap<unsigned, ATSUStyle> m_ATSUStyleMap;
     mutable bool m_ATSUMirrors;
     mutable bool m_checkedShapesArabic;
     mutable bool m_shapesArabic;
@@ -222,12 +224,12 @@ private:
 
 #if USE(CORE_TEXT)
     mutable RetainPtr<CTFontRef> m_CTFont;
-    mutable RetainPtr<CFDictionaryRef> m_CFStringAttributes;
+    mutable HashMap<unsigned, RetainPtr<CFDictionaryRef> > m_CFStringAttributes;
 #endif
 
-#if PLATFORM(WIN)
+#if PLATFORM(WIN) || (OS(WINDOWS) && PLATFORM(WX))
     bool m_isSystemFont;
-#if !PLATFORM(WINCE)    // disable unused members to save space
+#if !OS(WINCE) // disable unused members to save space
     mutable SCRIPT_CACHE m_scriptCache;
     mutable SCRIPT_FONTPROPERTIES* m_scriptFontProperties;
 #endif
@@ -236,16 +238,16 @@ private:
     
     
 #if !PLATFORM(QT)
-ALWAYS_INLINE float SimpleFontData::widthForGlyph(Glyph glyph) const
+ALWAYS_INLINE GlyphMetrics SimpleFontData::metricsForGlyph(Glyph glyph, GlyphMetricsMode metricsMode) const
 {
-    float width = m_glyphToWidthMap.widthForGlyph(glyph);
-    if (width != cGlyphWidthUnknown)
-        return width;
-    
-    width = platformWidthForGlyph(glyph);
-    m_glyphToWidthMap.setWidthForGlyph(glyph, width);
-    
-    return width;
+    GlyphMetrics metrics = m_glyphToMetricsMap.metricsForGlyph(glyph);
+    if ((metricsMode == GlyphWidthOnly && metrics.horizontalAdvance != cGlyphSizeUnknown) || (metricsMode == GlyphBoundingBox && metrics.boundingBox.width() != cGlyphSizeUnknown))
+        return metrics;
+
+    metrics = platformMetricsForGlyph(glyph, metricsMode);
+    m_glyphToMetricsMap.setMetricsForGlyph(glyph, metrics);
+
+    return metrics;
 }
 #endif
 

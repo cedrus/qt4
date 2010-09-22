@@ -50,7 +50,7 @@
 #define JRIEnv  void
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__SYMBIAN32__)
 #    ifndef XP_WIN
 #        define XP_WIN 1
 #    endif /* XP_WIN */
@@ -590,8 +590,8 @@ typedef QEvent NPEvent;
 typedef struct _NPEvent
 {
     uint16   event;
-    uint32   wParam;
-    uint32   lParam;
+    uintptr_t   wParam;
+    uintptr_t   lParam;
 } NPEvent;
 #elif defined (XP_UNIX)
 typedef XEvent NPEvent;

@@ -64,6 +64,8 @@
 
 #include "qdbusthreaddebug_p.h"
 
+#ifndef QT_NO_DBUS
+
 QT_BEGIN_NAMESPACE
 
 static bool isDebugging;
@@ -616,7 +618,7 @@ static int findSlot(const QMetaObject *mo, const QByteArray &name, int flags,
             continue;
 
         // check type:
-        if (mm.methodType() != QMetaMethod::Slot)
+        if (mm.methodType() != QMetaMethod::Slot && mm.methodType() != QMetaMethod::Method)
             continue;
 
         // check name:
@@ -680,10 +682,17 @@ static int findSlot(const QMetaObject *mo, const QByteArray &name, int flags,
         if (isAsync && metaTypes.count() > i + 1)
             continue;
 
-        if (isScriptable && (flags & QDBusConnection::ExportScriptableSlots) == 0)
-            continue;           // not exported
-        if (!isScriptable && (flags & QDBusConnection::ExportNonScriptableSlots) == 0)
-            continue;           // not exported
+        if (mm.methodType() == QMetaMethod::Slot) {
+            if (isScriptable && (flags & QDBusConnection::ExportScriptableSlots) == 0)
+                continue;           // scriptable slots not exported
+            if (!isScriptable && (flags & QDBusConnection::ExportNonScriptableSlots) == 0)
+                continue;           // non-scriptable slots not exported
+        } else {
+            if (isScriptable && (flags & QDBusConnection::ExportScriptableInvokables) == 0)
+                continue;           // scriptable invokables not exported
+            if (!isScriptable && (flags & QDBusConnection::ExportNonScriptableInvokables) == 0)
+                continue;           // non-scriptable invokables not exported
+        }
 
         // if we got here, this slot matched
         return idx;
@@ -704,6 +713,9 @@ QDBusCallDeliveryEvent* QDBusConnectionPrivate::prepareReply(QDBusConnectionPriv
     int n = metaTypes.count() - 1;
     if (metaTypes[n] == QDBusMetaTypeId::message)
         --n;
+
+    if (msg.arguments().count() < n)
+        return 0;               // too few arguments
 
     // check that types match
     for (int i = 0; i < n; ++i)
@@ -758,6 +770,7 @@ bool QDBusConnectionPrivate::activateCall(QObject* object, int flags, const QDBu
     if (!object)
         return false;
 
+#ifndef QT_NO_PROPERTIES
     Q_ASSERT_X(QThread::currentThread() == object->thread(),
                "QDBusConnection: internal threading error",
                "function called for an object that is in another thread!!");
@@ -816,6 +829,8 @@ bool QDBusConnectionPrivate::activateCall(QObject* object, int flags, const QDBu
         deliverCall(object, flags, msg, cacheIt->metaTypes, cacheIt->slotIdx);
         return true;
     }
+#endif // QT_NO_PROPERTIES
+    return false;
 }
 
 void QDBusConnectionPrivate::deliverCall(QObject *object, int /*flags*/, const QDBusMessage &msg,
@@ -1374,7 +1389,8 @@ void QDBusConnectionPrivate::activateObject(ObjectTreeNode &node, const QDBusMes
         return;                 // internal filters have already run or an error has been sent
 
     // try the object itself:
-    if (node.flags & (QDBusConnection::ExportScriptableSlots|QDBusConnection::ExportNonScriptableSlots)) {
+    if (node.flags & (QDBusConnection::ExportScriptableSlots|QDBusConnection::ExportNonScriptableSlots) ||
+        node.flags & (QDBusConnection::ExportScriptableInvokables|QDBusConnection::ExportNonScriptableInvokables)) {
         bool interfaceFound = true;
         if (!msg.interface().isEmpty())
             interfaceFound = qDBusInterfaceInObject(node.obj, msg.interface());
@@ -2343,3 +2359,5 @@ void QDBusConnectionPrivate::postEventToThread(int action, QObject *object, QEve
 }
 
 QT_END_NAMESPACE
+
+#endif // QT_NO_DBUS

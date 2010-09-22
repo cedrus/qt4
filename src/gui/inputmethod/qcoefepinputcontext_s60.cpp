@@ -44,6 +44,9 @@
 #include "qcoefepinputcontext_p.h"
 #include <qapplication.h>
 #include <qtextformat.h>
+#include <qgraphicsview.h>
+#include <qgraphicsscene.h>
+#include <qgraphicswidget.h>
 #include <private/qcore_symbian_p.h>
 
 #include <fepitfr.h>
@@ -76,7 +79,6 @@ QCoeFepInputContext::QCoeFepInputContext(QObject *parent)
       m_inlinePosition(0),
       m_formatRetriever(0),
       m_pointerHandler(0),
-      m_cursorPos(0),
       m_hasTempPreeditString(false)
 {
     m_fepState->SetObjectProvider(this);
@@ -234,11 +236,17 @@ bool QCoeFepInputContext::filterEvent(const QEvent *event)
             break;
         }
 
+        QString widgetText = focusWidget()->inputMethodQuery(Qt::ImSurroundingText).toString();
+        int maxLength = focusWidget()->inputMethodQuery(Qt::ImMaximumTextLength).toInt();
+        if (!keyEvent->text().isEmpty() && widgetText.size() + m_preeditString.size() >= maxLength) {
+            // Don't send key events with string content if the widget is "full".
+            return true;
+        }
+
         if (keyEvent->type() == QEvent::KeyPress
             && focusWidget()->inputMethodHints() & Qt::ImhHiddenText
             && !keyEvent->text().isEmpty()) {
             // Send some temporary preedit text in order to make text visible for a moment.
-            m_cursorPos = focusWidget()->inputMethodQuery(Qt::ImCursorPosition).toInt();
             m_preeditString = keyEvent->text();
             QList<QInputMethodEvent::Attribute> attributes;
             QInputMethodEvent imEvent(m_preeditString, attributes);
@@ -320,12 +328,14 @@ TCoeInputCapabilities QCoeFepInputContext::inputCapabilities()
     return TCoeInputCapabilities(m_textCapabilities, this, 0);
 }
 
-static QTextCharFormat qt_TCharFormat2QTextCharFormat(const TCharFormat &cFormat)
+static QTextCharFormat qt_TCharFormat2QTextCharFormat(const TCharFormat &cFormat, bool validStyleColor)
 {
     QTextCharFormat qFormat;
 
-    QBrush foreground(QColor(cFormat.iFontPresentation.iTextColor.Internal()));
-    qFormat.setForeground(foreground);
+    if (validStyleColor) {
+        QBrush foreground(QColor(cFormat.iFontPresentation.iTextColor.Internal()));
+        qFormat.setForeground(foreground);
+    }
 
     qFormat.setFontStrikeOut(cFormat.iFontPresentation.iStrikethrough == EStrikethroughOn);
     qFormat.setFontUnderline(cFormat.iFontPresentation.iUnderline == EUnderlineOn);
@@ -484,10 +494,30 @@ void QCoeFepInputContext::applyHints(Qt::InputMethodHints hints)
 void QCoeFepInputContext::applyFormat(QList<QInputMethodEvent::Attribute> *attributes)
 {
     TCharFormat cFormat;
-    const QColor styleTextColor = focusWidget() ? focusWidget()->palette().text().color() : 
-        QApplication::palette("QLineEdit").text().color();
-    const TLogicalRgb fontColor(TRgb(styleTextColor.red(), styleTextColor.green(), styleTextColor.blue(), styleTextColor.alpha()));
-    cFormat.iFontPresentation.iTextColor = fontColor;
+    QColor styleTextColor;
+    if (QWidget *focused = focusWidget()) {
+        QGraphicsView *gv = qobject_cast<QGraphicsView*>(focused);
+        if (!gv) // could be either the QGV or its viewport that has focus
+            gv = qobject_cast<QGraphicsView*>(focused->parentWidget());
+        if (gv) {
+            if (QGraphicsScene *scene = gv->scene()) {
+                if (QGraphicsItem *focusItem = scene->focusItem()) {
+                    if (focusItem->isWidget()) {
+                        styleTextColor = static_cast<QGraphicsWidget*>(focusItem)->palette().text().color();
+                    }
+                }
+            }
+        } else {
+            styleTextColor = focused->palette().text().color();
+        }
+    } else {
+        styleTextColor = QApplication::palette("QLineEdit").text().color();
+    }
+
+    if (styleTextColor.isValid()) {
+        const TLogicalRgb fontColor(TRgb(styleTextColor.red(), styleTextColor.green(), styleTextColor.blue(), styleTextColor.alpha()));
+        cFormat.iFontPresentation.iTextColor = fontColor;
+    }
 
     TInt numChars = 0;
     TInt charPos = 0;
@@ -501,7 +531,7 @@ void QCoeFepInputContext::applyFormat(QList<QInputMethodEvent::Attribute> *attri
         attributes->append(QInputMethodEvent::Attribute(QInputMethodEvent::TextFormat,
                                                         charPos,
                                                         numChars,
-                                                        QVariant(qt_TCharFormat2QTextCharFormat(cFormat))));
+                                                        QVariant(qt_TCharFormat2QTextCharFormat(cFormat, styleTextColor.isValid()))));
         charPos += numChars;
         if (charPos >= m_preeditString.size()) {
             break;
@@ -552,8 +582,6 @@ void QCoeFepInputContext::StartFepInlineEditL(const TDesC& aInitialInlineText,
 
     commitTemporaryPreeditString();
 
-    m_cursorPos = w->inputMethodQuery(Qt::ImCursorPosition).toInt();
-    
     QList<QInputMethodEvent::Attribute> attributes;
 
     m_cursorVisibility = aCursorVisibility ? 1 : 0;
@@ -568,9 +596,10 @@ void QCoeFepInputContext::StartFepInlineEditL(const TDesC& aInitialInlineText,
     // Let's remove the selected text if aInitialInlineText is empty and there is selected text
     if (m_preeditString.isEmpty()) {
         int anchor = w->inputMethodQuery(Qt::ImAnchorPosition).toInt();
-        int replacementLength = qAbs(m_cursorPos-anchor);
+        int cursorPos = w->inputMethodQuery(Qt::ImCursorPosition).toInt();
+        int replacementLength = qAbs(cursorPos-anchor);
         if (replacementLength > 0) {
-            int replacementStart = m_cursorPos < anchor ? 0 : -replacementLength;
+            int replacementStart = cursorPos < anchor ? 0 : -replacementLength;
             QList<QInputMethodEvent::Attribute> clearSelectionAttributes;
             QInputMethodEvent clearSelectionEvent(QLatin1String(""), clearSelectionAttributes);
             clearSelectionEvent.setCommitString(QLatin1String(""), replacementStart, replacementLength);
@@ -603,8 +632,13 @@ void QCoeFepInputContext::UpdateFepInlineTextL(const TDesC& aNewInlineText,
                                                    m_inlinePosition,
                                                    m_cursorVisibility,
                                                    QVariant()));
-    m_preeditString = qt_TDesC2QString(aNewInlineText);
-    QInputMethodEvent event(m_preeditString, attributes);
+    QString newPreeditString = qt_TDesC2QString(aNewInlineText);
+    QInputMethodEvent event(newPreeditString, attributes);
+    if (newPreeditString.isEmpty() && m_preeditString.isEmpty()) {
+        // In Symbian world this means "erase last character".
+        event.setCommitString("", -1, 1);
+    }
+    m_preeditString = newPreeditString;
     sendEvent(event);
 }
 
@@ -776,23 +810,13 @@ void QCoeFepInputContext::commitCurrentString(bool cancelFepTransaction)
 {
     int longPress = 0;
 
-    if (m_preeditString.size() == 0) {
-        QWidget *w = focusWidget();
-        if (!cancelFepTransaction && w) {
-            // We must replace the last character only if the input box has already accepted one 
-            if (w->inputMethodQuery(Qt::ImCursorPosition).toInt() != m_cursorPos)
-                longPress = 1;
-        }
-    }
-
     QList<QInputMethodEvent::Attribute> attributes;
     QInputMethodEvent event(QLatin1String(""), attributes);
-    event.setCommitString(m_preeditString, 0-longPress, longPress);
+    event.setCommitString(m_preeditString, 0, 0);
     m_preeditString.clear();
     sendEvent(event);
 
     m_hasTempPreeditString = false;
-    longPress = 0;
 
     if (cancelFepTransaction) {
         CCoeFep* fep = CCoeEnv::Static()->Fep();

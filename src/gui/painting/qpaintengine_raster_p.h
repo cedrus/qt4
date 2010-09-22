@@ -203,6 +203,8 @@ public:
     void clip(const QRect &rect, Qt::ClipOperation op);
     void clip(const QRegion &region, Qt::ClipOperation op);
 
+    void drawStaticTextItem(QStaticTextItem *textItem);
+
     enum ClipType {
         RectClip,
         ComplexClip
@@ -257,7 +259,8 @@ private:
     void fillRect(const QRectF &rect, QSpanData *data);
     void drawBitmap(const QPointF &pos, const QImage &image, QSpanData *fill);
 
-    void drawCachedGlyphs(const QPointF &p, const QTextItemInt &ti);
+    void drawCachedGlyphs(int numGlyphs, const glyph_t *glyphs, const QFixedPoint *positions,
+                          QFontEngine *fontEngine);
 
 #if defined(Q_OS_SYMBIAN) && defined(QT_NO_FREETYPE)
     void drawGlyphsS60(const QPointF &p, const QTextItemInt &ti);
@@ -297,6 +300,7 @@ QRasterPaintEnginePrivate : public QPaintEngineExPrivate
 {
     Q_DECLARE_PUBLIC(QRasterPaintEngine)
 public:
+    QRasterPaintEnginePrivate();
 
     void rasterizeLine_dashed(QLineF line, qreal width,
                               int *dashIndex, qreal *dashOffset, bool *inDash);
@@ -351,8 +355,6 @@ public:
     QScopedPointer<QDashStroker> dashStroker;
 
     QScopedPointer<QT_FT_Raster> grayRaster;
-    unsigned long rasterPoolSize;
-    unsigned char *rasterPoolBase;
 
     QDataBuffer<QLineF> cachedLines;
     QSpanData image_filler;

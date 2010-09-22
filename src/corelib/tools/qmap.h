@@ -125,6 +125,10 @@ template <class Key, class T>
 struct QMapNode {
     Key key;
     T value;
+
+private:
+    // never access these members through this structure.
+    // see below
     QMapData::Node *backward;
     QMapData::Node *forward[1];
 };
@@ -134,6 +138,22 @@ struct QMapPayloadNode
 {
     Key key;
     T value;
+
+private:
+    // QMap::e is a pointer to QMapData::Node, which matches the member
+    // below. However, the memory allocation node in QMapData::node_create
+    // allocates sizeof(QMapPayloNode) and incorrectly calculates the offset
+    // of 'backward' below. If the alignment of QMapPayloadNode is larger
+    // than the alignment of a pointer, the 'backward' member is aligned to
+    // the end of this structure, not to 'value' above, and will occupy the
+    // tail-padding area.
+    //
+    //  e.g., on a 32-bit archictecture with Key = int and
+    //        sizeof(T) = alignof(T) = 8
+    //   0        4        8        12       16       20       24  byte
+    //   |   key  |   PAD  |      value      |backward|  PAD   |   correct layout
+    //   |   key  |   PAD  |      value      |        |backward|   how it's actually used
+    //   |<-----  value of QMap::payload() = 20 ----->|
     QMapData::Node *backward;
 };
 
@@ -182,6 +202,7 @@ public:
     inline void detach() { if (d->ref != 1) detach_helper(); }
     inline bool isDetached() const { return d->ref == 1; }
     inline void setSharable(bool sharable) { if (!sharable) detach(); d->sharable = sharable; }
+    inline bool isSharedWith(const QMap<Key, T> &other) const { return d == other.d; }
     inline void setInsertInOrder(bool ordered) { d->insertInOrder = ordered; }
 
     void clear();
@@ -772,6 +793,7 @@ template <class Key, class T>
 Q_OUTOFLINE_TEMPLATE QList<Key> QMap<Key, T>::uniqueKeys() const
 {
     QList<Key> res;
+    res.reserve(size()); // May be too much, but assume short lifetime
     const_iterator i = begin();
     if (i != end()) {
         for (;;) {
@@ -791,6 +813,7 @@ template <class Key, class T>
 Q_OUTOFLINE_TEMPLATE QList<Key> QMap<Key, T>::keys() const
 {
     QList<Key> res;
+    res.reserve(size());
     const_iterator i = begin();
     while (i != end()) {
         res.append(i.key());
@@ -835,6 +858,7 @@ template <class Key, class T>
 Q_OUTOFLINE_TEMPLATE QList<T> QMap<Key, T>::values() const
 {
     QList<T> res;
+    res.reserve(size());
     const_iterator i = begin();
     while (i != end()) {
         res.append(i.value());

@@ -43,6 +43,12 @@ embedded {
 }
 
 symbian {
-    LIBS += -lsendas2 -letext -lapmime
-    contains(QT_CONFIG, s60): LIBS += -lplatformenv -lCommonUI
+    LIBS += -lsendas2 -letext -lapmime -lplatformenv
+    contains(QT_CONFIG, s60) {
+        contains(CONFIG, is_using_gnupoc) {
+            LIBS += -lcommonui
+        } else {
+            LIBS += -lCommonUI
+        }
+    }
 }

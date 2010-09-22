@@ -560,7 +560,7 @@ void QXmlStreamReader::clear()
     chunk of XML can be added with addData(), if the XML is being read
     from a QByteArray, or by waiting for more data to arrive if the
     XML is being read from a QIODevice. Either way, atEnd() will
-    return false once more adata is available.
+    return false once more data is available.
 
     \sa hasError(), error(), device(), QIODevice::atEnd()
  */
@@ -3003,8 +3003,7 @@ QXmlStreamWriterPrivate::QXmlStreamWriterPrivate(QXmlStreamWriter *q)
     deleteDevice = false;
 #ifndef QT_NO_TEXTCODEC
     codec = QTextCodec::codecForMib(106); // utf8
-    encoder = codec->makeEncoder();
-    encoder->state.flags |= QTextCodec::IgnoreHeader; // no byte order mark for utf8
+    encoder = codec->makeEncoder(QTextCodec::IgnoreHeader); // no byte order mark for utf8
 #endif
     inStartElement = inEmptyElement = false;
     wroteSomething = false;
@@ -3278,9 +3277,7 @@ void QXmlStreamWriter::setCodec(QTextCodec *codec)
     if (codec) {
         d->codec = codec;
         delete d->encoder;
-        d->encoder = codec->makeEncoder();
-        if (codec->mibEnum() == 106)
-            d->encoder->state.flags |= QTextCodec::IgnoreHeader; // no byte order mark for utf8
+        d->encoder = codec->makeEncoder(QTextCodec::IgnoreHeader); // no byte order mark for utf8
     }
 }
 
@@ -3719,7 +3716,8 @@ void QXmlStreamWriter::writeProcessingInstruction(const QString &target, const Q
 {
     Q_D(QXmlStreamWriter);
     Q_ASSERT(!data.contains(QLatin1String("?>")));
-    d->finishStartElement();
+    if (!d->finishStartElement(false) && d->autoFormatting)
+        d->indent(d->tagStack.size());
     d->write("<?");
     d->write(target);
     if (!data.isNull()) {

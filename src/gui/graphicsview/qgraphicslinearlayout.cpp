@@ -147,7 +147,7 @@ void QGraphicsLinearLayoutPrivate::removeGridItem(QGridLayoutItem *gridItem)
 {
     int index = gridItem->firstRow(orientation);
     engine.removeItem(gridItem);
-    engine.removeRow(index, orientation);
+    engine.removeRows(index, 1, orientation);
 }
 
 void QGraphicsLinearLayoutPrivate::fixIndex(int *index) const
@@ -171,14 +171,13 @@ int QGraphicsLinearLayoutPrivate::gridColumn(int index) const
     return int(qMin(uint(index), uint(engine.columnCount())));
 }
 
+Q_GLOBAL_STATIC(QWidget, globalStyleInfoWidget)
+
 QLayoutStyleInfo QGraphicsLinearLayoutPrivate::styleInfo() const
 {
-    static QWidget *wid = 0;
-    if (!wid)
-        wid = new QWidget;
     QGraphicsItem *item = parentItem();
     QStyle *style = (item && item->isWidget()) ? static_cast<QGraphicsWidget*>(item)->style() : QApplication::style();
-    return QLayoutStyleInfo(style, wid);
+    return QLayoutStyleInfo(style, globalStyleInfoWidget());
 }
 
 /*!
@@ -554,6 +553,8 @@ void QGraphicsLinearLayout::dump(int indent) const
                d->orientation == Qt::Horizontal ? "Horizontal" : "Vertical");
         d->engine.dump(indent + 1);
     }
+#else
+    Q_UNUSED(indent);
 #endif
 }
 

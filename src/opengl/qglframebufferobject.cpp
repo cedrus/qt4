@@ -44,7 +44,7 @@
 
 #include <qdebug.h>
 #include <private/qgl_p.h>
-#if !defined(QT_OPENGL_ES_1) && !defined(QT_OPENGL_ES_1_CL)
+#if !defined(QT_OPENGL_ES_1)
 #include <private/qpaintengineex_opengl2_p.h>
 #endif
 
@@ -55,10 +55,6 @@
 #include <qglframebufferobject.h>
 #include <qlibrary.h>
 #include <qimage.h>
-
-#ifdef QT_OPENGL_ES_1_CL
-#include "qgl_cl_p.h"
-#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -132,7 +128,7 @@ void QGLFramebufferObjectFormat::detach()
     attachments, texture target \c GL_TEXTURE_2D, and internal format \c GL_RGBA8.
     On OpenGL/ES systems, the default internal format is \c GL_RGBA.
 
-    \sa samples(), attachment(), target(), internalTextureFormat()
+    \sa samples(), attachment(), internalTextureFormat()
 */
 
 QGLFramebufferObjectFormat::QGLFramebufferObjectFormat()
@@ -987,7 +983,7 @@ QImage QGLFramebufferObject::toImage() const
     return image;
 }
 
-#if !defined(QT_OPENGL_ES_1) && !defined(QT_OPENGL_ES_1_CL)
+#if !defined(QT_OPENGL_ES_1)
 Q_GLOBAL_STATIC(QGL2PaintEngineEx, qt_buffer_2_engine)
 #endif
 
@@ -1002,7 +998,7 @@ QPaintEngine *QGLFramebufferObject::paintEngine() const
     if (d->engine)
         return d->engine;
 
-#if !defined(QT_OPENGL_ES_1) && !defined(QT_OPENGL_ES_1_CL)
+#if !defined(QT_OPENGL_ES_1)
 #if !defined (QT_OPENGL_ES_2)
     if (qt_gl_preferGL2Engine()) {
 #endif
@@ -1025,6 +1021,36 @@ QPaintEngine *QGLFramebufferObject::paintEngine() const
     }
     return engine;
 #endif
+}
+
+/*!
+    \fn bool QGLFramebufferObject::bindDefault()
+    \internal
+
+    Switches rendering back to the default, windowing system provided
+    framebuffer.
+    Returns true upon success, false otherwise.
+
+    \sa bind(), release()
+*/
+bool QGLFramebufferObject::bindDefault()
+{
+    QGLContext *ctx = const_cast<QGLContext *>(QGLContext::currentContext());
+
+    if (ctx) {
+        bool ext_detected = (QGLExtensions::glExtensions() & QGLExtensions::FramebufferObject);
+        if (!ext_detected || (ext_detected && !qt_resolve_framebufferobject_extensions(ctx)))
+            return false;
+
+        ctx->d_ptr->current_fbo = ctx->d_ptr->default_fbo;
+        glBindFramebuffer(GL_FRAMEBUFFER_EXT, ctx->d_ptr->default_fbo);
+#ifdef QT_DEBUG
+    } else {
+        qWarning("QGLFramebufferObject::bindDefault() called without current context.");
+#endif
+    }
+
+    return ctx != 0;
 }
 
 /*!

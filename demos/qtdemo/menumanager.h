@@ -45,6 +45,9 @@
 #include <QtGui>
 #include <QtXml>
 #include <QtHelp/QHelpEngineCore>
+#ifndef QT_NO_DECLARATIVE
+#include <QtDeclarative>
+#endif
 
 #include "score.h"
 #include "textbutton.h"
@@ -61,7 +64,7 @@ class MenuManager : public QObject
     Q_OBJECT
 
 public:
-    enum BUTTON_TYPE {ROOT, MENU1, MENU2, LAUNCH, DOCUMENTATION, QUIT, FULLSCREEN, UP, DOWN, BACK};
+    enum BUTTON_TYPE {ROOT, MENU1, MENU2, LAUNCH, DOCUMENTATION, QUIT, FULLSCREEN, UP, DOWN, BACK, LAUNCH_QML};
 
     // singleton pattern:
     static MenuManager *instance();
@@ -83,6 +86,11 @@ public:
     Score *score;
     int currentMenuCode;
 
+    QObject *qmlRoot;
+#ifndef QT_NO_DECLARATIVE
+    QDeclarativeEngine* declarativeEngine;
+#endif
+
 private slots:
     void exampleFinished();
     void exampleError(QProcess::ProcessError error);
@@ -100,6 +108,7 @@ private:
     void readInfoAboutExample(const QDomElement &example);
     void showDocInAssistant(const QString &docFile);
     void launchExample(const QString &uniqueName);
+    void launchQmlExample(const QString &uniqueName);
 
     void createMenu(const QDomElement &category, BUTTON_TYPE type);
     void createLowLeftButton(const QString &label, BUTTON_TYPE type,
@@ -128,6 +137,7 @@ private:
 
     TextButton *upButton;
     TextButton *downButton;
+
 };
 
 #endif // MENU_MANAGER_H

@@ -1846,7 +1846,9 @@ void QTableView::setSelection(const QRect &rect, QItemSelectionModel::SelectionF
             selection.append(QItemSelectionRange(topLeft, bottomRight));
         }
     } else { // nothing moved
-        selection.append(QItemSelectionRange(tl, br));
+        QItemSelectionRange range(tl, br);
+        if (!range.isEmpty())
+            selection.append(range);
     }
 
     d->selectionModel->select(selection, command);
@@ -1857,6 +1859,9 @@ void QTableView::setSelection(const QRect &rect, QItemSelectionModel::SelectionF
 
     Returns the rectangle from the viewport of the items in the given
     \a selection.
+
+    Since 4.7, the returned region only contains rectangles intersecting
+    (or included in) the viewport.
 */
 QRegion QTableView::visualRegionForSelection(const QItemSelection &selection) const
 {
@@ -1866,6 +1871,7 @@ QRegion QTableView::visualRegionForSelection(const QItemSelection &selection) co
         return QRegion();
 
     QRegion selectionRegion;
+    const QRect &viewportRect = d->viewport->rect();
     bool verticalMoved = verticalHeader()->sectionsMoved();
     bool horizontalMoved = horizontalHeader()->sectionsMoved();
 
@@ -1875,8 +1881,11 @@ QRegion QTableView::visualRegionForSelection(const QItemSelection &selection) co
             if (range.parent() != d->root || !range.isValid())
                 continue;
             for (int r = range.top(); r <= range.bottom(); ++r)
-                for (int c = range.left(); c <= range.right(); ++c)
-                    selectionRegion += QRegion(visualRect(d->model->index(r, c, d->root)));
+                for (int c = range.left(); c <= range.right(); ++c) {
+                    const QRect &rangeRect = visualRect(d->model->index(r, c, d->root));
+                    if (viewportRect.intersects(rangeRect))
+                        selectionRegion += rangeRect;
+                }
         }
     } else if (horizontalMoved) {
         for (int i = 0; i < selection.count(); ++i) {
@@ -1888,9 +1897,11 @@ QRegion QTableView::visualRegionForSelection(const QItemSelection &selection) co
             if (top > bottom)
                 qSwap<int>(top, bottom);
             int height = bottom - top;
-            for (int c = range.left(); c <= range.right(); ++c)
-                selectionRegion += QRegion(QRect(columnViewportPosition(c), top,
-                                                 columnWidth(c), height));
+            for (int c = range.left(); c <= range.right(); ++c) {
+                const QRect rangeRect(columnViewportPosition(c), top, columnWidth(c), height);
+                if (viewportRect.intersects(rangeRect))
+                    selectionRegion += rangeRect;
+            }
         }
     } else if (verticalMoved) {
         for (int i = 0; i < selection.count(); ++i) {
@@ -1902,9 +1913,11 @@ QRegion QTableView::visualRegionForSelection(const QItemSelection &selection) co
             if (left > right)
                 qSwap<int>(left, right);
             int width = right - left;
-            for (int r = range.top(); r <= range.bottom(); ++r)
-                selectionRegion += QRegion(QRect(left, rowViewportPosition(r),
-                                                 width, rowHeight(r)));
+            for (int r = range.top(); r <= range.bottom(); ++r) {
+                const QRect rangeRect(left, rowViewportPosition(r), width, rowHeight(r));
+                if (viewportRect.intersects(rangeRect))
+                    selectionRegion += rangeRect;
+            }
         }
     } else { // nothing moved
         const int gridAdjust = showGrid() ? 1 : 0;
@@ -1925,12 +1938,17 @@ QRegion QTableView::visualRegionForSelection(const QItemSelection &selection) co
                 rleft = columnViewportPosition(range.right());
                 rright = columnViewportPosition(range.left()) + columnWidth(range.left());
             }
-            selectionRegion += QRect(QPoint(rleft, rtop), QPoint(rright - 1 - gridAdjust, rbottom - 1 - gridAdjust));
+            const QRect rangeRect(QPoint(rleft, rtop), QPoint(rright - 1 - gridAdjust, rbottom - 1 - gridAdjust));
+            if (viewportRect.intersects(rangeRect))
+                selectionRegion += rangeRect;
             if (d->hasSpans()) {
                 foreach (QSpanCollection::Span *s,
                          d->spans.spansInRect(range.left(), range.top(), range.width(), range.height())) {
-                    if (range.contains(s->top(), s->left(), range.parent()))
-                        selectionRegion += d->visualSpanRect(*s);
+                    if (range.contains(s->top(), s->left(), range.parent())) {
+                        const QRect &visualSpanRect = d->visualSpanRect(*s);
+                        if (viewportRect.intersects(visualSpanRect))
+                            selectionRegion += visualSpanRect;
+                    }
                 }
             }
         }
@@ -1967,12 +1985,7 @@ QModelIndexList QTableView::selectedIndexes() const
 void QTableView::rowCountChanged(int /*oldCount*/, int /*newCount*/ )
 {
     Q_D(QTableView);
-    updateGeometries();
-    if (verticalScrollMode() == QAbstractItemView::ScrollPerItem)
-        d->verticalHeader->setOffsetToSectionPosition(verticalScrollBar()->value());
-    else
-        d->verticalHeader->setOffset(verticalScrollBar()->value());
-    d->viewport->update();
+    d->doDelayedItemsLayout();
 }
 
 /*!
@@ -2132,8 +2145,8 @@ int QTableView::sizeHintForRow(int row) const
 
     ensurePolished();
 
-    int left = qMax(0, columnAt(0));
-    int right = columnAt(d->viewport->width());
+    int left = qMax(0, d->horizontalHeader->visualIndexAt(0));
+    int right = d->horizontalHeader->visualIndexAt(d->viewport->width());
     if (right == -1) // the table don't have enough columns to fill the viewport
         right = d->model->columnCount(d->root) - 1;
 
@@ -2191,8 +2204,8 @@ int QTableView::sizeHintForColumn(int column) const
 
     ensurePolished();
 
-    int top = qMax(0, rowAt(0));
-    int bottom = rowAt(d->viewport->height());
+    int top = qMax(0, d->verticalHeader->visualIndexAt(0));
+    int bottom = d->verticalHeader->visualIndexAt(d->viewport->height());
     if (!isVisible() || bottom == -1) // the table don't have enough rows to fill the viewport
         bottom = d->model->rowCount(d->root) - 1;
 

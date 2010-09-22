@@ -1,6 +1,4 @@
 /*
- * This file is part of the html renderer for KDE.
- *
  * Copyright (C) 2005 Apple Computer
  *
  * This library is free software; you can redistribute it and/or
@@ -59,11 +57,13 @@ public:
 
     virtual bool canHaveChildren() const;
 
-protected:
+private:
     virtual void styleWillChange(StyleDifference, const RenderStyle* newStyle);
     virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
 
     virtual bool hasLineIfEmpty() const { return true; }
+
+    virtual bool requiresForcedStyleRecalcPropagation() const { return true; }
 
     void timerFired(Timer<RenderButton>*);
 

@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -65,12 +51,29 @@
         \o \l {Exception Safety with Symbian}
         \o \l {Platform Notes - Symbian} {Qt for the Symbian platform - state of support}
         \o \l {qmake Platform Notes#Symbian platform} {Qt for Symbian extensions for qmake}
+	\o \l {Symbian Platform Security Requirements} {Symbian Platform Security Requirements}
     \endlist
     \o
     \list
         \o \l {Deploying an Application on the Symbian platform}{Deploying Applications}
     \endlist
     \endtable
+*/
+
+/*!
+    \page symbian-platform-security-requirements.html
+
+    \title Symbian Platform Security Requirements
+    \ingroup qtsymbian
+
+    On Symbian, processes that access media via the network must
+    have the \c NetworkServices platform security capability. If the client
+    process lacks this capability, operations will result in errors.
+    This failure is indicated by a state() of Phonon::ErrorState.
+
+    Platform security capabilities are added via the
+    \l{qmake-variable-reference.html#target-capability}{TARGET.CAPABILITY}
+    qmake variable.
 */
 
 /*!
@@ -126,7 +129,9 @@
     \row \o \c release-armv5 \o Build release binaries for hardware using RVCT.
     \row \o \c run           \o Run the application on the emulator.
     \row \o \c runonphone    \o Run the application on a device.
+    \row \o \c deploy        \o Deploys the project into a device.
     \row \o \c sis           \o Create signed \c .sis file for project.
+    \row \o \c unsigned_sis  \o Create unsigned \c .sis file for project.
     \row \o \c installer_sis \o Create signed \l{Smart Installer}{smart installer}
                                 \c .sis file for project.
                                 Smart installer will attempt to download
@@ -185,17 +190,21 @@
                                        By default empty.
     \endtable
 
-    The suppported options for \c QT_SIS_OPTIONS:
+    The supported options for \c QT_SIS_OPTIONS:
 
     \target Supported options for QT_SIS_OPTIONS
     \table
     \row \o -i                  \o Install the package right away using PC suite.
     \row \o -p                  \o Only preprocess the template \c .pkg file.
-    \row \o -c=<file>           \o Read certificate information from a file.
+    \row \o -c <file>           \o Read certificate information from a file.
+    \row \o -u                  \o Preserves unsigned package.
+    \row \o -o                  \o Creates only unsigned package.
+    \row \o -s                  \o Generates stub sis for ROM.
+    \row \o -n <name>           \o Specifies the final sis name.
     \endtable
 
     Execute the \c{createpackage.pl} script without any
-    parameters for detailed information about options. By default no otions are given.
+    parameters for detailed information about options. By default no options are given.
 
     For example:
 
@@ -205,9 +214,9 @@
 
     \snippet doc/src/snippets/code/doc_src_symbian-introduction.qdoc 3
 
-    If you want to install the program immediately, make sure that the device
-    is connected to the computer in "PC Suite" mode, and run \c sis target
-    with the \c QT_SIS_OPTIONS=-i, like this:
+    If you want to install the program immediately after creating \c .sis file,
+    make sure that the device is connected to the computer in "PC Suite" mode,
+    and use \c deploy target instead of \c sis target:
 
     \snippet doc/src/snippets/code/doc_src_symbian-introduction.qdoc 5
 

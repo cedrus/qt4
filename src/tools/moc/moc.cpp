@@ -230,11 +230,13 @@ Type Moc::parseType()
         }
     }
     while (test(CONST) || test(VOLATILE) || test(SIGNED) || test(UNSIGNED)
-           || test(STAR) || test(AND)) {
+           || test(STAR) || test(AND) || test(ANDAND)) {
         type.name += ' ';
         type.name += lexem();
         if (lookup(0) == AND)
             type.referenceType = Type::Reference;
+        else if (lookup(0) == ANDAND)
+            type.referenceType = Type::RValueReference;
         else if (lookup(0) == STAR)
             type.referenceType = Type::Pointer;
     }
@@ -1206,6 +1208,12 @@ bool Moc::until(Token target) {
         default: break;
         }
     }
+
+    //when searching commas within the default argument, we should take care of template depth (anglecount)
+    // unfortunatelly, we do not have enough semantic information to know if '<' is the operator< or
+    // the beginning of a template type. so we just use heuristics.
+    int possible = -1;
+
     while (index < symbols.size()) {
         Token t = symbols.at(index++).token;
         switch (t) {
@@ -1224,8 +1232,16 @@ bool Moc::until(Token target) {
             && braceCount <= 0
             && brackCount <= 0
             && parenCount <= 0
-            && (target != RANGLE || angleCount <= 0))
+            && (target != RANGLE || angleCount <= 0)) {
+            if (target != COMMA || angleCount <= 0)
+                return true;
+            possible = index;
+        }
+
+        if (target == COMMA && t == EQ && possible != -1) {
+            index = possible;
             return true;
+        }
 
         if (braceCount < 0 || brackCount < 0 || parenCount < 0
             || (target == RANGLE && angleCount < 0)) {
@@ -1233,6 +1249,12 @@ bool Moc::until(Token target) {
             break;
         }
     }
+
+    if(target == COMMA && angleCount != 0 && possible != -1) {
+        index = possible;
+        return true;
+    }
+
     return false;
 }
 

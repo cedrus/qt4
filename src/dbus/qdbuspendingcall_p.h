@@ -63,6 +63,8 @@
 #include "qdbusmessage.h"
 #include "qdbus_symbols_p.h"
 
+#ifndef QT_NO_DBUS
+
 QT_BEGIN_NAMESPACE
 
 class QDBusPendingCall;
@@ -135,4 +137,5 @@ Q_SIGNALS:
 
 QT_END_NAMESPACE
 
+#endif // QT_NO_DBUS
 #endif

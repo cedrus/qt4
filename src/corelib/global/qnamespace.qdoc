@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -42,6 +28,7 @@
 /*!
     \namespace Qt
     \inmodule QtCore
+    \target Qt Namespace
 
     \brief The Qt namespace contains miscellaneous identifiers
     used throughout the Qt library.
@@ -184,6 +171,7 @@
     left-handed mice.)
     \value RightButton     The right button.
     \value MidButton       The middle button.
+    \value MiddleButton    The middle button.
     \value XButton1        The first X button.
     \value XButton2        The second X button.
 
@@ -577,8 +565,9 @@
     be short, localized names. This is basically equivalent to using the date format
     string, "ddd MMM d yyyy". See QDate::toString() for more information.
 
-    \value ISODate ISO 8601 extended format: either \c{YYYY-MM-DD} for dates or
-    \c{YYYY-MM-DDTHH:MM:SS} for combined dates and times.
+    \value ISODate \l{ISO 8601} extended format: either \c{YYYY-MM-DD} for dates or
+    \c{YYYY-MM-DDTHH:MM:SS}, \c{YYYY-MM-DDTHH:MM:SSTZD} (e.g., 1997-07-16T19:20:30+01:00)
+    for combined dates and times.
 
     \value SystemLocaleShortDate The \l{QLocale::ShortFormat}{short format} used
     by the \l{QLocale::system()}{operating system}.
@@ -1254,6 +1243,10 @@
     window boundary (widget without parent or dialog) is found.
     This attribute currently has effect only on Symbian platforms
 
+    \value WA_X11DoNotAcceptFocus Asks the window manager to not give focus
+    to this top level window. This attribute has no effect on non-X11
+    platforms.
+
     \omitvalue WA_SetLayoutDirection
     \omitvalue WA_InputMethodTransparent
     \omitvalue WA_WState_CompressKeys
@@ -1311,7 +1304,7 @@
     \value Key_Enter     Typically located on the keypad.
     \value Key_Insert
     \value Key_Delete
-    \value Key_Pause
+    \value Key_Pause    The Pause/Break key (\note Not anything to do with pausing media)
     \value Key_Print
     \value Key_SysReq
     \value Key_Clear
@@ -1609,12 +1602,14 @@
     \value Key_BassDown
     \value Key_TrebleUp
     \value Key_TrebleDown
-    \value Key_MediaPlay
-    \value Key_MediaStop
+    \value Key_MediaPlay    A key setting the state of the media player to play
+    \value Key_MediaStop    A key setting the state of the media player to stop
     \value Key_MediaPrevious
     \omitvalue Key_MediaPrev
     \value Key_MediaNext
     \value Key_MediaRecord
+    \value Key_MediaPause   A key setting the state of the media player to pause (\note not the pause/break key)
+    \value Key_MediaTogglePlayPause   A key to toggle the play/pause state in the media player (rather than setting an absolute state)
     \value Key_HomePage
     \value Key_Favorites
     \value Key_Search
@@ -1638,6 +1633,8 @@
     \value Key_LaunchD On X11 this key is mapped to XF86XK_LaunchB key for legacy reasons.
     \value Key_LaunchE On X11 this key is mapped to XF86XK_LaunchC key for legacy reasons.
     \value Key_LaunchF On X11 this key is mapped to XF86XK_LaunchD key for legacy reasons.
+    \value Key_LaunchG On X11 this key is mapped to XF86XK_LaunchE key for legacy reasons.
+    \value Key_LaunchH On X11 this key is mapped to XF86XK_LaunchF key for legacy reasons.
     \value Key_MonBrightnessUp
     \value Key_MonBrightnessDown
     \value Key_KeyboardLightOnOff
@@ -1733,16 +1730,21 @@
     \value Key_MediaLast
     \value Key_unknown
 
-    \value Key_Call
+    \value Key_Call     A key to answer or initiate a call (see \l Key_ToggleCallHangup for a key to toggle current call state)
+    \value Key_Camera   A key to activate the camera shutter
+    \value Key_CameraFocus  A key to focus the camera
     \value Key_Context1
     \value Key_Context2
     \value Key_Context3
     \value Key_Context4
     \value Key_Flip
-    \value Key_Hangup
+    \value Key_Hangup   A key to end an ongoing call (see \l Key_ToggleCallHangup for a key to toggle current call state)
     \value Key_No
     \value Key_Select
     \value Key_Yes
+    \value Key_ToggleCallHangup A key to toggle the current call state (ie. either answer, or hangup) depending on current call state
+    \value Key_VoiceDial
+    \value Key_LastNumberRedial
 
     \value Key_Execute
     \value Key_Printer
@@ -2516,6 +2518,15 @@
                           operations that allow the user to interact with
                           the application while they are performed in the
                           background.
+    \value DragMoveCursor
+                          A cursor that is usually used when dragging an item.
+    \value DragCopyCursor
+                          A cursor that is usually used when dragging an item
+                          to copy it.
+    \value DragLinkCursor
+                          A cursor that is usually used when dragging an item
+                          to make a link to it.
+
     \value BitmapCursor
     \omitvalue LastCursor
     \omitvalue CustomCursor
@@ -2548,15 +2559,23 @@
 /*!
     \enum Qt::LayoutDirection
 
-    Specifies the direction of Qt's layouts:
+    Specifies the direction of Qt's layouts and text handling.
 
     \value LeftToRight  Left-to-right layout.
     \value RightToLeft  Right-to-left layout.
+    \value LayoutDirectionAuto   Automatic layout.
 
     Right-to-left layouts are necessary for certain languages,
     notably Arabic and Hebrew.
 
-    \sa QApplication::setLayoutDirection(), QWidget::setLayoutDirection()
+    LayoutDirectionAuto serves two purposes. When used in conjunction with widgets and layouts, it
+    will imply to use the layout direction set on the parent widget or QApplication. This
+    has the same effect as QWidget::unsetLayoutDirection().
+
+    When LayoutDirectoinAuto is used in conjunction with text layouting, it will imply that the text
+    directionality is determined from the content of the string to be layouted.
+
+    \sa QApplication::setLayoutDirection(), QWidget::setLayoutDirection(), QTextOption::setTextDirection(), QString::isRightToLeft()
 */
 
 /*!
@@ -2975,6 +2994,11 @@
     the widget always gets the full gesture sequence starting with a gesture in
     the Qt::GestureStarted state and ending with a gesture in the
     Qt::GestureFinished or Qt::GestureCanceled states.
+
+    \value IgnoredGesturesPropagateToParent Since Qt 4.7, this flag allows you
+    to fine-tune gesture event propagation. By setting the flag when
+    \l{QGraphicsObject::grabGesture()}{grabbing} a gesture all ignored partial
+    gestures will propagate to their parent items.
 
     \sa QWidget::grabGesture(), QGraphicsObject::grabGesture()
 */

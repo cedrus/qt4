@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -292,7 +278,7 @@
     \codeline
     \snippet examples/sql/drilldown/view.h 1
 
-    The QGraphicsView class is part of the \l {The Graphics View
+    The QGraphicsView class is part of the \l {Graphics View
     Framework} which we will use to display the images of Nokia's
     Qt offices. To be able to respond to user interaction;
     i.e., showing the
@@ -388,8 +374,8 @@
     reason we must create a custom item class is that we want to catch
     the item's hover events, animating the item when the mouse cursor
     is hovering over the image (by default, no items accept hover
-    events). Please see the \l{The Graphics View Framework}
-    documentation and the \l{Graphics View Examples} for more details.
+    events). Please see the \l{Graphics View Framework} documentation
+    and the \l{Graphics View Examples} for more details.
 
     \snippet examples/sql/drilldown/view.cpp 5
 
@@ -399,7 +385,7 @@
     function calls the private \c showInformation() function to pop up
     the associated information window.
 
-    \l {The Graphics View Framework} provides the qgraphicsitem_cast()
+    The \l {Graphics View Framework} provides the qgraphicsitem_cast()
     function to determine whether the given QGraphicsItem instance is
     of a given type. Note that if the event is not related to any of
     our image items, we pass it on to the base class implementation.
@@ -456,7 +442,7 @@
     borders.
 
     Finally, we store the location ID that this particular record is
-    associated with as well as a z-value. In the \l {The Graphics View
+    associated with as well as a z-value. In the \l {Graphics View
     Framework}, an item's z-value determines its position in the item
     stack. An item of high Z-value will be drawn on top of an item
     with a lower z-value if they share the same parent item. We also
@@ -477,7 +463,7 @@
     there is no current mouse grabber item. They are sent when the
     mouse cursor enters an item, when it moves around inside the item,
     and when the cursor leaves an item. As we mentioned earlier, none
-    of the \l {The Graphics View Framework}'s items accept hover
+    of the \l {Graphics View Framework}'s items accept hover
     event's by default.
 
     The QTimeLine class provides a timeline for controlling

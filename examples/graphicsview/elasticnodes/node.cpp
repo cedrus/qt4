@@ -6,35 +6,34 @@
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial Usage
-** Licensees holding valid Qt Commercial licenses may use this file in
-** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** $QT_BEGIN_LICENSE:BSD$
+** You may use this file under the terms of the BSD license as follows:
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of Nokia Corporation and its Subsidiary(-ies) nor
+**     the names of its contributors may be used to endorse or promote
+**     products derived from this software without specific prior written
+**     permission.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
-** If you have questions regarding the use of this file, please contact
-** Nokia at qt-info@nokia.com.
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -48,6 +47,7 @@
 #include "node.h"
 #include "graphwidget.h"
 
+//! [0]
 Node::Node(GraphWidget *graphWidget)
     : graph(graphWidget)
 {
@@ -56,7 +56,9 @@ Node::Node(GraphWidget *graphWidget)
     setCacheMode(DeviceCoordinateCache);
     setZValue(-1);
 }
+//! [0]
 
+//! [1]
 void Node::addEdge(Edge *edge)
 {
     edgeList << edge;
@@ -67,14 +69,18 @@ QList<Edge *> Node::edges() const
 {
     return edgeList;
 }
+//! [1]
 
+//! [2]
 void Node::calculateForces()
 {
     if (!scene() || scene()->mouseGrabberItem() == this) {
         newPos = pos();
         return;
     }
-    
+//! [2]
+
+//! [3]
     // Sum up all forces pushing this item away
     qreal xvel = 0;
     qreal yvel = 0;
@@ -83,37 +89,45 @@ void Node::calculateForces()
         if (!node)
             continue;
 
-        QLineF line(mapFromItem(node, 0, 0), QPointF(0, 0));
-        qreal dx = line.dx();
-        qreal dy = line.dy();
+        QPointF vec = mapToItem(node, 0, 0);
+        qreal dx = vec.x();
+        qreal dy = vec.y();
         double l = 2.0 * (dx * dx + dy * dy);
         if (l > 0) {
             xvel += (dx * 150.0) / l;
             yvel += (dy * 150.0) / l;
         }
     }
+//! [3]
 
+//! [4]
     // Now subtract all forces pulling items together
     double weight = (edgeList.size() + 1) * 10;
     foreach (Edge *edge, edgeList) {
-        QPointF pos;
+        QPointF vec;
         if (edge->sourceNode() == this)
-            pos = mapFromItem(edge->destNode(), 0, 0);
+            vec = mapToItem(edge->destNode(), 0, 0);
         else
-            pos = mapFromItem(edge->sourceNode(), 0, 0);
-        xvel += pos.x() / weight;
-        yvel += pos.y() / weight;
+            vec = mapToItem(edge->sourceNode(), 0, 0);
+        xvel -= vec.x() / weight;
+        yvel -= vec.y() / weight;
     }
-    
+//! [4]
+
+//! [5]
     if (qAbs(xvel) < 0.1 && qAbs(yvel) < 0.1)
         xvel = yvel = 0;
+//! [5]
 
+//! [6]
     QRectF sceneRect = scene()->sceneRect();
     newPos = pos() + QPointF(xvel, yvel);
     newPos.setX(qMin(qMax(newPos.x(), sceneRect.left() + 10), sceneRect.right() - 10));
     newPos.setY(qMin(qMax(newPos.y(), sceneRect.top() + 10), sceneRect.bottom() - 10));
 }
+//! [6]
 
+//! [7]
 bool Node::advance()
 {
     if (newPos == pos())
@@ -122,21 +136,27 @@ bool Node::advance()
     setPos(newPos);
     return true;
 }
+//! [7]
 
+//! [8]
 QRectF Node::boundingRect() const
 {
     qreal adjust = 2;
     return QRectF(-10 - adjust, -10 - adjust,
                   23 + adjust, 23 + adjust);
 }
+//! [8]
 
+//! [9]
 QPainterPath Node::shape() const
 {
     QPainterPath path;
     path.addEllipse(-10, -10, 20, 20);
     return path;
 }
+//! [9]
 
+//! [10]
 void Node::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *)
 {
     painter->setPen(Qt::NoPen);
@@ -157,7 +177,9 @@ void Node::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWid
     painter->setPen(QPen(Qt::black, 0));
     painter->drawEllipse(-10, -10, 20, 20);
 }
+//! [10]
 
+//! [11]
 QVariant Node::itemChange(GraphicsItemChange change, const QVariant &value)
 {
     switch (change) {
@@ -172,7 +194,9 @@ QVariant Node::itemChange(GraphicsItemChange change, const QVariant &value)
 
     return QGraphicsItem::itemChange(change, value);
 }
+//! [11]
 
+//! [12]
 void Node::mousePressEvent(QGraphicsSceneMouseEvent *event)
 {
     update();
@@ -184,3 +208,4 @@ void Node::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
     update();
     QGraphicsItem::mouseReleaseEvent(event);
 }
+//! [12]

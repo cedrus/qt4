@@ -73,13 +73,14 @@ struct CompilerInfo{
 } compiler_info[] = {
     // The compilers here are sorted in a reversed-preferred order
     {CC_BORLAND, "Borland C++",                                                    0, "bcc32.exe"},
-    {CC_MINGW,   "MinGW (Minimalist GNU for Windows)",                             0, "mingw32-gcc.exe"},
+    {CC_MINGW,   "MinGW (Minimalist GNU for Windows)",                             0, "g++.exe"},
     {CC_INTEL,   "Intel(R) C++ Compiler for 32-bit applications",                  0, "icl.exe"}, // xilink.exe, xilink5.exe, xilink6.exe, xilib.exe
     {CC_MSVC6,   "Microsoft (R) 32-bit C/C++ Optimizing Compiler (6.x)",           "Software\\Microsoft\\VisualStudio\\6.0\\Setup\\Microsoft Visual C++\\ProductDir", "cl.exe"}, // link.exe, lib.exe
     {CC_NET2002, "Microsoft (R) 32-bit C/C++ Optimizing Compiler.NET 2002 (7.0)",  "Software\\Microsoft\\VisualStudio\\7.0\\Setup\\VC\\ProductDir", "cl.exe"}, // link.exe, lib.exe
     {CC_NET2003, "Microsoft (R) 32-bit C/C++ Optimizing Compiler.NET 2003 (7.1)",  "Software\\Microsoft\\VisualStudio\\7.1\\Setup\\VC\\ProductDir", "cl.exe"}, // link.exe, lib.exe
     {CC_NET2005, "Microsoft (R) 32-bit C/C++ Optimizing Compiler.NET 2005 (8.0)",  "Software\\Microsoft\\VisualStudio\\SxS\\VC7\\8.0", "cl.exe"}, // link.exe, lib.exe
     {CC_NET2008, "Microsoft (R) 32-bit C/C++ Optimizing Compiler.NET 2008 (9.0)",  "Software\\Microsoft\\VisualStudio\\SxS\\VC7\\9.0", "cl.exe"}, // link.exe, lib.exe
+    {CC_NET2010, "Microsoft (R) 32-bit C/C++ Optimizing Compiler.NET 2010 (10.0)", "Software\\Microsoft\\VisualStudio\\SxS\\VC7\\10.0", "cl.exe"}, // link.exe, lib.exe
     {CC_UNKNOWN, "Unknown", 0, 0},
 };
 
@@ -105,6 +106,9 @@ QString Environment::detectQMakeSpec()
 {
     QString spec;
     switch (detectCompiler()) {
+    case CC_NET2010:
+        spec = "win32-msvc2010";
+        break;
     case CC_NET2008:
         spec = "win32-msvc2008";
         break;
@@ -357,7 +361,7 @@ int Environment::execute(QStringList arguments, const QStringList &additionalEnv
     QString args = qt_create_commandline(program, arguments);
     QByteArray envlist = qt_create_environment(fullEnv);
 
-    DWORD exitCode = -1;
+    DWORD exitCode = DWORD(-1);
     PROCESS_INFORMATION procInfo;
     memset(&procInfo, 0, sizeof(procInfo));
 
@@ -378,7 +382,7 @@ int Environment::execute(QStringList arguments, const QStringList &additionalEnv
     }
 
 
-    if (exitCode == -1) {
+    if (exitCode == DWORD(-1)) {
         switch(GetLastError()) {
         case E2BIG:
             cerr << "execute: Argument list exceeds 1024 bytes" << endl;

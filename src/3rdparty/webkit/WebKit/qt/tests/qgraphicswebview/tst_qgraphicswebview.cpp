@@ -17,35 +17,13 @@
     Boston, MA 02110-1301, USA.
 */
 
+#include "../util.h"
 #include <QtTest/QtTest>
-
+#include <QGraphicsSceneMouseEvent>
 #include <QGraphicsView>
 #include <qgraphicswebview.h>
 #include <qwebpage.h>
 #include <qwebframe.h>
-
-/**
- * Starts an event loop that runs until the given signal is received.
- * Optionally the event loop
- * can return earlier on a timeout.
- *
- * \return \p true if the requested signal was received
- *         \p false on timeout
- */
-static bool waitForSignal(QObject* obj, const char* signal, int timeout = 10000)
-{
-    QEventLoop loop;
-    QObject::connect(obj, signal, &loop, SLOT(quit()));
-    QTimer timer;
-    QSignalSpy timeoutSpy(&timer, SIGNAL(timeout()));
-    if (timeout > 0) {
-        QObject::connect(&timer, SIGNAL(timeout()), &loop, SLOT(quit()));
-        timer.setSingleShot(true);
-        timer.start(timeout);
-    }
-    loop.exec();
-    return timeoutSpy.isEmpty();
-}
 
 class tst_QGraphicsWebView : public QObject
 {
@@ -54,6 +32,9 @@ class tst_QGraphicsWebView : public QObject
 private slots:
     void qgraphicswebview();
     void crashOnViewlessWebPages();
+    void microFocusCoordinates();
+    void focusInputTypes();
+    void crashOnSetScaleBeforeSetUrl();
 };
 
 void tst_QGraphicsWebView::qgraphicswebview()
@@ -97,6 +78,29 @@ private slots:
     }
 };
 
+class GraphicsWebView : public QGraphicsWebView
+{
+    Q_OBJECT
+
+public:
+    GraphicsWebView(QGraphicsItem* parent = 0): QGraphicsWebView(parent)
+    {
+    }
+
+    void fireMouseClick(QPointF point) {
+        QGraphicsSceneMouseEvent presEv(QEvent::GraphicsSceneMousePress);
+        presEv.setPos(point);
+        presEv.setButton(Qt::LeftButton);
+        presEv.setButtons(Qt::LeftButton);
+        QGraphicsSceneMouseEvent relEv(QEvent::GraphicsSceneMouseRelease);
+        relEv.setPos(point);
+        relEv.setButton(Qt::LeftButton);
+        relEv.setButtons(Qt::LeftButton);
+        QGraphicsWebView::sceneEvent(&presEv);
+        QGraphicsWebView::sceneEvent(&relEv);
+    }
+};
+
 void tst_QGraphicsWebView::crashOnViewlessWebPages()
 {
     QGraphicsScene scene;
@@ -106,15 +110,18 @@ void tst_QGraphicsWebView::crashOnViewlessWebPages()
     WebPage* page = new WebPage;
     webView->setPage(page);
     page->webView = webView;
-    connect(page->mainFrame(), SIGNAL(initialLayoutCompleted()), page, SLOT(aborting()));
-
     scene.addItem(webView);
 
     view.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     view.resize(600, 480);
     webView->resize(view.geometry().size());
-    QTest::qWait(200);
+
+    QCoreApplication::processEvents();
     view.show();
+
+    // Resizing the page will resize and layout the empty "about:blank"
+    // page, so we first connect the signal afterward.
+    connect(page->mainFrame(), SIGNAL(initialLayoutCompleted()), page, SLOT(aborting()));
 
     page->mainFrame()->setHtml(QString("data:text/html,"
                                             "<frameset cols=\"25%,75%\">"
@@ -122,8 +129,101 @@ void tst_QGraphicsWebView::crashOnViewlessWebPages()
                                                 "<frame src=\"data:text/html,bar\">"
                                             "</frameset>"));
 
-    QVERIFY(::waitForSignal(page, SIGNAL(loadFinished(bool))));
+    QVERIFY(waitForSignal(page, SIGNAL(loadFinished(bool))));
+    delete page;
 }
+
+void tst_QGraphicsWebView::crashOnSetScaleBeforeSetUrl()
+{
+    QGraphicsWebView* webView = new QGraphicsWebView;
+    webView->setScale(2.0);
+    delete webView;
+}
+
+void tst_QGraphicsWebView::microFocusCoordinates()
+{
+    QWebPage* page = new QWebPage;
+    QGraphicsWebView* webView = new QGraphicsWebView;
+    webView->setPage( page );
+    QGraphicsView* view = new QGraphicsView;
+    QGraphicsScene* scene = new QGraphicsScene(view);
+    view->setScene(scene);
+    scene->addItem(webView);
+    view->setGeometry(QRect(0,0,500,500));
+
+    page->mainFrame()->setHtml("<html><body>" \
+        "<input type='text' id='input1' style='font--family: serif' value='' maxlength='20'/><br>" \
+        "<canvas id='canvas1' width='500' height='500'/>" \
+        "<input type='password'/><br>" \
+        "<canvas id='canvas2' width='500' height='500'/>" \
+        "</body></html>");
+
+    page->mainFrame()->setFocus();
+
+    QVariant initialMicroFocus = page->inputMethodQuery(Qt::ImMicroFocus);
+    QVERIFY(initialMicroFocus.isValid());
+
+    page->mainFrame()->scroll(0,300);
+
+    QVariant currentMicroFocus = page->inputMethodQuery(Qt::ImMicroFocus);
+    QVERIFY(currentMicroFocus.isValid());
+
+    QCOMPARE(initialMicroFocus.toRect().translated(QPoint(0,-300)), currentMicroFocus.toRect());
+
+    delete view;
+}
+
+void tst_QGraphicsWebView::focusInputTypes()
+{
+    QWebPage* page = new QWebPage;
+    GraphicsWebView* webView = new GraphicsWebView;
+    webView->setPage( page );
+    QGraphicsView* view = new QGraphicsView;
+    QGraphicsScene* scene = new QGraphicsScene(view);
+    view->setScene(scene);
+    scene->addItem(webView);
+    view->setGeometry(QRect(0,0,500,500));
+    QCoreApplication::processEvents();
+    QUrl url("qrc:///resources/input_types.html");
+    page->mainFrame()->load(url);
+    page->mainFrame()->setFocus();
+
+    QVERIFY(waitForSignal(page, SIGNAL(loadFinished(bool))));
+
+    // 'text' type
+    webView->fireMouseClick(QPointF(20.0, 10.0));
+#if defined(Q_WS_MAEMO_5) || defined(Q_WS_MAEMO_6) || defined(Q_OS_SYMBIAN)
+    QVERIFY(webView->inputMethodHints() & Qt::ImhNoAutoUppercase);
+    QVERIFY(webView->inputMethodHints() & Qt::ImhNoPredictiveText);
+#else
+    QVERIFY(webView->inputMethodHints() == Qt::ImhNone);
+#endif
+
+    // 'password' field
+    webView->fireMouseClick(QPointF(20.0, 60.0));
+    QVERIFY(webView->inputMethodHints() & Qt::ImhHiddenText);
+
+    // 'tel' field
+    webView->fireMouseClick(QPointF(20.0, 110.0));
+    QVERIFY(webView->inputMethodHints() & Qt::ImhDialableCharactersOnly);
+
+    // 'number' field
+    webView->fireMouseClick(QPointF(20.0, 160.0));
+    QVERIFY(webView->inputMethodHints() & Qt::ImhDigitsOnly);
+
+    // 'email' field
+    webView->fireMouseClick(QPointF(20.0, 210.0));
+    QVERIFY(webView->inputMethodHints() & Qt::ImhEmailCharactersOnly);
+
+    // 'url' field
+    webView->fireMouseClick(QPointF(20.0, 260.0));
+    QVERIFY(webView->inputMethodHints() & Qt::ImhUrlCharactersOnly);
+
+    delete webView;
+    delete view;
+}
+
+
 
 QTEST_MAIN(tst_QGraphicsWebView)
 

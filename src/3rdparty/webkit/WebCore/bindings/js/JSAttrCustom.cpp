@@ -33,6 +33,7 @@
 #include "Document.h"
 #include "HTMLFrameElementBase.h"
 #include "HTMLNames.h"
+#include "JSDOMBinding.h"
 
 using namespace JSC;
 
@@ -46,13 +47,8 @@ void JSAttr::setValue(ExecState* exec, JSValue value)
     String attrValue = valueToStringWithNullCheck(exec, value);
 
     Element* ownerElement = imp->ownerElement();
-    if (ownerElement && (ownerElement->hasTagName(iframeTag) || ownerElement->hasTagName(frameTag))) {
-        if (equalIgnoringCase(imp->name(), "src") && protocolIsJavaScript(deprecatedParseURL(attrValue))) {
-            Document* contentDocument = static_cast<HTMLFrameElementBase*>(ownerElement)->contentDocument();
-            if (contentDocument && !checkNodeSecurity(exec, contentDocument))
-                return;
-        }
-    }
+    if (ownerElement && !allowSettingSrcToJavascriptURL(exec, ownerElement, imp->name(), attrValue))
+        return;
 
     ExceptionCode ec = 0;
     imp->setValue(attrValue, ec);
@@ -65,10 +61,8 @@ void JSAttr::markChildren(MarkStack& markStack)
 
     // Mark the element so that this will work to access the attribute even if the last
     // other reference goes away.
-    if (Element* element = impl()->ownerElement()) {
-        if (JSNode* wrapper = getCachedDOMNodeWrapper(element->document(), element))
-            markStack.append(wrapper);
-    }
+    if (Element* element = impl()->ownerElement())
+        markDOMNodeWrapper(markStack, element->document(), element);
 }
 
 } // namespace WebCore

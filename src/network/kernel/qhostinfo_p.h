@@ -84,7 +84,7 @@ public Q_SLOTS:
     }
 
 Q_SIGNALS:
-    void resultsReady(const QHostInfo info);
+    void resultsReady(const QHostInfo &info);
 };
 
 // needs to be QObject because fromName calls tr()
@@ -116,7 +116,7 @@ public:
 // These functions are outside of the QHostInfo class and strictly internal.
 // Do NOT use them outside of QAbstractSocket.
 QHostInfo Q_NETWORK_EXPORT qt_qhostinfo_lookup(const QString &name, QObject *receiver, const char *member, bool *valid, int *id);
-void Q_NETWORK_EXPORT qt_qhostinfo_clear_cache();
+void Q_AUTOTEST_EXPORT qt_qhostinfo_clear_cache();
 void Q_AUTOTEST_EXPORT qt_qhostinfo_enable_cache(bool e);
 
 class QHostInfoCache
@@ -161,6 +161,7 @@ public:
     QHostInfoLookupManager();
     ~QHostInfoLookupManager();
 
+    void clear();
     void work();
 
     // called from QHostInfo
@@ -172,6 +173,8 @@ public:
     bool wasAborted(int id);
 
     QHostInfoCache cache;
+
+    friend class QHostInfoRunnable;
 protected:
     QList<QHostInfoRunnable*> currentLookups; // in progress
     QList<QHostInfoRunnable*> postponedLookups; // postponed because in progress for same host

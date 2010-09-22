@@ -37,7 +37,9 @@ HEADERS += \
 	text/qtexttable_p.h \
 	text/qzipreader_p.h \
 	text/qzipwriter_p.h \
-	text/qtextodfwriter_p.h
+	text/qtextodfwriter_p.h \
+	text/qstatictext_p.h \
+	text/qstatictext.h
 
 SOURCES += \
 	text/qfont.cpp \
@@ -66,7 +68,8 @@ SOURCES += \
 	text/qsyntaxhighlighter.cpp \
 	text/qcssparser.cpp \
 	text/qzip.cpp \
-	text/qtextodfwriter.cpp
+	text/qtextodfwriter.cpp \
+	text/qstatictext.cpp
 
 win32 {
 	SOURCES += \
@@ -135,7 +138,8 @@ contains(QT_CONFIG, freetype) {
 	../3rdparty/freetype/src/base/ftinit.c \
 	../3rdparty/freetype/src/base/ftmm.c \
 	../3rdparty/freetype/src/base/fttype1.c \
-          ../3rdparty/freetype/src/base/ftbitmap.c\
+	../3rdparty/freetype/src/base/ftsynth.c \
+	../3rdparty/freetype/src/base/ftbitmap.c \
 	../3rdparty/freetype/src/bdf/bdf.c \
 	../3rdparty/freetype/src/cache/ftcache.c \
 	../3rdparty/freetype/src/cff/cff.c \

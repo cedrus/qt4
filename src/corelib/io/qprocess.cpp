@@ -88,7 +88,7 @@ QT_END_NAMESPACE
 #include "qprocess_p.h"
 
 #include <qbytearray.h>
-#include <qdatetime.h>
+#include <qelapsedtimer.h>
 #include <qcoreapplication.h>
 #include <qsocketnotifier.h>
 #include <qtimer.h>
@@ -1377,6 +1377,50 @@ void QProcess::setStandardOutputProcess(QProcess *destination)
     dto->stdinChannel.pipeFrom(dfrom);
 }
 
+#if defined(Q_OS_WIN) || defined(Q_OS_SYMBIAN)
+
+/*!
+    \since 4.7
+
+    Returns the additional native command line arguments for the program.
+
+    \note This function is available only on the Windows and Symbian
+    platforms.
+
+    \sa setNativeArguments()
+*/
+QString QProcess::nativeArguments() const
+{
+    Q_D(const QProcess);
+    return d->nativeArguments;
+}
+
+/*!
+    \since 4.7
+    \overload
+
+    Sets additional native command line \a arguments for the program.
+
+    On operating systems where the system API for passing command line
+    \a arguments to a subprocess natively uses a single string, one can
+    conceive command lines which cannot be passed via QProcess's portable
+    list-based API. In such cases this function must be used to set a
+    string which is \e appended to the string composed from the usual
+    argument list, with a delimiting space.
+
+    \note This function is available only on the Windows and Symbian
+    platforms.
+
+    \sa nativeArguments()
+*/
+void QProcess::setNativeArguments(const QString &arguments)
+{
+    Q_D(QProcess);
+    d->nativeArguments = arguments;
+}
+
+#endif
+
 /*!
     If QProcess has been assigned a working directory, this function returns
     the working directory that the QProcess will enter before the program has
@@ -1649,7 +1693,7 @@ bool QProcess::waitForBytesWritten(int msecs)
     if (d->processState == QProcess::NotRunning)
         return false;
     if (d->processState == QProcess::Starting) {
-        QTime stopWatch;
+        QElapsedTimer stopWatch;
         stopWatch.start();
         bool started = waitForStarted(msecs);
         if (!started)
@@ -1686,7 +1730,7 @@ bool QProcess::waitForFinished(int msecs)
     if (d->processState == QProcess::NotRunning)
         return false;
     if (d->processState == QProcess::Starting) {
-        QTime stopWatch;
+        QElapsedTimer stopWatch;
         stopWatch.start();
         bool started = waitForStarted(msecs);
         if (!started)
@@ -1856,7 +1900,7 @@ QByteArray QProcess::readAllStandardError()
 }
 
 /*!
-    Starts the program \a program in a new process, if one is not already
+    Starts the given \a program in a new process, if none is already
     running, passing the command line arguments in \a arguments. The OpenMode
     is set to \a mode.
 
@@ -1866,13 +1910,12 @@ QByteArray QProcess::readAllStandardError()
     process, a warning may be printed at the console, and the existing
     process will continue running.
 
-    \note Arguments that contain spaces are not passed to the
-    process as separate arguments.
-
     \note Processes are started asynchronously, which means the started()
     and error() signals may be delayed. Call waitForStarted() to make
     sure the process has started (or has failed to start) and those signals
     have been emitted.
+
+    \note No further splitting of the arguments is performed.
 
     \bold{Windows:} Arguments that contain spaces are wrapped in quotes.
 
@@ -2022,7 +2065,7 @@ void QProcess::start(const QString &program, OpenMode mode)
     \note Terminating running processes from other processes will typically
     cause a panic in Symbian due to platform security.
 
-    \sa \l {Symbian Platform Security Requirements}
+    \sa {Symbian Platform Security Requirements}
     \sa kill()
 */
 void QProcess::terminate()
@@ -2040,7 +2083,7 @@ void QProcess::terminate()
     On Symbian, this function requires platform security capability
     \c PowerMgmt. If absent, the process will panic with KERN-EXEC 46.
 
-    \sa \l {Symbian Platform Security Requirements}
+    \sa {Symbian Platform Security Requirements}
     \sa terminate()
 */
 void QProcess::kill()
@@ -2079,18 +2122,23 @@ QProcess::ExitStatus QProcess::exitStatus() const
     code of the process. Any data the new process writes to the
     console is forwarded to the calling process.
 
-    The environment and working directory are inherited by the calling
+    The environment and working directory are inherited from the calling
     process.
 
     On Windows, arguments that contain spaces are wrapped in quotes.
+
+    If the process cannot be started, -2 is returned. If the process
+    crashes, -1 is returned. Otherwise, the process' exit code is
+    returned.
 */
 int QProcess::execute(const QString &program, const QStringList &arguments)
 {
     QProcess process;
     process.setReadChannelMode(ForwardedChannels);
     process.start(program, arguments);
-    process.waitForFinished(-1);
-    return process.exitCode();
+    if (!process.waitForFinished(-1))
+        return -2;
+    return process.exitStatus() == QProcess::NormalExit ? process.exitCode() : -1;
 }
 
 /*!
@@ -2105,8 +2153,9 @@ int QProcess::execute(const QString &program)
     QProcess process;
     process.setReadChannelMode(ForwardedChannels);
     process.start(program);
-    process.waitForFinished(-1);
-    return process.exitCode();
+    if (!process.waitForFinished(-1))
+        return -2;
+    return process.exitStatus() == QProcess::NormalExit ? process.exitCode() : -1;
 }
 
 /*!

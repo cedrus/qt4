@@ -56,7 +56,12 @@
 #include <QtCore/qbasictimer.h>
 #include <QtCore/qdatetime.h>
 #include <QtCore/qtimer.h>
+#include <QtCore/qelapsedtimer.h>
 #include <private/qobject_p.h>
+
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
 
 #ifndef QT_NO_ANIMATION
 
@@ -109,6 +114,7 @@ private:
     Q_DECLARE_PUBLIC(QAbstractAnimation)
 };
 
+typedef QElapsedTimer ElapsedTimer;
 
 class QUnifiedTimer : public QObject
 {
@@ -118,9 +124,10 @@ private:
 public:
     //XXX this is needed by dui
     static Q_CORE_EXPORT QUnifiedTimer *instance();
+    static QUnifiedTimer *instance(bool create);
 
-    void registerAnimation(QAbstractAnimation *animation, bool isTopLevel);
-    void unregisterAnimation(QAbstractAnimation *animation);
+    static void registerAnimation(QAbstractAnimation *animation, bool isTopLevel);
+    static void unregisterAnimation(QAbstractAnimation *animation);
 
     //defines the timing interval. Default is DEFAULT_TIMER_INTERVAL
     void setTimingInterval(int interval)
@@ -138,20 +145,21 @@ public:
     */
     void setConsistentTiming(bool consistent) { consistentTiming = consistent; }
 
-    //this facilitates fine-tuning of complex animations
+    //these facilitate fine-tuning of complex animations
     void setSlowModeEnabled(bool enabled) { slowMode = enabled; }
+    void setSlowdownFactor(qreal factor) { slowdownFactor = factor; }
 
     /*
         this is used for updating the currentTime of all animations in case the pause
         timer is active or, otherwise, only of the animation passed as parameter.
     */
-    void ensureTimerUpdate();
+    static void ensureTimerUpdate();
 
     /*
         this will evaluate the need of restarting the pause timer in case there is still
         some pause animations running.
     */
-    void restartAnimationTimer();
+    static void updateAnimationTimer();
 
 protected:
     void timerEvent(QTimerEvent *);
@@ -162,12 +170,19 @@ private:
     // timer used to delay the check if we should start/stop the animation timer
     QBasicTimer startStopAnimationTimer;
 
-    QTime time;
-    int lastTick;
+    ElapsedTimer time;
+
+    qint64 lastTick;
     int timingInterval;
     int currentAnimationIdx;
     bool consistentTiming;
     bool slowMode;
+
+    // This factor will be used to divide the DEFAULT_TIMER_INTERVAL at each tick
+    // when slowMode is enabled. Setting it to 0 or higher than DEFAULT_TIMER_INTERVAL (16)
+    // stops all animations.
+    qreal slowdownFactor;
+
     // bool to indicate that only pause animations are active
     bool isPauseTimerActive;
 
@@ -179,6 +194,8 @@ private:
 
     void registerRunningAnimation(QAbstractAnimation *animation);
     void unregisterRunningAnimation(QAbstractAnimation *animation);
+
+    void restartAnimationTimer();
 
     void updateAnimationsTime();
     int closestPauseAnimationTimeToFinish();

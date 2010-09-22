@@ -267,8 +267,10 @@ void QWSManager::mouseMoveEvent(QMouseEvent *e)
 
 
 #ifndef QT_NO_CURSOR
-    QWSDisplay *qwsd = QApplication::desktop()->qwsDisplay();
-    qwsd->selectCursor(d->managed, regionToShape(d->cachedRegionAt()));
+    if (d->managed->minimumSize() != d->managed->maximumSize()) {
+        QWSDisplay *qwsd = QApplication::desktop()->qwsDisplay();
+        qwsd->selectCursor(d->managed, regionToShape(d->cachedRegionAt()));
+    }
 #endif //QT_NO_CURSOR
 
     if (d->activeRegion)
@@ -392,7 +394,7 @@ void QWSManagerPrivate::dirtyRegion(int decorationRegion,
                                     const QRegion &clip)
 {
     QTLWExtra *topextra = managed->d_func()->extra->topextra;
-    QWidgetBackingStore *bs = topextra->backingStore;
+    QWidgetBackingStore *bs = topextra->backingStore.data();
     const bool pendingUpdateRequest = bs->isDirty();
 
     if (decorationRegion == QDecoration::All) {

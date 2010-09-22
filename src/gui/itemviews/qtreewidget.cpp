@@ -1472,6 +1472,10 @@ QTreeWidgetItem::QTreeWidgetItem(QTreeWidgetItem *parent, QTreeWidgetItem *after
 
 /*!
   Destroys this tree widget item.
+  
+  The item will be removed from \l{QTreeWidget}s to which it has
+  been added. This makes it safe to delete an item at any time.
+
 */
 
 QTreeWidgetItem::~QTreeWidgetItem()
@@ -2199,7 +2203,7 @@ void QTreeWidgetItem::executePendingSort() const
 
     This operator uses QTreeWidgetItem::write().
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 QDataStream &operator<<(QDataStream &out, const QTreeWidgetItem &item)
 {
@@ -2214,7 +2218,7 @@ QDataStream &operator<<(QDataStream &out, const QTreeWidgetItem &item)
 
     This operator uses QTreeWidgetItem::read().
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 QDataStream &operator>>(QDataStream &in, QTreeWidgetItem &item)
 {
@@ -3039,10 +3043,14 @@ QList<QTreeWidgetItem*> QTreeWidget::selectedItems() const
     Q_D(const QTreeWidget);
     QModelIndexList indexes = selectionModel()->selectedIndexes();
     QList<QTreeWidgetItem*> items;
+    items.reserve(indexes.count());
+    QSet<QTreeWidgetItem *> seen;
+    seen.reserve(indexes.count());
     for (int i = 0; i < indexes.count(); ++i) {
         QTreeWidgetItem *item = d->item(indexes.at(i));
-        if (isItemHidden(item) || items.contains(item)) // ### slow, optimize later
+        if (isItemHidden(item) || seen.contains(item))
             continue;
+        seen.insert(item);
         items.append(item);
     }
     return items;

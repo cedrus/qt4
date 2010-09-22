@@ -1,9 +1,13 @@
 TEMPLATE      = subdirs
-SUBDIRS       = blockingfortuneclient \
+SUBDIRS       = \
+                download \
+                downloadmanager
+
+!contains(QT_CONFIG, no-gui) {
+    SUBDIRS +=  \
+                blockingfortuneclient \
                 broadcastreceiver \
                 broadcastsender \
-                download \
-                downloadmanager \
                 fortuneclient \
                 fortuneserver \
                 qftp \
@@ -11,15 +15,21 @@ SUBDIRS       = blockingfortuneclient \
                 loopback \
                 threadedfortuneserver \
                 googlesuggest \
-                torrent
+                torrent \
+                bearermonitor
 
-# no QProcess
-!vxworks:!qnx:SUBDIRS += network-chat
+    contains(QT_CONFIG, svg) {
+        SUBDIRS += bearercloud
+    }
+
+    # no QProcess
+    !vxworks:!qnx:SUBDIRS += network-chat
+
+    contains(QT_CONFIG, openssl):SUBDIRS += securesocketclient
+    contains(QT_CONFIG, openssl-linked):SUBDIRS += securesocketclient
+}
 
 symbian: SUBDIRS = qftp
-
-contains(QT_CONFIG, openssl):SUBDIRS += securesocketclient
-contains(QT_CONFIG, openssl-linked):SUBDIRS += securesocketclient
 
 # install
 sources.files = $$SOURCES $$HEADERS $$RESOURCES $$FORMS network.pro README

@@ -67,15 +67,15 @@ NPError PluginView::handlePostReadFile(Vector<char>&, uint32, const char*)
     return 0;
 }
 
-NPError PluginView::getValue(NPNVariable, void*)
+#if ENABLE(NETSCAPE_PLUGIN_API)
+bool PluginView::platformGetValue(NPNVariable, void*, NPError*)
 {
-    return 0;
+    return false;
 }
 
-#if ENABLE(NETSCAPE_PLUGIN_API)
-NPError PluginView::getValueStatic(NPNVariable variable, void* value)
+bool PluginView::platformGetValueStatic(NPNVariable, void*, NPError*)
 {
-    return 0;
+    return false;
 }
 #endif
 
@@ -119,5 +119,21 @@ void PluginView::halt()
 void PluginView::restart()
 {
 }
+
+#if ENABLE(NETSCAPE_PLUGIN_API)
+void PluginView::keepAlive(NPP)
+{
+}
+#endif
+
+#if PLATFORM(MAC) || PLATFORM(CHROMIUM) || PLATFORM(EFL)
+void PluginView::privateBrowsingStateChanged(bool)
+{
+}
+
+void PluginView::setJavaScriptPaused(bool)
+{
+}
+#endif
 
 } // namespace WebCore

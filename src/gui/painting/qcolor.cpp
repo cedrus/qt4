@@ -133,7 +133,7 @@ QT_BEGIN_NAMESPACE
     QColor is platform and device independent. The QColormap class
     maps the color to the hardware.
 
-    For more information about painting in general, see \l{The Paint
+    For more information about painting in general, see the \l{Paint
     System} documentation.
 
     \tableofcontents
@@ -532,25 +532,49 @@ QString QColor::name() const
 
 void QColor::setNamedColor(const QString &name)
 {
+    if (!setColorFromString(name))
+        qWarning("QColor::setNamedColor: Unknown color name '%s'", name.toLatin1().constData());
+}
+
+/*!
+   \since 4.7
+
+   Returns true if the \a name is a valid color name and can
+   be used to construct a valid QColor object, otherwise returns
+   false.
+
+   It uses the same algorithm used in setNamedColor().
+
+   \sa setNamedColor()
+*/
+bool QColor::isValidColor(const QString &name)
+{
+    return !name.isEmpty() && QColor().setColorFromString(name);
+}
+
+bool QColor::setColorFromString(const QString &name)
+{
     if (name.isEmpty()) {
         invalidate();
-        return;
+        return true;
     }
 
     if (name.startsWith(QLatin1Char('#'))) {
         QRgb rgb;
         if (qt_get_hex_rgb(name.constData(), name.length(), &rgb)) {
             setRgb(rgb);
+            return true;
         } else {
             invalidate();
+            return false;
         }
-        return;
     }
 
 #ifndef QT_NO_COLORNAMES
     QRgb rgb;
     if (qt_get_named_rgb(name.constData(), name.length(), &rgb)) {
         setRgba(rgb);
+        return true;
     } else
 #endif
     {
@@ -561,11 +585,12 @@ void QColor::setNamedColor(const QString &name)
             && QX11Info::display()
             && XParseColor(QX11Info::display(), QX11Info::appColormap(), name.toLatin1().constData(), &result)) {
             setRgb(result.red >> 8, result.green >> 8, result.blue >> 8);
+            return true;
         } else
 #endif
         {
-            qWarning("QColor::setNamedColor: Unknown color name '%s'", name.toLatin1().constData());
             invalidate();
+            return false;
         }
     }
 }
@@ -2498,7 +2523,7 @@ QDebug operator<<(QDebug dbg, const QColor &c)
 
     Writes the \a color to the \a stream.
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 QDataStream &operator<<(QDataStream &stream, const QColor &color)
 {
@@ -2534,7 +2559,7 @@ QDataStream &operator<<(QDataStream &stream, const QColor &color)
 
     Reads the \a color from the \a stream.
 
-    \sa { Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 QDataStream &operator>>(QDataStream &stream, QColor &color)
 {
@@ -2690,14 +2715,6 @@ QDataStream &operator>>(QDataStream &stream, QColor &color)
     \l{QColor#Alpha-Blended Drawing}{Alpha-Blended Drawing} section.
 
     \sa QColor::rgb(), QColor::rgba()
-*/
-
-/*! \fn void QColormap::initialize()
-  \internal
-*/
-
-/*! \fn void QColormap::cleanup()
-  \internal
 */
 
 QT_END_NAMESPACE

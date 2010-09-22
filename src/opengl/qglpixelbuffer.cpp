@@ -78,7 +78,7 @@
 
 #include <QtCore/qglobal.h>
 
-#if !defined(QT_OPENGL_ES_1) && !defined(QT_OPENGL_ES_1_CL)
+#if !defined(QT_OPENGL_ES_1)
 #include <private/qpaintengineex_opengl2_p.h>
 #endif
 
@@ -137,14 +137,14 @@ void QGLPixelBufferPrivate::common_init(const QSize &size, const QGLFormat &form
 #if defined(Q_WS_WIN) && !defined(QT_OPENGL_ES)
         qctx->d_func()->dc = dc;
         qctx->d_func()->rc = ctx;
-#elif (defined(Q_WS_X11) && !defined(QT_OPENGL_ES))
+#elif (defined(Q_WS_X11) && defined(QT_NO_EGL))
         qctx->d_func()->cx = ctx;
         qctx->d_func()->pbuf = (void *) pbuf;
         qctx->d_func()->vi = 0;
 #elif defined(Q_WS_MAC)
         qctx->d_func()->cx = ctx;
         qctx->d_func()->vi = 0;
-#elif defined(QT_OPENGL_ES)
+#elif !defined(QT_NO_EGL)
         qctx->d_func()->eglContext = ctx;
         qctx->d_func()->eglSurface = pbuf;
 #endif
@@ -254,7 +254,7 @@ bool QGLPixelBuffer::doneCurrent()
     \sa size()
 */
 
-#if (defined(Q_WS_X11) || defined(Q_WS_WIN)) && !defined(QT_OPENGL_ES)
+#if (defined(Q_WS_X11) || defined(Q_WS_WIN)) && defined(QT_NO_EGL)
 GLuint QGLPixelBuffer::generateDynamicTexture() const
 {
     Q_D(const QGLPixelBuffer);
@@ -387,7 +387,7 @@ bool QGLPixelBuffer::isValid() const
     return !d->invalid;
 }
 
-#if !defined(QT_OPENGL_ES_1) && !defined(QT_OPENGL_ES_1_CL)
+#if !defined(QT_OPENGL_ES_1)
 Q_GLOBAL_STATIC(QGL2PaintEngineEx, qt_buffer_2_engine)
 #endif
 
@@ -398,7 +398,7 @@ Q_GLOBAL_STATIC(QOpenGLPaintEngine, qt_buffer_engine)
 /*! \reimp */
 QPaintEngine *QGLPixelBuffer::paintEngine() const
 {
-#if defined(QT_OPENGL_ES_1) || defined(QT_OPENGL_ES_1_CL)
+#if defined(QT_OPENGL_ES_1)
     return qt_buffer_engine();
 #elif defined(QT_OPENGL_ES_2)
     return qt_buffer_2_engine();

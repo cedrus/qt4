@@ -47,7 +47,7 @@
 #include <qlayout.h>
 #include <qstyle.h>
 #include <qstyleoption.h>
-#include <qdatetime.h>
+#include <qelapsedtimer.h>
 #include <qpointer.h>
 #include <qdebug.h>
 #include <qx11info_x11.h>
@@ -1070,6 +1070,7 @@ QX11EmbedContainer::QX11EmbedContainer(QWidget *parent)
     d->focusProxy = new QWidget(this);
     d->focusProxy->setAttribute(Qt::WA_NativeWindow);
     d->focusProxy->setAttribute(Qt::WA_DontCreateNativeAncestors);
+    d->focusProxy->createWinId();
     d->focusProxy->setGeometry(-1, -1, 1, 1);
 
     // We need events from the window (activation status) and
@@ -1231,7 +1232,7 @@ void QX11EmbedContainer::embedClient(WId id)
       For safety, we will not wait more than 500 ms, so that we can
       preemptively workaround buggy window managers.
     */
-    QTime t;
+    QElapsedTimer t;
     t.start();
 
     functorData data;

@@ -65,7 +65,6 @@
 #endif
 
 class FrequencySpectrum;
-
 QT_FORWARD_DECLARE_CLASS(QAudioInput)
 QT_FORWARD_DECLARE_CLASS(QAudioOutput)
 QT_FORWARD_DECLARE_CLASS(QFile)

@@ -85,6 +85,9 @@
 // Freetype Font Engine
 //#define QT_NO_FREETYPE
 
+// Gesture
+//#define QT_NO_GESTURES
+
 // QGroupBox
 //#define QT_NO_GROUPBOX
 
@@ -500,9 +503,19 @@
 #define QT_NO_XMLSTREAMWRITER
 #endif
 
+// Bearer Management
+#if !defined(QT_NO_BEARERMANAGEMENT) && (defined(QT_NO_LIBRARY))
+#define QT_NO_BEARERMANAGEMENT
+#endif
+
 // Context menu
 #if !defined(QT_NO_CONTEXTMENU) && (defined(QT_NO_MENU))
 #define QT_NO_CONTEXTMENU
+#endif
+
+// QtDBus module
+#if !defined(QT_NO_DBUS) && (defined(QT_NO_PROPERTIES) || defined(QT_NO_DOM))
+#define QT_NO_DBUS
 #endif
 
 // File Transfer Protocol

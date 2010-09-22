@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -44,10 +30,13 @@
 \title Installation
 \brief Installing Qt on supported platforms.
 
-The installation procedure is different on each Qt platform.
-Please follow the instructions for your platform from the following list.
+The installation procedure is different on each Qt platform. This page provides
+information on how to install Qt, as well as software and hardware requirements
+for using Qt on each of the supported platforms. Please follow the instructions
+for your platform from the following list.
 
 \generatelist{related}
+
 */
 
 /*! \page install-x11.html
@@ -176,7 +165,7 @@ consult the installation instructions provided instead of the ones in
 this document.
 \o \l{Open Source Versions of Qt} is not officially supported for use with
 any version of Visual Studio. Integration with Visual Studio is available
-as part of the \l{Qt Commercial Editions}.
+as part of the \l{Qt Commercial Edition}.
 
 \endlist
 \endtable
@@ -289,6 +278,10 @@ in the \l{Qt for Mac OS X Requirements} document.
 and follow the instructions to install Qt. You can later run the \c{uninstall-qt.py}
 script to uninstall the binary package. The script is located in /Developer/Tools and
 must be run as root.
+
+\note Do not run the iPhone simulator while installing Qt. The
+\l{http://openradar.appspot.com/7214991} 
+{iPhone simulator conflicts with the package installer}.
 
 The following instructions describe how to install Qt from the source package.
 
@@ -693,6 +686,207 @@ If you are using pre-built binaries, follow the instructions given in the
 \endlist
 
 */
+/*! \page install-Symbian-linux.html
+\title Installing Qt on the Symbian platform using Linux (experimental)
+\ingroup installation
+\ingroup qtsymbian
+\brief How to install Qt on the Symbian platform using Linux.
+
+\note \bold {This document describes how to install and configure Qt for
+the Symbian platform from scratch, using Linux as the build host.
+Qt for Symbian binaries can be downloaded directly so development of
+applications using Qt for Symbian can start right away.}
+
+\list 1
+
+    \o  Setup the development environment
+
+        \note Qt for the Symbian platform has some requirements on the development
+        platform. The Symbian SDK for Linux as well as a cross compiler for the ARM
+        processor used on Symbian devices should be present on the development machine.
+        See {http://qt.gitorious.org/qt/pages/QtCreatorSymbianLinux} for more details.
+
+    \o  Install Qt
+
+        Uncompress the \l{http://qt.nokia.com/downloads}{downloaded} source package into the
+        directory you want Qt installed, e.g. \c{/home/user/qt/%VERSION%}.
+
+    \o  Environment variables
+
+        In order to build and use Qt, the \c PATH environment variable needs
+        to be extended to fine Qt tools and also to find the Symbian platform tools:
+
+        First you need to set the \c EPOCROOT environment variable to point to the location
+        of your S60 SDK:
+
+        \snippet doc/src/snippets/code/doc_src_installation.qdoc 36
+
+        Then you can update the PATH variable;
+
+        \snippet doc/src/snippets/code/doc_src_installation.qdoc 37
+
+    \o  Configure Qt
+
+        To configure Qt for the Symbian platform, do:
+
+        \snippet doc/src/snippets/code/doc_src_installation.qdoc 38
+        to build the libraries using RVCT or
+        \snippet doc/src/snippets/code/doc_src_installation.qdoc 39
+        to build the libraries using GCCE.
+
+    \o  Build Qt
+
+        To build Qt for the device, type:
+
+        \snippet doc/src/snippets/code/doc_src_installation.qdoc 40
+
+        Congratulations, Qt is now ready to use.
+
+    \o  Building Qt packages for the device
+
+        To run any application or demo on a real device, you need to install it
+        on the device. To do this you first have to create a a package for the
+        device, containing the libraries:
+
+    \list A
+        \o Building a Qt package without a certificate
+
+            If you have no certificate, build a self signed Qt:
+
+            \snippet doc/src/snippets/code/doc_src_installation.qdoc 41
+
+            The Qt libraries are built with "All -Tcb" capability, so that
+            they can support all types of applications. However, these
+            capabilities are automatically lowered if you make a self-signed
+            package.
+
+        \o Building a Qt package with a Symbian developer certificate
+
+            If you have a symbian-signed developer certificate, specify the
+            capabilities you can sign for, for example:
+
+            \snippet doc/src/snippets/code/doc_src_installation.qdoc 42
+    \endlist
+
+    \o  Installing Qt packages to the device.
+
+        It is possible to install packages to a phone in Linux by putting
+        the package on the phone memory card and then installing manually
+        from the phone menu. However, this is tedious and will not work
+        on phones without a memory card, so the method recommended by Qt is
+        to use the App TRK tool.
+
+        \list a
+            \o Obtaining the App TRK package.
+
+                Download the package from the following location.
+
+                \list
+                    \o \l{http://tools.ext.nokia.com/trk/}{Application TRK}.
+                       Choose the correct installation package based on the
+                       S60 version of your device
+                       (\c{S60_<S60-version>_app_trk_<TRK-version>.sisx}).
+                \endlist
+
+                This package currently has to be installed by putting the
+                package on the memory card and installing from the phone
+                menu, or using a Windows PC for doing the install. However,
+                the installation only has to be done once.
+
+            \o Configuring App TRK on the phone.
+
+                When App TRK is installed, connect the phone to the PC using
+                the USB cable. Select "PCSuite" as connection type. Then run
+                App TRK on the phone, and make sure that the connection type is
+                USB. This can be changed under
+                the \c Settings menu entry. If necessary, choose \c Connect
+                from the menu.
+
+            \o Configuring the USB serial driver on the Linux system.
+
+               On Linux, phone should appear as the \c /dev/ttyUSB1 device,
+               however if you are running an old kernel, you may need to
+               force the USB module to be loaded correctly before the device
+               will appear:
+
+               \snippet doc/src/snippets/code/doc_src_installation.qdoc 43
+
+               Note the identifier on the line where your Symbian device
+               appears. Then execute the following, using the first and
+               second part of the identifier in place of \c XXX,
+               respectively.
+
+               \snippet doc/src/snippets/code/doc_src_installation.qdoc 44
+
+               The \c rmmod step may fail if the module is not already
+               loaded, but that is harmless.
+
+            \o Building the \c runonphone tool.
+
+               Note that building the \c runonphone tool requires a separate
+               installation of Qt for Linux. If there is a version of Qt
+               installed by your distribution's package mechanism, that that
+               should do fine. Some distributions separate the libraries from
+               the development setup which includes qmake. Make sure you have
+               both installed.
+
+               First make sure that the \c qmake you use is taken from the
+               Linux installation of Qt. The easiest way to make sure of this
+               is to open a new shell and run the following command:
+
+               \snippet doc/src/snippets/code/doc_src_installation.qdoc 45
+
+               \c qmake will tell you where it is installed.
+
+               Copy the \c{%QTDIR%/tools/runonphone} folder to a place outside
+               of the Qt tree. Then go to the folder in a shell and build it:
+
+               \snippet doc/src/snippets/code/doc_src_installation.qdoc 46
+
+               Copy the resulting executable to a folder which is in your
+               \c PATH environment variable.
+
+            \o Installing the built package onto the phone.
+
+               Return to the root of the Qt tree configured for Symbian. Then
+               install the Qt libraries by running the following:
+
+               \snippet doc/src/snippets/code/doc_src_installation.qdoc 47
+
+               \note If the installation fails, please make sure that there is
+                     no previously installed version of Qt on the phone.
+
+               Qt requires some dependent packages to be installed on the device,
+               they are shipped in the Symbian SDK and can be installed using the
+               runonphone tool as well.
+               The packages can be found in the EPOCROOT at the following locations;
+
+               \snippet doc/src/snippets/code/doc_src_installation.qdoc 50
+
+        \endlist
+
+    \o  Running Qt demos
+
+        We've included a subset of the Qt demos in this package for you
+        to try out. An excellent starting point is the "fluidlauncher"
+        demo.
+
+        Install and run the demo by using the following commands:
+
+        \snippet doc/src/snippets/code/doc_src_installation.qdoc 48
+
+        The same command can be used for other applications:
+
+        \snippet doc/src/snippets/code/doc_src_installation.qdoc 49
+
+        For more information about building and running Qt programs on the
+        Symbian platform, see \l{The Symbian platform - Introduction to Qt}.
+
+    We hope you will enjoy using Qt.
+
+\endlist
+
+*/
 /*!
     \page requirements.html
     \title General Qt Requirements
@@ -740,9 +934,9 @@ If you are using pre-built binaries, follow the instructions given in the
     \l{http://www.microsoft.com/downloads/details.aspx?FamilyId=BB4A75AB-E2D4-4C96-B39D-37BAF6B5B1DC&amp;displaylang=en}{here}
     to avoid runtime conflicts.
 
-    If you are using a source code package of Qt, you must first install Perl so 
+    If you are using a source edition of Qt, you must first install Perl so
     that the syncqt script invoked by configure can be executed. You can download
-    this \l{http://www.activestate/downloads/}{here}.  
+    this \l{http://www.activestate.com/downloads/}{here}.
 
     To build Qt with Phonon on Windows, you require:
 
@@ -754,7 +948,7 @@ If you are using pre-built binaries, follow the instructions given in the
         \l{http://www.microsoft.com/downloads/details.aspx?FamilyID=0baf2b35-c656-4969-ace8-e4c0c0716adb&amp;DisplayLang=en}{here}.
     \endlist
 
-    \sa {Known Issues in %VERSION%}
+    \sa {Known Issues}
 */
 
 /*!
@@ -764,7 +958,7 @@ If you are using pre-built binaries, follow the instructions given in the
     \brief Setting up the Mac OS X environment for Qt.
     \previouspage General Qt Requirements
 
-    \sa {Known Issues in %VERSION%}
+    \sa {Known Issues}
 */
 
 /*!
@@ -903,7 +1097,7 @@ If you are using pre-built binaries, follow the instructions given in the
     distributions; try searching for \c gstreamer or \c libgstreamer in your
     distribution's package repository to find suitable packages.
 
-    \sa {Known Issues in %VERSION%}
+    \sa {Known Issues}
 */
 
 /*!
@@ -957,7 +1151,7 @@ If you are using pre-built binaries, follow the instructions given in the
     information on Windows CE Customization can be found
     \l{Windows CE - Working with Custom SDKs}{here}.
 
-    \sa {Known Issues in %VERSION%}
+    \sa {Known Issues}
 */
 
 /*!
@@ -967,7 +1161,7 @@ If you are using pre-built binaries, follow the instructions given in the
     \brief Setting up the Embedded Linux environment for Qt.
     \previouspage General Qt Requirements
 
-    \sa {Known Issues in %VERSION%}
+    \sa {Known Issues}
 
     \section1 Building Qt for Embedded Linux with uclibc
 
@@ -1017,9 +1211,9 @@ If you are using pre-built binaries, follow the instructions given in the
 
     Qt for the Symbian platform requires the following software installed on your development PC:
     \list
-        \o \l{http://www.forum.nokia.com/main/resources/tools_and_sdks/carbide_cpp/}{Carbide.c++ v2.0.0 or higher}
+        \o \l{http://www.forum.nokia.com/Library/Tools_and_downloads/Other/Carbide.c++/}{Carbide.c++ v2.3.0 or higher recommended}.
            \list
-           \o \bold{Note:} It may be necessary to update the Carbide compiler.
+           \o \bold{Note:} It may be necessary to update the Carbide compiler depending on Carbide version.
               See \l{http://pepper.troll.no/s60prereleases/patches/}{here} for instructions how to check your
               compiler version and how to patch it, if needed.
            \endlist
@@ -1029,18 +1223,18 @@ If you are using pre-built binaries, follow the instructions given in the
               but that version is no longer available from ActiveState. However, Qt for Symbian has been successfully
               compiled using both 5.8.x and 5.10.x versions.
            \endlist
-        \o \l{http://www.forum.nokia.com/main/resources/tools_and_sdks/S60SDK/}{S60 Platform SDK 3rd Edition FP1 or higher}
+        \o \l{http://www.forum.nokia.com/info/sw.nokia.com/id/ec866fab-4b76-49f6-b5a5-af0631419e9c/S60_All_in_One_SDKs.html}{S60 Platform SDK 3rd Edition FP1 or higher}
            \list
            \o \bold{Note:} Users of \bold{S60 Platform SDK 3rd Edition FP1} also need special update. The update can be found
            \l{http://pepper.troll.no/s60prereleases/patches/}{here}.
            \endlist
-        \o \l{http://www.forum.nokia.com/main/resources/technologies/openc_cpp/}{Open C/C++ v1.6.0 or higher}.
+        \o \l{http://www.forum.nokia.com/info/sw.nokia.com/id/91d89929-fb8c-4d66-bea0-227e42df9053/Open_C_SDK_Plug-In.html}{Open C/C++ v1.7.5 or higher}.
            Install this to all Symbian SDKs you plan to use Qt with.
         \o Building Qt tools from scratch requires \l{http://www.mingw.org/}{MinGW 3.4.5 or higher}, or another windows compiler.
            \list
            \o \bold{Note:} This is not required if you are using pre-built binary package.
            \endlist
-        \o Building Qt libraries requires \l{http://www.arm.com/products/DevTools/RVCT.html}{RVCT} version 2.2 (build 686 or later),
+        \o Building Qt libraries requires \l{http://www.arm.com/products/tools/software-development-tools.php}{RVCT} version 2.2 (build 686 or later),
            which is not available free of charge.  Usage of later versions of RVCT, including the 3.x and 4.x series, is not supported
            in this release.
     \endlist
@@ -1067,5 +1261,5 @@ If you are using pre-built binaries, follow the instructions given in the
     We recommend you to take a look at \l{http://developer.symbian.org/wiki/index.php/Qt_Quick_Start}{Symbian Foundation - Qt Quick Start}
     to get more information about how to setup the development environment.
 
-    \sa {Known Issues in %VERSION%}
+    \sa {Known Issues}
 */

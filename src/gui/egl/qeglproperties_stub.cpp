@@ -43,6 +43,7 @@
 #include <QtCore/qstringlist.h>
 
 #include "qeglproperties_p.h"
+#include "qeglcontext_p.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -90,6 +91,13 @@ bool QEglProperties::removeValue(int name)
     return false;
 }
 
+void QEglProperties::setDeviceType(int devType)
+{
+    Q_UNUSED(devType)
+    NOEGL
+}
+
+
 // Sets the red, green, blue, and alpha sizes based on a pixel format.
 // Normally used to match a configuration request to the screen format.
 void QEglProperties::setPixelFormat(QImage::Format pixelFormat)
@@ -115,6 +123,13 @@ bool QEglProperties::reduceConfiguration()
     return false;
 }
 
+static void addTag(QString& str, const QString& tag)
+{
+    Q_UNUSED(str)
+    Q_UNUSED(tag)
+    NOEGL
+}
+
 // Convert a property list to a string suitable for debug output.
 QString QEglProperties::toString() const
 {
@@ -125,11 +140,6 @@ QString QEglProperties::toString() const
 void QEglProperties::setPaintDeviceFormat(QPaintDevice *dev)
 {
     Q_UNUSED(dev)
-    NOEGL
-}
-
-void QEglProperties::dumpAllConfigs()
-{
     NOEGL
 }
 

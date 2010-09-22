@@ -28,4 +28,5 @@ wince*: {
    DEFINES += SRCDIR=\\\".\\\"
 } else:!symbian {
    DEFINES+= SRCDIR=\\\"$$PWD\\\"
+   TARGET.CAPABILITY = NetworkServices
 }

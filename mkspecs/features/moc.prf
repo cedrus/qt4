@@ -9,23 +9,23 @@ isEmpty(QMAKE_EXT_CPP_MOC):QMAKE_EXT_CPP_MOC = .moc
 # has too many includes. We do this to overcome a command-line limit on Win < XP
 INCLUDETEMP=
 WIN_INCLUDETEMP=
-win32:count($$list($$INCPATH), 40, >) {
+win32:count($$list($$INCLUDEPATH), 40, >) {
     INCLUDETEMP = $$MOC_DIR/mocinclude.tmp
 
     WIN_INCLUDETEMP=$$INCLUDETEMP
 
-    EOC = $$escape_expand(\n\t)
+    EOC = $$escape_expand(\\n\\t)
 
     if(contains(TEMPLATE, "vc.*")|contains(TEMPLATE_PREFIX, "vc")) {
         # the VCPROJ generator will replace the \r\h with the coded \r\n: &#x0d;&#x0a;
         # No other generator understands the \h
-        if(win32-msvc.net|win32-msvc2*|wince*msvc*): EOC = $$escape_expand(\r\h)
-        else: EOC = $$escape_expand(\\)$$escape_expand(\n\t)
+        if(win32-msvc2*|wince*msvc*): EOC = $$escape_expand(\\r\\h)
+        else: EOC = $$escape_expand(\\\\\\n\\t)
     }
 
     unset(INCFILELIST)
     RET =
-    for(incfile, $$list($$INCPATH)) {
+    for(incfile, $$list($$INCLUDEPATH)) {
         INCFILELIST = -I$$incfile
         isEmpty(RET): RET += @echo $$INCFILELIST> $$WIN_INCLUDETEMP $$EOC
         else:         RET += @echo $$INCFILELIST>> $$WIN_INCLUDETEMP $$EOC

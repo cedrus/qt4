@@ -58,6 +58,7 @@ class Tree;
 struct Section
 {
     QString name;
+    QString divClass;
     QString singularMember;
     QString pluralMember;
     NodeList members;
@@ -66,9 +67,11 @@ struct Section
 
     Section() { }
     Section(const QString& name0, 
+            const QString& divClass0,
             const QString& singularMember0, 
             const QString& pluralMember0) 
-        : name(name0), 
+        : name(name0),
+          divClass(divClass0),
           singularMember(singularMember0),
 	  pluralMember(pluralMember0) { }
     void appendMember(Node* node) { members.append(node); }
@@ -79,6 +82,7 @@ struct FastSection
 {
     const InnerNode *innerNode;
     QString name;
+    QString divClass;
     QString singularMember;
     QString pluralMember;
     QMap<QString, Node *> memberMap;
@@ -86,19 +90,29 @@ struct FastSection
     QList<QPair<ClassNode *, int> > inherited;
 
     FastSection(const InnerNode *innerNode0, 
-                const QString& name0 = "",
-                const QString& singularMember0 = "member",
-                const QString& pluralMember0 = "members")
+                const QString& name0,
+                const QString& divClass0,
+                const QString& singularMember0,
+                const QString& pluralMember0)
 	: innerNode(innerNode0), 
           name(name0), 
+          divClass(divClass0),
           singularMember(singularMember0),
 	  pluralMember(pluralMember0) { }
     bool isEmpty() const { 
-        return (memberMap.isEmpty() && inherited.isEmpty() && 
+        return (memberMap.isEmpty() && 
+                inherited.isEmpty() && 
                 reimpMemberMap.isEmpty()); 
     }
 
 };
+
+#if 0
+                const QString& name0 = "",
+                const QString& divClass0 = "",
+                const QString& singularMember0 = "member",
+                const QString& pluralMember0 = "members")
+#endif
 
 class CodeMarker
 {
@@ -139,12 +153,14 @@ class CodeMarker
                                     Status status) = 0;
 #ifdef QDOC_QML
     virtual QList<Section> qmlSections(const QmlClassNode* qmlClassNode,
-                                       SynopsisStyle style);
+                                       SynopsisStyle style,
+                                       const Tree* tree);
 #endif
-    virtual const Node *resolveTarget(const QString& target, 
-                                      const Tree *tree,
-		                      const Node *relative) = 0;
-    virtual QStringList macRefsForNode(const Node *node);
+    virtual const Node* resolveTarget(const QString& target, 
+                                      const Tree* tree,
+		                      const Node* relative,
+                                      const Node* self = 0);
+    virtual QStringList macRefsForNode(const Node* node);
 
     static void initialize(const Config& config);
     static void terminate();

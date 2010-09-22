@@ -57,14 +57,28 @@
 #include <QtCore/qthread.h>
 #include <QtCore/qurl.h>
 #include <QtCore/qvarlengtharray.h>
-
-static void initNetworkResources()
-{
-    // Initialize resources
-    Q_INIT_RESOURCE(network);
-}
+#include <QLibrary> // for loading the security lib for the CA store
 
 QT_BEGIN_NAMESPACE
+
+#if defined(Q_OS_MAC)
+#define kSecTrustSettingsDomainSystem 2 // so we do not need to include the header file
+    PtrSecCertificateGetData QSslSocketPrivate::ptrSecCertificateGetData = 0;
+    PtrSecTrustSettingsCopyCertificates QSslSocketPrivate::ptrSecTrustSettingsCopyCertificates = 0;
+    PtrSecTrustCopyAnchorCertificates QSslSocketPrivate::ptrSecTrustCopyAnchorCertificates = 0;
+#elif defined(Q_OS_WIN)
+    PtrCertOpenSystemStoreW QSslSocketPrivate::ptrCertOpenSystemStoreW = 0;
+    PtrCertFindCertificateInStore QSslSocketPrivate::ptrCertFindCertificateInStore = 0;
+    PtrCertCloseStore QSslSocketPrivate::ptrCertCloseStore = 0;
+#elif defined(Q_OS_SYMBIAN)
+#include <e32base.h>
+#include <e32std.h>
+#include <e32debug.h>
+#include <QtCore/private/qcore_symbian_p.h>
+#endif
+
+bool QSslSocketPrivate::s_libraryLoaded = false;
+bool QSslSocketPrivate::s_loadedCiphersAndCerts = false;
 
 // Useful defines
 #define SSL_ERRORSTR() QString::fromLocal8Bit(q_ERR_error_string(q_ERR_get_error(), NULL))
@@ -146,13 +160,14 @@ static void locking_function(int mode, int lockNumber, const char *, int)
 }
 static unsigned long id_function()
 {
-    return (unsigned long)QThread::currentThreadId();
+    return (quintptr)QThread::currentThreadId();
 }
 } // extern "C"
 
 QSslSocketBackendPrivate::QSslSocketBackendPrivate()
     : ssl(0),
       ctx(0),
+      pkey(0),
       readBio(0),
       writeBio(0),
       session(0)
@@ -187,7 +202,7 @@ QSslCipher QSslSocketBackendPrivate::QSslCipher_from_SSL_CIPHER(SSL_CIPHER *ciph
             ciph.d->protocol = QSsl::SslV2;
         else if (protoString == QLatin1String("TLSv1"))
             ciph.d->protocol = QSsl::TlsV1;
-        
+
         if (descriptionList.at(2).startsWith(QLatin1String("Kx=")))
             ciph.d->keyExchangeMethod = descriptionList.at(2).mid(3);
         if (descriptionList.at(3).startsWith(QLatin1String("Au=")))
@@ -289,8 +304,20 @@ init_context:
     }
 
     // Add all our CAs to this store.
-    foreach (const QSslCertificate &caCertificate, q->caCertificates())
+    QList<QSslCertificate> expiredCerts;
+    foreach (const QSslCertificate &caCertificate, q->caCertificates()) {
+        // add expired certs later, so that the
+        // valid ones are used before the expired ones
+        if (! caCertificate.isValid()) {
+            expiredCerts.append(caCertificate);
+        } else {
+            q_X509_STORE_add_cert(ctx->cert_store, (X509 *)caCertificate.handle());
+        }
+    }
+    // now add the expired certs
+    foreach (const QSslCertificate &caCertificate, expiredCerts) {
         q_X509_STORE_add_cert(ctx->cert_store, (X509 *)caCertificate.handle());
+    }
 
     // Register a custom callback to get all verification errors.
     X509_STORE_set_verify_cb_func(ctx->cert_store, q_X509Callback);
@@ -311,11 +338,14 @@ init_context:
         }
 
         // Load private key
-        EVP_PKEY *pkey = q_EVP_PKEY_new();
+        pkey = q_EVP_PKEY_new();
+        // before we were using EVP_PKEY_assign_R* functions and did not use EVP_PKEY_free.
+        // this lead to a memory leak. Now we use the *_set1_* functions which do not
+        // take ownership of the RSA/DSA key instance because the QSslKey already has ownership.
         if (configuration.privateKey.algorithm() == QSsl::Rsa)
-            q_EVP_PKEY_assign_RSA(pkey, (RSA *)configuration.privateKey.handle());
+            q_EVP_PKEY_set1_RSA(pkey, (RSA *)configuration.privateKey.handle());
         else
-            q_EVP_PKEY_assign_DSA(pkey, (DSA *)configuration.privateKey.handle());
+            q_EVP_PKEY_set1_DSA(pkey, (DSA *)configuration.privateKey.handle());
         if (!q_SSL_CTX_use_PrivateKey(ctx, pkey)) {
             q->setErrorString(QSslSocket::tr("Error loading private key, %1").arg(SSL_ERRORSTR()));
             emit q->error(QAbstractSocket::UnknownSocketError);
@@ -340,7 +370,7 @@ init_context:
     // Set verification depth.
     if (configuration.peerVerifyDepth != 0)
         q_SSL_CTX_set_verify_depth(ctx, configuration.peerVerifyDepth);
-    
+
     // Create and initialize SSL session
     if (!(ssl = q_SSL_new(ctx))) {
         // ### Bad error code
@@ -388,22 +418,24 @@ void QSslSocketPrivate::deinitialize()
 /*!
     \internal
 
-    Declared static in QSslSocketPrivate, makes sure the SSL libraries have
-    been initialized.
+    Does the minimum amount of initialization to determine whether SSL
+    is supported or not.
 */
-bool QSslSocketPrivate::ensureInitialized()
+
+bool QSslSocketPrivate::supportsSsl()
+{
+    return ensureLibraryLoaded();
+}
+
+bool QSslSocketPrivate::ensureLibraryLoaded()
 {
     if (!q_resolveOpenSslSymbols())
         return false;
 
     // Check if the library itself needs to be initialized.
     QMutexLocker locker(openssl_locks()->initLock());
-    static int q_initialized = false;
-    if (!q_initialized) {
-        q_initialized = true;
-
-        // Initialize resources
-        initNetworkResources();
+    if (!s_libraryLoaded) {
+        s_libraryLoaded = true;
 
         // Initialize OpenSSL.
         q_CRYPTO_set_id_callback(id_function);
@@ -440,11 +472,69 @@ bool QSslSocketPrivate::ensureInitialized()
             if (!attempts)
                 return false;
         }
-
-        resetDefaultCiphers();
-        setDefaultCaCertificates(systemCaCertificates());
     }
     return true;
+}
+
+void QSslSocketPrivate::ensureCiphersAndCertsLoaded()
+{
+    if (s_loadedCiphersAndCerts)
+        return;
+    s_loadedCiphersAndCerts = true;
+
+    resetDefaultCiphers();
+    setDefaultCaCertificates(systemCaCertificates());
+}
+
+/*!
+    \internal
+
+    Declared static in QSslSocketPrivate, makes sure the SSL libraries have
+    been initialized.
+*/
+
+void QSslSocketPrivate::ensureInitialized()
+{
+    if (!supportsSsl())
+        return;
+
+    ensureCiphersAndCertsLoaded();
+
+    //load symbols needed to receive certificates from system store
+#if defined(Q_OS_MAC)
+    QLibrary securityLib("/System/Library/Frameworks/Security.framework/Versions/Current/Security");
+    if (securityLib.load()) {
+        ptrSecCertificateGetData = (PtrSecCertificateGetData) securityLib.resolve("SecCertificateGetData");
+        if (!ptrSecCertificateGetData)
+            qWarning("could not resolve symbols in security library"); // should never happen
+
+        ptrSecTrustSettingsCopyCertificates = (PtrSecTrustSettingsCopyCertificates) securityLib.resolve("SecTrustSettingsCopyCertificates");
+        if (!ptrSecTrustSettingsCopyCertificates) { // method was introduced in Leopard, use legacy method if it's not there
+            ptrSecTrustCopyAnchorCertificates = (PtrSecTrustCopyAnchorCertificates) securityLib.resolve("SecTrustCopyAnchorCertificates");
+            if (!ptrSecTrustCopyAnchorCertificates)
+                qWarning("could not resolve symbols in security library"); // should never happen
+        }
+    } else {
+        qWarning("could not load security library");
+    }
+#elif defined(Q_OS_WIN)
+    HINSTANCE hLib = LoadLibraryW(L"Crypt32");
+    if (hLib) {
+#if defined(Q_OS_WINCE)
+        ptrCertOpenSystemStoreW = (PtrCertOpenSystemStoreW)GetProcAddress(hLib, L"CertOpenStore");
+        ptrCertFindCertificateInStore = (PtrCertFindCertificateInStore)GetProcAddress(hLib, L"CertFindCertificateInStore");
+        ptrCertCloseStore = (PtrCertCloseStore)GetProcAddress(hLib, L"CertCloseStore");
+#else
+        ptrCertOpenSystemStoreW = (PtrCertOpenSystemStoreW)GetProcAddress(hLib, "CertOpenSystemStoreW");
+        ptrCertFindCertificateInStore = (PtrCertFindCertificateInStore)GetProcAddress(hLib, "CertFindCertificateInStore");
+        ptrCertCloseStore = (PtrCertCloseStore)GetProcAddress(hLib, "CertCloseStore");
+#endif
+        if (!ptrCertOpenSystemStoreW || !ptrCertFindCertificateInStore || !ptrCertCloseStore)
+            qWarning("could not resolve symbols in crypt32 library"); // should never happen
+    } else {
+        qWarning("could not load crypt32 library"); // should never happen
+    }
+#endif
 }
 
 /*!
@@ -480,15 +570,228 @@ void QSslSocketPrivate::resetDefaultCiphers()
     setDefaultCiphers(ciphers);
 }
 
+#if defined(Q_OS_SYMBIAN)
+
+CSymbianCertificateRetriever::CSymbianCertificateRetriever() : CActive(CActive::EPriorityStandard),
+        iSequenceError(KErrNone)
+{
+}
+
+CSymbianCertificateRetriever::~CSymbianCertificateRetriever()
+{
+    iThread.Close();
+}
+
+CSymbianCertificateRetriever* CSymbianCertificateRetriever::NewL()
+{
+    CSymbianCertificateRetriever* self = new (ELeave) CSymbianCertificateRetriever();
+    CleanupStack::PushL(self);
+    self->ConstructL();
+    CleanupStack::Pop();
+    return self;
+}
+
+int CSymbianCertificateRetriever::GetCertificates(QList<QByteArray> &certificates)
+{
+    iCertificates = &certificates;
+
+    TRequestStatus status;
+    iThread.Logon(status);
+    iThread.Resume();
+    User::WaitForRequest(status);
+    if (iThread.ExitType() == EExitKill)
+        return KErrDied;
+    else
+        return status.Int();    // Logon() completes with the thread's exit value
+}
+
+void CSymbianCertificateRetriever::doThreadEntryL()
+{
+    CActiveScheduler* activeScheduler = new (ELeave) CActiveScheduler;
+    CleanupStack::PushL(activeScheduler);
+    CActiveScheduler::Install(activeScheduler);
+
+    CActiveScheduler::Add(this);
+
+    // These aren't deleted in the destructor so leaving the to CS is ok
+    iCertStore = CUnifiedCertStore::NewLC(qt_s60GetRFs(), EFalse);
+    iCertFilter = CCertAttributeFilter::NewLC();
+
+    // Kick off the sequence by initializing the cert store
+    iState = Initializing;
+    iCertStore->Initialize(iStatus);
+    SetActive();
+
+    CActiveScheduler::Start();
+
+    // Sequence complete, clean up
+
+    // These MUST be cleaned up before the installed CActiveScheduler is destroyed and can't be left to the
+    // destructor of CSymbianCertificateRetriever. Otherwise the destructor of CActiveScheduler will get
+    // stuck.
+    iCertInfos.Close();
+    CleanupStack::PopAndDestroy(3);     // activeScheduler, iCertStore, iCertFilter
+}
+
+
+TInt CSymbianCertificateRetriever::ThreadEntryPoint(TAny* aParams)
+{
+    CTrapCleanup* cleanupStack = CTrapCleanup::New();
+
+    CSymbianCertificateRetriever* self = (CSymbianCertificateRetriever*) aParams;
+    TRAPD(err, self->doThreadEntryL());
+    delete cleanupStack;
+
+    // doThreadEntryL() can leave only before the retrieval sequence is started
+    if (err)
+        return err;
+    else
+        return self->iSequenceError;    // return any error that occured during the retrieval
+}
+
+void CSymbianCertificateRetriever::ConstructL()
+{
+    User::LeaveIfError(iThread.Create(_L("CertWorkerThread"),
+        CSymbianCertificateRetriever::ThreadEntryPoint, 16384, NULL, this));
+}
+
+void CSymbianCertificateRetriever::DoCancel()
+{
+    // We never cancel the sequence
+}
+
+TInt CSymbianCertificateRetriever::RunError(TInt aError)
+{
+    // If something goes wrong in the sequence, abort the sequence
+    iSequenceError = aError;    // this gets reported to the client in the TRequestStatus
+    CActiveScheduler::Stop();
+    return KErrNone;
+}
+
+void CSymbianCertificateRetriever::GetCertificateL()
+{
+    CCTCertInfo* certInfo = iCertInfos[iCurrentCertIndex];
+    iCertificateData.resize(certInfo->Size());
+    TPtr8 des((TUint8*)iCertificateData.data(), 0, iCertificateData.size());
+    iCertStore->Retrieve(*certInfo, des, iStatus);
+    iState = RetrievingCertificates;
+    SetActive();
+}
+
+void CSymbianCertificateRetriever::RunL()
+{
+    switch (iState) {
+    case Initializing:
+        iState = Listing;
+        iCertStore->List(iCertInfos, *iCertFilter, iStatus);
+        SetActive();
+        break;
+
+    case Listing:
+        iCurrentCertIndex = 0;
+        GetCertificateL();
+        break;
+
+    case RetrievingCertificates:
+        iCertificates->append(iCertificateData);
+        iCertificateData = QByteArray();
+        iCurrentCertIndex++;
+        if (iCurrentCertIndex < iCertInfos.Count())
+            GetCertificateL();
+        else
+            // Stop the scheduler to return to the thread entry function
+            CActiveScheduler::Stop();
+        break;
+    }
+}
+#endif // defined(Q_OS_SYMBIAN)
+
 QList<QSslCertificate> QSslSocketPrivate::systemCaCertificates()
 {
-    // Qt provides a default bundle of certificates
-    QFile caBundle(QLatin1String(":/trolltech/network/ssl/qt-ca-bundle.crt"));
-    if (caBundle.open(QIODevice::ReadOnly | QIODevice::Text))
-        return QSslCertificate::fromDevice(&caBundle);
+    ensureInitialized();
+    QList<QSslCertificate> systemCerts;
+#if defined(Q_OS_MAC)
+    CFArrayRef cfCerts;
+    OSStatus status = 1;
 
-    // Unreachable; return no bundle.
-    return QList<QSslCertificate>();
+    OSStatus SecCertificateGetData (
+       SecCertificateRef certificate,
+       CSSM_DATA_PTR data
+    );
+
+    if (ptrSecCertificateGetData) {
+        if (ptrSecTrustSettingsCopyCertificates)
+            status = ptrSecTrustSettingsCopyCertificates(kSecTrustSettingsDomainSystem, &cfCerts);
+        else if (ptrSecTrustCopyAnchorCertificates)
+            status = ptrSecTrustCopyAnchorCertificates(&cfCerts);
+        if (!status) {
+            CFIndex size = CFArrayGetCount(cfCerts);
+            for (CFIndex i = 0; i < size; ++i) {
+                SecCertificateRef cfCert = (SecCertificateRef)CFArrayGetValueAtIndex(cfCerts, i);
+                CSSM_DATA data;
+                CSSM_DATA_PTR dataPtr = &data;
+                if (ptrSecCertificateGetData(cfCert, dataPtr)) {
+                    qWarning("error retrieving a CA certificate from the system store");
+                } else {
+                    int len = data.Length;
+                    char *rawData = reinterpret_cast<char *>(data.Data);
+                    QByteArray rawCert(rawData, len);
+                    systemCerts.append(QSslCertificate::fromData(rawCert, QSsl::Der));
+                }
+            }
+        }
+        else {
+           // no detailed error handling here
+           qWarning("could not retrieve system CA certificates");
+        }
+    }
+#elif defined(Q_OS_WIN)
+    if (ptrCertOpenSystemStoreW && ptrCertFindCertificateInStore && ptrCertCloseStore) {
+        HCERTSTORE hSystemStore;
+#if defined(Q_OS_WINCE)
+        hSystemStore = ptrCertOpenSystemStoreW(CERT_STORE_PROV_SYSTEM_W,
+                                               0,
+                                               0,
+                                               CERT_STORE_NO_CRYPT_RELEASE_FLAG|CERT_SYSTEM_STORE_CURRENT_USER,
+                                               L"ROOT");
+#else
+        hSystemStore = ptrCertOpenSystemStoreW(0, L"ROOT");
+#endif
+        if(hSystemStore) {
+            PCCERT_CONTEXT pc = NULL;
+            while(1) {
+                pc = ptrCertFindCertificateInStore( hSystemStore, X509_ASN_ENCODING, 0, CERT_FIND_ANY, NULL, pc);
+                if(!pc)
+                    break;
+                QByteArray der((const char *)(pc->pbCertEncoded), static_cast<int>(pc->cbCertEncoded));
+                QSslCertificate cert(der, QSsl::Der);
+                systemCerts.append(cert);
+            }
+            ptrCertCloseStore(hSystemStore, 0);
+        }
+    }
+#elif defined(Q_OS_UNIX) && !defined(Q_OS_SYMBIAN)
+    systemCerts.append(QSslCertificate::fromPath(QLatin1String("/var/ssl/certs/*.pem"), QSsl::Pem, QRegExp::Wildcard)); // AIX
+    systemCerts.append(QSslCertificate::fromPath(QLatin1String("/usr/local/ssl/certs/*.pem"), QSsl::Pem, QRegExp::Wildcard)); // Solaris
+    systemCerts.append(QSslCertificate::fromPath(QLatin1String("/opt/openssl/certs/*.pem"), QSsl::Pem, QRegExp::Wildcard)); // HP-UX
+    systemCerts.append(QSslCertificate::fromPath(QLatin1String("/etc/ssl/certs/*.pem"), QSsl::Pem, QRegExp::Wildcard)); // (K)ubuntu, OpenSUSE, Mandriva, ...
+    systemCerts.append(QSslCertificate::fromPath(QLatin1String("/etc/pki/tls/certs/ca-bundle.crt"), QSsl::Pem)); // Fedora
+    systemCerts.append(QSslCertificate::fromPath(QLatin1String("/usr/lib/ssl/certs/*.pem"), QSsl::Pem, QRegExp::Wildcard)); // Gentoo, Mandrake
+    systemCerts.append(QSslCertificate::fromPath(QLatin1String("/usr/share/ssl/*.pem"), QSsl::Pem, QRegExp::Wildcard)); // Centos, Redhat, SuSE
+    systemCerts.append(QSslCertificate::fromPath(QLatin1String("/usr/local/ssl/*.pem"), QSsl::Pem, QRegExp::Wildcard)); // Normal OpenSSL Tarball
+#elif defined(Q_OS_SYMBIAN)
+    QList<QByteArray> certs;
+    QScopedPointer<CSymbianCertificateRetriever> retriever(CSymbianCertificateRetriever::NewL());
+
+    retriever->GetCertificates(certs);
+    foreach (const QByteArray &encodedCert, certs) {
+        QSslCertificate cert(encodedCert, QSsl::Der);
+        if (!cert.isNull())
+            systemCerts.append(cert);
+    }
+#endif
+
+    return systemCerts;
 }
 
 void QSslSocketBackendPrivate::startClientEncryption()
@@ -533,7 +836,7 @@ void QSslSocketBackendPrivate::transmit()
     bool transmitting;
     do {
         transmitting = false;
-        
+
         // If the connection is secure, we can transfer data from the write
         // buffer (in plain text) to the write BIO through SSL_write.
         if (connectionEncrypted && !writeBuffer.isEmpty()) {
@@ -680,8 +983,20 @@ void QSslSocketBackendPrivate::transmit()
 #endif
                 plainSocket->disconnectFromHost();
                 break;
+            case SSL_ERROR_SYSCALL: // some IO error
+            case SSL_ERROR_SSL: // error in the SSL library
+                // we do not know exactly what the error is, nor whether we can recover from it,
+                // so just return to prevent an endless loop in the outer "while" statement
+                q->setErrorString(QSslSocket::tr("Error while reading: %1").arg(SSL_ERRORSTR()));
+                q->setSocketError(QAbstractSocket::UnknownSocketError);
+                emit q->error(QAbstractSocket::UnknownSocketError);
+                return;
             default:
-                // ### Handle errors better.
+                // SSL_ERROR_WANT_CONNECT, SSL_ERROR_WANT_ACCEPT: can only happen with a
+                // BIO_s_connect() or BIO_s_accept(), which we do not call.
+                // SSL_ERROR_WANT_X509_LOOKUP: can only happen with a
+                // SSL_CTX_set_client_cert_cb(), which we do not call.
+                // So this default case should never be triggered.
                 q->setErrorString(QSslSocket::tr("Error while reading: %1").arg(SSL_ERRORSTR()));
                 q->setSocketError(QAbstractSocket::UnknownSocketError);
                 emit q->error(QAbstractSocket::UnknownSocketError);
@@ -815,17 +1130,16 @@ bool QSslSocketBackendPrivate::startHandshake()
             QString peerName = (verificationPeerName.isEmpty () ? q->peerName() : verificationPeerName);
             QString commonName = configuration.peerCertificate.subjectInfo(QSslCertificate::CommonName);
 
-            QRegExp regexp(commonName, Qt::CaseInsensitive, QRegExp::Wildcard);
-            if (!regexp.exactMatch(peerName)) {
+            if (!isMatchingHostname(commonName.toLower(), peerName.toLower())) {
                 bool matched = false;
                 foreach (const QString &altName, configuration.peerCertificate
                          .alternateSubjectNames().values(QSsl::DnsEntry)) {
-                    regexp.setPattern(altName);
-                    if (regexp.exactMatch(peerName)) {
+                    if (isMatchingHostname(altName.toLower(), peerName.toLower())) {
                         matched = true;
                         break;
                     }
                 }
+
                 if (!matched) {
                     // No matches in common names or alternate names.
                     QSslError error(QSslError::HostNameMismatch, configuration.peerCertificate);
@@ -922,6 +1236,11 @@ void QSslSocketBackendPrivate::disconnected()
         q_SSL_CTX_free(ctx);
         ctx = 0;
     }
+    if (pkey) {
+        q_EVP_PKEY_free(pkey);
+        pkey = 0;
+    }
+
 }
 
 QSslCipher QSslSocketBackendPrivate::sessionCipher() const
@@ -948,6 +1267,46 @@ QList<QSslCertificate> QSslSocketBackendPrivate::STACKOFX509_to_QSslCertificates
             certificates << QSslCertificatePrivate::QSslCertificate_from_X509(entry);
     }
     return certificates;
+}
+
+bool QSslSocketBackendPrivate::isMatchingHostname(const QString &cn, const QString &hostname)
+{
+    int wildcard = cn.indexOf(QLatin1Char('*'));
+
+    // Check this is a wildcard cert, if not then just compare the strings
+    if (wildcard < 0)
+        return cn == hostname;
+
+    int firstCnDot = cn.indexOf(QLatin1Char('.'));
+    int secondCnDot = cn.indexOf(QLatin1Char('.'), firstCnDot+1);
+
+    // Check at least 3 components
+    if ((-1 == secondCnDot) || (secondCnDot+1 >= cn.length()))
+        return false;
+
+    // Check * is last character of 1st component (ie. there's a following .)
+    if (wildcard+1 != firstCnDot)
+        return false;
+
+    // Check only one star
+    if (cn.lastIndexOf(QLatin1Char('*')) != wildcard)
+        return false;
+
+    // Check characters preceding * (if any) match
+    if (wildcard && (hostname.leftRef(wildcard) != cn.leftRef(wildcard)))
+        return false;
+
+    // Check characters following first . match
+    if (hostname.midRef(hostname.indexOf(QLatin1Char('.'))) != cn.midRef(firstCnDot))
+        return false;
+
+    // Check if the hostname is an IP address, if so then wildcards are not allowed
+    QHostAddress addr(hostname);
+    if (!addr.isNull())
+        return false;
+
+    // Ok, I guess this was a wildcard CN and the hostname matches.
+    return true;
 }
 
 QT_END_NAMESPACE

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2006 Zack Rusin   <zack@kde.org>
  *               2006 Rob Buis     <buis@kde.org>
- *               2009 Dirk Schulze <krit@webkit.org>
+ *               2009, 2010 Dirk Schulze <krit@webkit.org>
  *
  * All rights reserved.
  *
@@ -30,7 +30,7 @@
 #include "config.h"
 #include "Path.h"
 
-#include "TransformationMatrix.h"
+#include "AffineTransform.h"
 #include "FloatRect.h"
 #include "GraphicsContext.h"
 #include "ImageBuffer.h"
@@ -51,38 +51,69 @@
 namespace WebCore {
 
 Path::Path()
-    : m_path(new QPainterPath())
 {
 }
 
 Path::~Path()
 {
-    delete m_path;
 }
 
 Path::Path(const Path& other)
-    : m_path(new QPainterPath(*other.platformPath()))
+    : m_path(other.m_path)
 {
 }
 
 Path& Path::operator=(const Path& other)
 {
-    if (&other != this) {
-        delete m_path;
-        m_path = new QPainterPath(*other.platformPath());
-    }
-
+    m_path = other.m_path;
     return *this;
+}
+
+static inline bool areCollinear(const QPointF& a, const QPointF& b, const QPointF& c)
+{
+    // Solved from comparing the slopes of a to b and b to c: (ay-by)/(ax-bx) == (cy-by)/(cx-bx)
+    return qFuzzyCompare((c.y() - b.y()) * (a.x() - b.x()), (a.y() - b.y()) * (c.x() - b.x()));
+}
+
+static inline bool withinRange(qreal p, qreal a, qreal b)
+{
+    return (p >= a && p <= b) || (p >= b && p <= a);
+}
+
+// Check whether a point is on the border
+static bool isPointOnPathBorder(const QPolygonF& border, const QPointF& p)
+{
+    QPointF p1 = border.at(0);
+    QPointF p2;
+
+    for (int i = 1; i < border.size(); ++i) {
+        p2 = border.at(i);
+        if (areCollinear(p, p1, p2)
+                // Once we know that the points are collinear we
+                // only need to check one of the coordinates
+                && (qAbs(p2.x() - p1.x()) > qAbs(p2.y() - p1.y()) ?
+                        withinRange(p.x(), p1.x(), p2.x()) :
+                        withinRange(p.y(), p1.y(), p2.y()))) {
+            return true;
+        }
+        p1 = p2;
+    }
+    return false;
 }
 
 bool Path::contains(const FloatPoint& point, WindRule rule) const
 {
-    Qt::FillRule savedRule = m_path->fillRule();
-    m_path->setFillRule(rule == RULE_EVENODD ? Qt::OddEvenFill : Qt::WindingFill);
+    Qt::FillRule savedRule = m_path.fillRule();
+    const_cast<QPainterPath*>(&m_path)->setFillRule(rule == RULE_EVENODD ? Qt::OddEvenFill : Qt::WindingFill);
 
-    bool contains = m_path->contains(point);
+    bool contains = m_path.contains(point);
+    
+    if (!contains) {
+        // check whether the point is on the border
+        contains = isPointOnPathBorder(m_path.toFillPolygon(), point);
+    }
 
-    m_path->setFillRule(savedRule);
+    const_cast<QPainterPath*>(&m_path)->setFillRule(savedRule);
     return contains;
 }
 
@@ -105,19 +136,19 @@ bool Path::strokeContains(StrokeStyleApplier* applier, const FloatPoint& point) 
     stroke.setDashPattern(pen.dashPattern());
     stroke.setDashOffset(pen.dashOffset());
 
-    return (stroke.createStroke(*platformPath())).contains(point);
+    return stroke.createStroke(m_path).contains(point);
 }
 
 void Path::translate(const FloatSize& size)
 {
     QTransform matrix;
     matrix.translate(size.width(), size.height());
-    *m_path = (*m_path) * matrix;
+    m_path = m_path * matrix;
 }
 
 FloatRect Path::boundingRect() const
 {
-    return m_path->boundingRect();
+    return m_path.boundingRect();
 }
 
 FloatRect Path::strokeBoundingRect(StrokeStyleApplier* applier)
@@ -138,35 +169,35 @@ FloatRect Path::strokeBoundingRect(StrokeStyleApplier* applier)
         stroke.setDashPattern(pen.dashPattern());
         stroke.setDashOffset(pen.dashOffset());
     }
-    return (stroke.createStroke(*platformPath())).boundingRect();
+    return stroke.createStroke(m_path).boundingRect();
 }
 
 void Path::moveTo(const FloatPoint& point)
 {
-    m_path->moveTo(point);
+    m_path.moveTo(point);
 }
 
 void Path::addLineTo(const FloatPoint& p)
 {
-    m_path->lineTo(p);
+    m_path.lineTo(p);
 }
 
 void Path::addQuadCurveTo(const FloatPoint& cp, const FloatPoint& p)
 {
-    m_path->quadTo(cp, p);
+    m_path.quadTo(cp, p);
 }
 
 void Path::addBezierCurveTo(const FloatPoint& cp1, const FloatPoint& cp2, const FloatPoint& p)
 {
-    m_path->cubicTo(cp1, cp2, p);
+    m_path.cubicTo(cp1, cp2, p);
 }
 
 void Path::addArcTo(const FloatPoint& p1, const FloatPoint& p2, float radius)
 {
-    FloatPoint p0(m_path->currentPosition());
+    FloatPoint p0(m_path.currentPosition());
 
     if ((p1.x() == p0.x() && p1.y() == p0.y()) || (p1.x() == p2.x() && p1.y() == p2.y()) || radius == 0.f) {
-        m_path->lineTo(p1);
+        m_path.lineTo(p1);
         return;
     }
 
@@ -176,17 +207,12 @@ void Path::addArcTo(const FloatPoint& p1, const FloatPoint& p2, float radius)
     float p1p2_length = sqrtf(p1p2.x() * p1p2.x() + p1p2.y() * p1p2.y());
 
     double cos_phi = (p1p0.x() * p1p2.x() + p1p0.y() * p1p2.y()) / (p1p0_length * p1p2_length);
-    // all points on a line logic
-    if (cos_phi == -1) {
-        m_path->lineTo(p1);
-        return;
-    }
-    if (cos_phi == 1) {
-        // add infinite far away point
-        unsigned int max_length = 65535;
-        double factor_max = max_length / p1p0_length;
-        FloatPoint ep((p0.x() + factor_max * p1p0.x()), (p0.y() + factor_max * p1p0.y()));
-        m_path->lineTo(ep);
+
+    // The points p0, p1, and p2 are on the same straight line (HTML5, 4.8.11.1.8)
+    // We could have used areCollinear() here, but since we're reusing
+    // the variables computed above later on we keep this logic.
+    if (qFuzzyCompare(qAbs(cos_phi), 1.0)) {
+        m_path.lineTo(p1);
         return;
     }
 
@@ -226,14 +252,14 @@ void Path::addArcTo(const FloatPoint& p1, const FloatPoint& p2, float radius)
     if ((sa < ea) && ((ea - sa) > piDouble))
         anticlockwise = true;
 
-    m_path->lineTo(t_p1p0);
+    m_path.lineTo(t_p1p0);
 
     addArc(p, radius, sa, ea, anticlockwise);
 }
 
 void Path::closeSubpath()
 {
-    m_path->closeSubpath();
+    m_path.closeSubpath();
 }
 
 #define DEGREES(t) ((t) * 180.0 / M_PI)
@@ -275,32 +301,35 @@ void Path::addArc(const FloatPoint& p, float r, float sar, float ear, bool antic
         span += ea - sa;
     }
 
-    m_path->moveTo(QPointF(xc + radius  * cos(sar),
-                          yc - radius  * sin(sar)));
+    // If the path is empty, move to where the arc will start to avoid painting a line from (0,0)
+    // NOTE: QPainterPath::isEmpty() won't work here since it ignores a lone MoveToElement
+    if (!m_path.elementCount())
+        m_path.arcMoveTo(xs, ys, width, height, sa);
 
-    m_path->arcTo(xs, ys, width, height, sa, span);
+    m_path.arcTo(xs, ys, width, height, sa, span);
+
 }
 
 void Path::addRect(const FloatRect& r)
 {
-    m_path->addRect(r.x(), r.y(), r.width(), r.height());
+    m_path.addRect(r.x(), r.y(), r.width(), r.height());
 }
 
 void Path::addEllipse(const FloatRect& r)
 {
-    m_path->addEllipse(r.x(), r.y(), r.width(), r.height());
+    m_path.addEllipse(r.x(), r.y(), r.width(), r.height());
 }
 
 void Path::clear()
 {
-    *m_path = QPainterPath();
+    m_path = QPainterPath();
 }
 
 bool Path::isEmpty() const
 {
     // Don't use QPainterPath::isEmpty(), as that also returns true if there's only
     // one initial MoveTo element in the path.
-    return !m_path->elementCount();
+    return !m_path.elementCount();
 }
 
 bool Path::hasCurrentPoint() const
@@ -311,26 +340,26 @@ bool Path::hasCurrentPoint() const
 String Path::debugString() const
 {
     QString ret;
-    for (int i = 0; i < m_path->elementCount(); ++i) {
-        const QPainterPath::Element &cur = m_path->elementAt(i);
+    for (int i = 0; i < m_path.elementCount(); ++i) {
+        const QPainterPath::Element &cur = m_path.elementAt(i);
 
         switch (cur.type) {
             case QPainterPath::MoveToElement:
-                ret += QString(QLatin1String("M %1 %2")).arg(cur.x).arg(cur.y);
+                ret += QString(QLatin1String("M%1,%2 ")).arg(cur.x, 0, 'f', 2).arg(cur.y, 0, 'f', 2);
                 break;
             case QPainterPath::LineToElement:
-                ret += QString(QLatin1String("L %1 %2")).arg(cur.x).arg(cur.y);
+                ret += QString(QLatin1String("L%1,%2 ")).arg(cur.x, 0, 'f', 2).arg(cur.y, 0, 'f', 2);
                 break;
             case QPainterPath::CurveToElement:
             {
-                const QPainterPath::Element &c1 = m_path->elementAt(i + 1);
-                const QPainterPath::Element &c2 = m_path->elementAt(i + 2);
+                const QPainterPath::Element &c1 = m_path.elementAt(i + 1);
+                const QPainterPath::Element &c2 = m_path.elementAt(i + 2);
 
                 Q_ASSERT(c1.type == QPainterPath::CurveToDataElement);
                 Q_ASSERT(c2.type == QPainterPath::CurveToDataElement);
 
-                ret += QString(QLatin1String("C %1 %2 %3 %4 %5 %6")).arg(cur.x).arg(cur.y).arg(c1.x).arg(c1.y).arg(c2.x).arg(c2.y);
-
+                ret += QString(QLatin1String("C%1,%2,%3,%4,%5,%6 ")).arg(cur.x, 0, 'f', 2).arg(cur.y, 0, 'f', 2).arg(c1.x, 0, 'f', 2)
+                                                                    .arg(c1.y, 0, 'f', 2).arg(c2.x, 0, 'f', 2).arg(c2.y, 0, 'f', 2);
                 i += 2;
                 break;
             }
@@ -340,7 +369,7 @@ String Path::debugString() const
         }
     }
 
-    return ret;
+    return ret.trimmed();
 }
 
 void Path::apply(void* info, PathApplierFunction function) const
@@ -348,8 +377,8 @@ void Path::apply(void* info, PathApplierFunction function) const
     PathElement pelement;
     FloatPoint points[3];
     pelement.points = points;
-    for (int i = 0; i < m_path->elementCount(); ++i) {
-        const QPainterPath::Element& cur = m_path->elementAt(i);
+    for (int i = 0; i < m_path.elementCount(); ++i) {
+        const QPainterPath::Element& cur = m_path.elementAt(i);
 
         switch (cur.type) {
             case QPainterPath::MoveToElement:
@@ -364,8 +393,8 @@ void Path::apply(void* info, PathApplierFunction function) const
                 break;
             case QPainterPath::CurveToElement:
             {
-                const QPainterPath::Element& c1 = m_path->elementAt(i + 1);
-                const QPainterPath::Element& c2 = m_path->elementAt(i + 2);
+                const QPainterPath::Element& c1 = m_path.elementAt(i + 1);
+                const QPainterPath::Element& c2 = m_path.elementAt(i + 2);
 
                 Q_ASSERT(c1.type == QPainterPath::CurveToDataElement);
                 Q_ASSERT(c2.type == QPainterPath::CurveToDataElement);
@@ -385,14 +414,9 @@ void Path::apply(void* info, PathApplierFunction function) const
     }
 }
 
-void Path::transform(const TransformationMatrix& transform)
+void Path::transform(const AffineTransform& transform)
 {
-    if (m_path) {
-        QTransform mat = transform;
-        QPainterPath temp = mat.map(*m_path);
-        delete m_path;
-        m_path = new QPainterPath(temp);
-    }
+    m_path = QTransform(transform).map(m_path);
 }
 
 }

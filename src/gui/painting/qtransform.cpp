@@ -47,6 +47,7 @@
 #include "qpainterpath.h"
 #include "qvariant.h"
 #include <qmath.h>
+#include <qnumeric.h>
 
 #include <private/qbezier_p.h>
 
@@ -147,8 +148,8 @@ QT_BEGIN_NAMESPACE
     coordinate system.  The standard coordinate system of a
     QPaintDevice has its origin located at the top-left position. The
     \e x values increase to the right; \e y values increase
-    downward. For a complete description, see the \l {The Coordinate
-    System}{coordinate system} documentation.
+    downward. For a complete description, see the \l {Coordinate
+    System} {coordinate system} documentation.
 
     QPainter has functions to translate, scale, shear and rotate the
     coordinate system without using a QTransform. For example:
@@ -222,7 +223,7 @@ QT_BEGIN_NAMESPACE
     \snippet doc/src/snippets/transform/main.cpp 2
     \endtable
 
-    \sa QPainter, {The Coordinate System}, {demos/affine}{Affine
+    \sa QPainter, {Coordinate System}, {demos/affine}{Affine
     Transformations Demo}, {Transformations Example}
 */
 
@@ -410,6 +411,12 @@ QTransform &QTransform::translate(qreal dx, qreal dy)
 {
     if (dx == 0 && dy == 0)
         return *this;
+#ifndef QT_NO_DEBUG
+    if (qIsNaN(dx) | qIsNaN(dy)) {
+        qWarning() << "QTransform::translate with NaN called";
+        return *this;
+    }
+#endif
 
     switch(inline_type()) {
     case TxNone:
@@ -447,6 +454,12 @@ QTransform &QTransform::translate(qreal dx, qreal dy)
 */
 QTransform QTransform::fromTranslate(qreal dx, qreal dy)
 {
+#ifndef QT_NO_DEBUG
+    if (qIsNaN(dx) | qIsNaN(dy)) {
+        qWarning() << "QTransform::fromTranslate with NaN called";
+        return QTransform();
+}
+#endif
     QTransform transform(1, 0, 0, 0, 1, 0, dx, dy, 1, true);
     if (dx == 0 && dy == 0)
         transform.m_type = TxNone;
@@ -466,6 +479,12 @@ QTransform & QTransform::scale(qreal sx, qreal sy)
 {
     if (sx == 1 && sy == 1)
         return *this;
+#ifndef QT_NO_DEBUG
+    if (qIsNaN(sx) | qIsNaN(sy)) {
+        qWarning() << "QTransform::scale with NaN called";
+        return *this;
+    }
+#endif
 
     switch(inline_type()) {
     case TxNone:
@@ -501,6 +520,12 @@ QTransform & QTransform::scale(qreal sx, qreal sy)
 */
 QTransform QTransform::fromScale(qreal sx, qreal sy)
 {
+#ifndef QT_NO_DEBUG
+    if (qIsNaN(sx) | qIsNaN(sy)) {
+        qWarning() << "QTransform::fromScale with NaN called";
+        return QTransform();
+}
+#endif
     QTransform transform(sx, 0, 0, 0, sy, 0, 0, 0, 1, true);
     if (sx == 1. && sy == 1.)
         transform.m_type = TxNone;
@@ -520,6 +545,12 @@ QTransform & QTransform::shear(qreal sh, qreal sv)
 {
     if (sh == 0 && sv == 0)
         return *this;
+#ifndef QT_NO_DEBUG
+    if (qIsNaN(sh) | qIsNaN(sv)) {
+        qWarning() << "QTransform::shear with NaN called";
+        return *this;
+    }
+#endif
 
     switch(inline_type()) {
     case TxNone:
@@ -575,6 +606,12 @@ QTransform & QTransform::rotate(qreal a, Qt::Axis axis)
 {
     if (a == 0)
         return *this;
+#ifndef QT_NO_DEBUG
+    if (qIsNaN(a)) {
+        qWarning() << "QTransform::rotate with NaN called";
+        return *this;
+    }
+#endif
 
     qreal sina = 0;
     qreal cosa = 0;
@@ -660,6 +697,12 @@ QTransform & QTransform::rotate(qreal a, Qt::Axis axis)
 */
 QTransform & QTransform::rotateRadians(qreal a, Qt::Axis axis)
 {
+#ifndef QT_NO_DEBUG
+    if (qIsNaN(a)) {
+        qWarning() << "QTransform::rotateRadians with NaN called";
+        return *this;
+    }
+#endif
     qreal sina = qSin(a);
     qreal cosa = qCos(a);
 
@@ -985,7 +1028,7 @@ void QTransform::reset()
     Writes the given \a matrix to the given \a stream and returns a
     reference to the stream.
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 QDataStream & operator<<(QDataStream &s, const QTransform &m)
 {
@@ -1009,7 +1052,7 @@ QDataStream & operator<<(QDataStream &s, const QTransform &m)
     Reads the given \a matrix from the given \a stream and returns a
     reference to the stream.
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 QDataStream & operator>>(QDataStream &s, QTransform &t)
 {
@@ -1037,8 +1080,18 @@ QDataStream & operator>>(QDataStream &s, QTransform &t)
 #ifndef QT_NO_DEBUG_STREAM
 QDebug operator<<(QDebug dbg, const QTransform &m)
 {
-    dbg.nospace() << "QTransform("
-                  << "11="  << m.m11()
+    static const char *typeStr[] =
+    {
+        "TxNone",
+        "TxTranslate",
+        "TxScale",
+        "TxRotate",
+        "TxShear",
+        "TxProject"
+    };
+
+    dbg.nospace() << "QTransform(type=" << typeStr[m.type()] << ','
+                  << " 11=" << m.m11()
                   << " 12=" << m.m12()
                   << " 13=" << m.m13()
                   << " 21=" << m.m21()
@@ -1048,6 +1101,7 @@ QDebug operator<<(QDebug dbg, const QTransform &m)
                   << " 32=" << m.m32()
                   << " 33=" << m.m33()
                   << ')';
+
     return dbg.space();
 }
 #endif
@@ -1491,12 +1545,19 @@ static inline bool lineTo_clipped(QPainterPath &path, const QTransform &transfor
 
     return true;
 }
+Q_GUI_EXPORT bool qt_scaleForTransform(const QTransform &transform, qreal *scale);
 
 static inline bool cubicTo_clipped(QPainterPath &path, const QTransform &transform, const QPointF &a, const QPointF &b, const QPointF &c, const QPointF &d, bool needsMoveTo)
 {
     // Convert projective xformed curves to line
     // segments so they can be transformed more accurately
-    QPolygonF segment = QBezier::fromPoints(a, b, c, d).toPolygon();
+
+    qreal scale;
+    qt_scaleForTransform(transform, &scale);
+
+    qreal curveThreshold = scale == 0 ? qreal(0.25) : (qreal(0.25) / scale);
+
+    QPolygonF segment = QBezier::fromPoints(a, b, c, d).toPolygon(curveThreshold);
 
     for (int i = 0; i < segment.size() - 1; ++i)
         if (lineTo_clipped(path, transform, segment.at(i), segment.at(i+1), needsMoveTo))
@@ -1565,7 +1626,7 @@ static QPainterPath mapProjective(const QTransform &transform, const QPainterPat
 QPainterPath QTransform::map(const QPainterPath &path) const
 {
     TransformationType t = inline_type();
-    if (t == TxNone || path.isEmpty())
+    if (t == TxNone || path.elementCount() == 0)
         return path;
 
     if (t >= TxProject)

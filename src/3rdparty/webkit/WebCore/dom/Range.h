@@ -105,9 +105,13 @@ public:
     Node* shadowTreeRootNode() const;
 
     IntRect boundingBox();
+    // Not transform-friendly
     void textRects(Vector<IntRect>&, bool useSelectionHeight = false);
+    // Transform-friendly
+    void textQuads(Vector<FloatQuad>&, bool useSelectionHeight = false);
 
     void nodeChildrenChanged(ContainerNode*);
+    void nodeChildrenWillBeRemoved(ContainerNode*);
     void nodeWillBeRemoved(Node*);
 
     void textInserted(Node*, unsigned offset, unsigned length);
@@ -154,5 +158,10 @@ bool operator==(const Range&, const Range&);
 inline bool operator!=(const Range& a, const Range& b) { return !(a == b); }
 
 } // namespace
+
+#ifndef NDEBUG
+// Outside the WebCore namespace for ease of invocation from gdb.
+void showTree(const WebCore::Range*);
+#endif
 
 #endif

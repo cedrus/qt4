@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -60,7 +46,9 @@
 
 /*!
     \page paintsystem.html
-    \title The Paint System
+    \title Paint System
+    \brief A system for painting on the screen or on print devices using the same API
+    \ingroup qt-graphics
     \ingroup frameworks-technologies
 
     Qt's paint system enables painting on screen and print devices
@@ -87,7 +75,7 @@
         \o \l{Classes for Painting}
         \o \l{Paint Devices and Backends}
         \o \l{Drawing and Filling}
-        \o \l{The Coordinate System}
+        \o \l{Coordinate System}
         \o \l{Reading and Writing Image Files}
         \o \l{Styling}
         \o \l{Printing with Qt}
@@ -337,10 +325,10 @@
 
     Normally, QPainter draws in a "natural" coordinate system, but it
     is able to perform view and world transformations using the
-    QTransform class. For more information, see \l {The Coordinate
-    System} documentation which also describes the rendering process,
-    i.e. the relation between the logical representation and the
-    rendered pixels, and the benefits of anti-aliased painting.
+    QTransform class. For more information, see \l {Coordinate
+    System}, which also describes the rendering process, i.e. the
+    relation between the logical representation and the rendered
+    pixels, and the benefits of anti-aliased painting.
 
     \table 100%
     \row \o
@@ -566,5 +554,5 @@
     \endtable
     
     For more information about widget styling and appearance, see the
-    documentation about \l{Implementing Styles and Style Aware Widgets}.
+    \l{Styles &amp Style Aware Widgets}.
 */

@@ -164,6 +164,7 @@ public:
     inline const char *constData() const;
     inline void detach();
     bool isDetached() const;
+    inline bool isSharedWith(const QByteArray &other) const { return d == other.d; }
     void clear();
 
 #ifdef Q_COMPILER_MANGLES_RETURN_TYPE
@@ -236,6 +237,7 @@ public:
     QByteArray &insert(int i, const QByteArray &a);
     QByteArray &remove(int index, int len);
     QByteArray &replace(int index, int len, const char *s);
+    QByteArray &replace(int index, int len, const char *s, int alen);
     QByteArray &replace(int index, int len, const QByteArray &s);
     QByteArray &replace(char before, const char *after);
     QByteArray &replace(char before, const QByteArray &after);
@@ -297,6 +299,7 @@ public:
     QByteArray &setNum(qulonglong, int base = 10);
     QByteArray &setNum(float, char f = 'g', int prec = 6);
     QByteArray &setNum(double, char f = 'g', int prec = 6);
+    QByteArray &setRawData(const char *a, uint n); // ### Qt 5: use an int
 
     static QByteArray number(int, int base = 10);
     static QByteArray number(uint, int base = 10);
@@ -341,8 +344,6 @@ public:
     inline QT3_SUPPORT QByteArray& duplicate(const QByteArray& a) { *this = a; return *this; }
     inline QT3_SUPPORT QByteArray& duplicate(const char *a, uint n)
     { *this = QByteArray(a, n); return *this; }
-    inline QT3_SUPPORT QByteArray& setRawData(const char *a, uint n)
-    { *this = fromRawData(a, n); return *this; }
     inline QT3_SUPPORT void resetRawData(const char *, uint) { clear(); }
     inline QT3_SUPPORT QByteArray lower() const { return toLower(); }
     inline QT3_SUPPORT QByteArray upper() const { return toUpper(); }

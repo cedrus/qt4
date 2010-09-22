@@ -55,7 +55,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #if defined(Q_OS_SYMBIAN)
-# include <syslimits.h>
+# include <sys/syslimits.h>
 # include <f32file.h>
 # include <pathinfo.h>
 # include "private/qcore_symbian_p.h"
@@ -122,7 +122,7 @@ void QFSFileEnginePrivate::setSymbianError(int symbianError, QFile::FileError de
 
     Returns the stdlib open string corresponding to a QIODevice::OpenMode.
 */
-static inline QByteArray openModeToFopenMode(QIODevice::OpenMode flags, const QString &fileName)
+static inline QByteArray openModeToFopenMode(QIODevice::OpenMode flags, const QByteArray &fileName)
 {
     QByteArray mode;
     if ((flags & QIODevice::ReadOnly) && !(flags & QIODevice::Truncate)) {
@@ -130,7 +130,7 @@ static inline QByteArray openModeToFopenMode(QIODevice::OpenMode flags, const QS
         if (flags & QIODevice::WriteOnly) {
             QT_STATBUF statBuf;
             if (!fileName.isEmpty()
-                && QT_STAT(QFile::encodeName(fileName), &statBuf) == 0
+                && QT_STAT(fileName, &statBuf) == 0
                 && (statBuf.st_mode & S_IFMT) == S_IFREG) {
                 mode += '+';
             } else {
@@ -254,7 +254,7 @@ bool QFSFileEnginePrivate::nativeOpen(QIODevice::OpenMode openMode)
 
         fh = 0;
     } else {
-        QByteArray fopenMode = openModeToFopenMode(openMode, filePath);
+        QByteArray fopenMode = openModeToFopenMode(openMode, nativeFilePath.constData());
 
         // Try to open the file in buffered mode.
         do {
@@ -634,13 +634,8 @@ QString QFSFileEngine::homePath()
 QString QFSFileEngine::rootPath()
 {
 #if defined(Q_OS_SYMBIAN)
-# ifdef Q_WS_S60
     TFileName symbianPath = PathInfo::PhoneMemoryRootPath();
     return QDir::cleanPath(QDir::fromNativeSeparators(qt_TDesC2QString(symbianPath)));
-# else
-# warning No fallback implementation of QFSFileEngine::rootPath()
-    return QString();
-# endif
 #else
     return QLatin1String("/");
 #endif
@@ -649,17 +644,12 @@ QString QFSFileEngine::rootPath()
 QString QFSFileEngine::tempPath()
 {
 #if defined(Q_OS_SYMBIAN)
-# ifdef Q_WS_S60
     TFileName symbianPath = PathInfo::PhoneMemoryRootPath();
     QString temp = QDir::fromNativeSeparators(qt_TDesC2QString(symbianPath));
     temp += QLatin1String( "temp/");
 
     // Just to verify that folder really exist on hardware
     QT_MKDIR(QFile::encodeName(temp), 0777);
-# else
-# warning No fallback implementation of QFSFileEngine::tempPath()
-    QString temp;
-# endif
 #else
     QString temp = QFile::decodeName(qgetenv("TMPDIR"));
     if (temp.isEmpty())
@@ -772,6 +762,46 @@ static bool _q_isMacHidden(const QString &path)
 }
 #endif
 
+QAbstractFileEngine::FileFlags QFSFileEnginePrivate::getPermissions(QAbstractFileEngine::FileFlags type) const
+{
+    QAbstractFileEngine::FileFlags ret = 0;
+
+    if (st.st_mode & S_IRUSR)
+        ret |= QAbstractFileEngine::ReadOwnerPerm;
+    if (st.st_mode & S_IWUSR)
+        ret |= QAbstractFileEngine::WriteOwnerPerm;
+    if (st.st_mode & S_IXUSR)
+        ret |= QAbstractFileEngine::ExeOwnerPerm;
+    if (st.st_mode & S_IRGRP)
+        ret |= QAbstractFileEngine::ReadGroupPerm;
+    if (st.st_mode & S_IWGRP)
+        ret |= QAbstractFileEngine::WriteGroupPerm;
+    if (st.st_mode & S_IXGRP)
+        ret |= QAbstractFileEngine::ExeGroupPerm;
+    if (st.st_mode & S_IROTH)
+        ret |= QAbstractFileEngine::ReadOtherPerm;
+    if (st.st_mode & S_IWOTH)
+        ret |= QAbstractFileEngine::WriteOtherPerm;
+    if (st.st_mode & S_IXOTH)
+        ret |= QAbstractFileEngine::ExeOtherPerm;
+
+    // calculate user permissions
+    if (type & QAbstractFileEngine::ReadUserPerm) {
+        if (QT_ACCESS(nativeFilePath.constData(), R_OK) == 0)
+            ret |= QAbstractFileEngine::ReadUserPerm;
+    }
+    if (type & QAbstractFileEngine::WriteUserPerm) {
+        if (QT_ACCESS(nativeFilePath.constData(), W_OK) == 0)
+            ret |= QAbstractFileEngine::WriteUserPerm;
+    }
+    if (type & QAbstractFileEngine::ExeUserPerm) {
+        if (QT_ACCESS(nativeFilePath.constData(), X_OK) == 0)
+            ret |= QAbstractFileEngine::ExeUserPerm;
+    }
+
+    return ret;
+}
+
 /*!
     \reimp
 */
@@ -791,32 +821,8 @@ QAbstractFileEngine::FileFlags QFSFileEngine::fileFlags(FileFlags type) const
     if (!exists && !d->isSymlink())
         return ret;
 
-    if (exists && (type & PermsMask)) {
-        if (d->st.st_mode & S_IRUSR)
-            ret |= ReadOwnerPerm;
-        if (d->st.st_mode & S_IWUSR)
-            ret |= WriteOwnerPerm;
-        if (d->st.st_mode & S_IXUSR)
-            ret |= ExeOwnerPerm;
-        if (d->st.st_mode & S_IRUSR)
-            ret |= ReadUserPerm;
-        if (d->st.st_mode & S_IWUSR)
-            ret |= WriteUserPerm;
-        if (d->st.st_mode & S_IXUSR)
-            ret |= ExeUserPerm;
-        if (d->st.st_mode & S_IRGRP)
-            ret |= ReadGroupPerm;
-        if (d->st.st_mode & S_IWGRP)
-            ret |= WriteGroupPerm;
-        if (d->st.st_mode & S_IXGRP)
-            ret |= ExeGroupPerm;
-        if (d->st.st_mode & S_IROTH)
-            ret |= ReadOtherPerm;
-        if (d->st.st_mode & S_IWOTH)
-            ret |= WriteOtherPerm;
-        if (d->st.st_mode & S_IXOTH)
-            ret |= ExeOtherPerm;
-    }
+    if (exists && (type & PermsMask))
+        ret |= d->getPermissions(type);
     if (type & TypesMask) {
 #if !defined(QWS) && defined(Q_OS_MAC)
         bool foundAlias = false;

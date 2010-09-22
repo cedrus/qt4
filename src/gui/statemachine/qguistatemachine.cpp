@@ -469,20 +469,16 @@ static QEvent *cloneEvent(QEvent *e)
     case QEvent::UngrabKeyboard:
         return new QEvent(*e);
 
-#ifdef QT_MAC_USE_COCOA
-    case QEvent::CocoaRequestModal:
-        Q_ASSERT_X(false, "cloneEvent()", "not implemented");
-        break;
-#endif
-
     case QEvent::TouchBegin:
     case QEvent::TouchUpdate:
     case QEvent::TouchEnd:
         return new QTouchEvent(*static_cast<QTouchEvent*>(e));
 
+#ifndef QT_NO_GESTURES
     case QEvent::NativeGesture:
         Q_ASSERT_X(false, "cloneEvent()", "not implemented");
         break;
+#endif
 
     case QEvent::RequestSoftwareInputPanel:
     case QEvent::CloseSoftwareInputPanel:

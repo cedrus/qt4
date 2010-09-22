@@ -1,0 +1,116 @@
+/****************************************************************************
+**
+** Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
+** All rights reserved.
+** Contact: Nokia Corporation (qt-info@nokia.com)
+**
+** This file is part of the documentation of the Qt Toolkit.
+**
+** $QT_BEGIN_LICENSE:FDL$
+** Commercial Usage
+** Licensees holding valid Qt Commercial licenses may use this file in
+** accordance with the Qt Commercial License Agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
+**
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
+**
+** If you have questions regarding the use of this file, please contact
+** Nokia at qt-info@nokia.com.
+** $QT_END_LICENSE$
+**
+****************************************************************************/
+
+/*!
+\title Qt Quick
+\page qtquick.html
+\ingroup qt-gui-concepts
+
+
+\brief Qt Quick provides a declarative framework for building highly
+dynamic, custom user interfaces.
+
+Qt Quick provides a declarative framework for building highly dynamic,
+custom user interfaces from a rich set of \l{QML Elements}{QML elements}.
+Qt Quick helps programmers and designers collaborate to
+build the fluid user interfaces that are becoming common in portable
+consumer devices, such as mobile phones, media players, set-top boxes
+and netbooks. Qt Quick consists of the QtDeclarative C++ module, QML, and
+the integration of both of these into the Qt Creator IDE. Using the QtDeclarative
+C++ module, you can load and interact with QML files from your Qt application.
+
+QML is an extension to \l{About JavaScript}{JavaScript}, that provides
+a mechanism to declaratively build an object tree of
+\l{QML Elements}{QML elements}.  QML improves the integration between
+JavaScript and Qt's existing QObject-based type system, adds support for
+automatic \l{Property Binding}{property bindings} and provides
+\l{Network Transparency}{network transparency} at the language level.
+
+The \l{QML Elements}{QML elements} are a sophisticated set of
+graphical and behavioral building blocks.  These different elements
+are combined together in \l{QML Documents}{QML documents} to build
+components ranging in complexity from simple buttons and sliders, to
+complete Internet-enabled applications like a photo browser for the
+popular \l{http://www.flickr.com}{Flickr} photo-sharing site.
+
+Qt Quick builds on \l{QML for Qt programmers}{Qt's existing strengths}.
+QML can be be used to incrementally extend an existing application or
+to build completely new applications.  QML is fully
+\l{Extending QML in C++}{extensible from C++} through the QtDeclarative
+Module.
+
+\section1 Getting Started
+
+\list
+\o \l{Introduction to the QML language}
+\o \l{QML Tutorial}{Tutorial: 'Hello World'}
+\o \l{QML Advanced Tutorial}{Tutorial: 'Same Game'}
+\o \l{QML Examples and Demos}
+\o \l{QML for Qt Programmers}
+\o \l{Getting Started Programming with QML}
+\o \l{Beginning Qt Quick}
+\endlist
+
+\section1 Core QML Features
+\list
+\o \l{QML Documents}
+\o \l{Property Binding}
+\o \l{Network Transparency}
+\o \l{QML Scope}
+\o \l{Integrating JavaScript}
+\o \l{Data Models}
+\o \l{Anchor-based Layout in QML}
+\o \l{QML States}
+\o \l{QML Animation}
+\o \l{Keyboard Focus in QML}
+\o \l{QML Modules}
+\o \l{Extending types from QML}
+\o \l{Dynamic Object Management in QML}
+\endlist
+
+\section1 Using QML with C++
+\list
+\o \l{Qt Declarative UI Runtime}
+\o \l{Using QML in C++ Applications}
+\o \l{Integrating QML with existing Qt UI code}
+\o \l{Tutorial: Writing QML extensions with C++}
+\o \l{Extending QML in C++}
+\endlist
+
+\section1 Reference
+\list
+\o \l{QML Elements}
+\o \l{QML Global Object}
+\o \l{QML Internationalization}
+\o \l{QML Security}
+\o \l{QtDeclarative Module}
+\o \l{Debugging QML}
+\o \l{QML Viewer}
+\o \l{QML Performance}
+\o \l{QML Coding Conventions}
+\endlist
+*/

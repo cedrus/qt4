@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -362,7 +348,7 @@
   By default, the script engine does not take ownership of the
   QObject that is passed to QScriptEngine::newQObject(); the object
   is managed according to Qt's object ownership (see
-  \l{Object Trees and Object Ownership}). This mode is appropriate
+  \l{Object Trees & Ownership}). This mode is appropriate
   when, for example, you are wrapping C++ objects that are part of
   your application's core; that is, they should persist regardless of
   what happens in the scripting environment. Another way of stating
@@ -627,9 +613,9 @@
 
   To completely understand how to make C++ objects available to Qt
   Script, some basic knowledge of the Qt meta-object system is very
-  helpful. We recommend that you read the \l{Qt Object Model}. The
-  information in this document and the documents it links to are very
-  useful for understanding how to implement application objects.
+  helpful. We recommend that you read about the Qt \l{Object Model}
+  and \l{The Meta-Object System}, which are useful for understanding
+  how to implement application objects.
 
   However, this knowledge is not essential in the simplest cases.
   To make an object available in QtScript, it must derive from

@@ -50,7 +50,7 @@
     It provides a light-weight foundation for writing your own custom items.
     This includes defining the item's geometry, collision detection, its
     painting implementation and item interaction through its event handlers.
-    QGraphicsItem is part of \l{The Graphics View Framework}
+    QGraphicsItem is part of the \l{Graphics View Framework}
 
     \image graphicsview-items.png
 
@@ -264,7 +264,7 @@
     functionality is completely untouched by Qt itself; it is provided for the
     user's convenience.
 
-    \sa QGraphicsScene, QGraphicsView, {The Graphics View Framework}
+    \sa QGraphicsScene, QGraphicsView, {Graphics View Framework}
 */
 
 /*!
@@ -381,7 +381,9 @@
 
     \value ItemSendsGeometryChanges The item enables itemChange()
     notifications for ItemPositionChange, ItemPositionHasChanged,
-    ItemMatrixChange, ItemTransformChange, and ItemTransformHasChanged. For
+    ItemMatrixChange, ItemTransformChange, ItemTransformHasChanged,
+    ItemRotationChange, ItemRotationHasChanged, ItemScaleChange, ItemScaleHasChanged,
+    ItemTransformOriginPointChange, and ItemTransformOriginPointHasChanged. For
     performance reasons, these notifications are disabled by default. You must
     enable this flag to receive notifications for position and transform
     changes. This flag was introduced in Qt 4.6.
@@ -409,6 +411,11 @@
     these notifications are disabled by default. You must enable this flag
     to receive notifications for scene position changes. This flag was
     introduced in Qt 4.6.
+
+    \omitvalue ItemStopsClickFocusPropagation \omit The item stops propagating
+    click focus to items underneath when being clicked on. This flag
+    allows you create a non-focusable item that can be clicked on without
+    changing the focus. \endomit
 */
 
 /*!
@@ -474,6 +481,52 @@
     transformation matrix has changed. The value argument is the new matrix
     (same as transform()), and QGraphicsItem ignores the return value for this
     notification (i.e., a read-only notification).
+
+    \value ItemRotationChange The item's rotation property changes. This
+    notification is sent if the ItemSendsGeometryChanges flag is enabled, and
+    when the item's rotation property changes (i.e., as a result of calling
+    setRotation()). The value argument is the new rotation (i.e., a double);
+    to get the old rotation, call rotation(). Do not call setRotation() in
+    itemChange() as this notification is delivered; instead, you can return
+    the new rotation from itemChange().
+
+    \value ItemRotationHasChanged The item's rotation property has changed.
+    This notification is sent if the ItemSendsGeometryChanges flag is enabled,
+    and after the item's rotation property has changed. The value argument is
+    the new rotation (i.e., a double), and QGraphicsItem ignores the return
+    value for this notification (i.e., a read-only notification). Do not call
+    setRotation() in itemChange() as this notification is delivered.
+
+    \value ItemScaleChange The item's scale property changes. This notification
+    is sent if the ItemSendsGeometryChanges flag is enabled, and when the item's
+    scale property changes (i.e., as a result of calling setScale()). The value
+    argument is the new scale (i.e., a double); to get the old scale, call
+    scale(). Do not call setScale() in itemChange() as this notification is
+    delivered; instead, you can return the new scale from itemChange().
+
+    \value ItemScaleHasChanged The item's scale property has changed. This
+    notification is sent if the ItemSendsGeometryChanges flag is enabled, and
+    after the item's scale property has changed. The value argument is the new
+    scale (i.e., a double), and QGraphicsItem ignores the return value for this
+    notification (i.e., a read-only notification). Do not call setScale() in
+    itemChange() as this notification is delivered.
+
+    \value ItemTransformOriginPointChange The item's transform origin point
+    property changes. This notification is sent if the ItemSendsGeometryChanges
+    flag is enabled, and when the item's transform origin point property changes
+    (i.e., as a result of calling setTransformOriginPoint()). The value argument
+    is the new origin point (i.e., a QPointF); to get the old origin point, call
+    transformOriginPoint(). Do not call setTransformOriginPoint() in itemChange()
+    as this notification is delivered; instead, you can return the new transform
+    origin point from itemChange().
+
+    \value ItemTransformOriginPointHasChanged The item's transform origin point
+    property has changed. This notification is sent if the ItemSendsGeometryChanges
+    flag is enabled, and after the item's transform origin point property has
+    changed. The value argument is the new origin point (i.e., a QPointF), and
+    QGraphicsItem ignores the return value for this notification (i.e., a read-only
+    notification). Do not call setTransformOriginPoint() in itemChange() as this
+    notification is delivered.
 
     \value ItemSelectedChange The item's selected state changes. If the item is
     presently selected, it will become unselected, and vice verca. The value
@@ -673,6 +726,7 @@
 #include <QtCore/qtimer.h>
 #include <QtCore/qvariant.h>
 #include <QtCore/qvarlengtharray.h>
+#include <QtCore/qnumeric.h>
 #include <QtGui/qapplication.h>
 #include <QtGui/qbitmap.h>
 #include <QtGui/qpainter.h>
@@ -682,6 +736,9 @@
 #include <QtGui/qevent.h>
 #include <QtGui/qinputcontext.h>
 #include <QtGui/qgraphicseffect.h>
+#ifndef QT_NO_ACCESSIBILITY
+# include "qaccessible.h"
+#endif
 
 #include <private/qgraphicsitem_p.h>
 #include <private/qgraphicswidget_p.h>
@@ -689,6 +746,7 @@
 #include <private/qtextdocumentlayout_p.h>
 #include <private/qtextengine_p.h>
 #include <private/qwidget_p.h>
+#include <private/qapplication_p.h>
 
 #ifdef Q_WS_X11
 #include <private/qt_x11_p.h>
@@ -1037,6 +1095,10 @@ void QGraphicsItemPrivate::setParentItemHelper(QGraphicsItem *newParent, const Q
     if (newParent == parent)
         return;
 
+    if (isWidget)
+        static_cast<QGraphicsWidgetPrivate *>(this)->fixFocusChainBeforeReparenting((newParent &&
+                                                        newParent->isWidget()) ? static_cast<QGraphicsWidget *>(newParent) : 0,
+                                                        scene);
     if (scene) {
         // Deliver the change to the index
         if (scene->d_func()->indexMethod != QGraphicsScene::NoIndex)
@@ -1087,6 +1149,7 @@ void QGraphicsItemPrivate::setParentItemHelper(QGraphicsItem *newParent, const Q
             if (q_ptr == fsi || q_ptr->isAncestorOf(fsi)) {
                 parentFocusScopeItem = fsi;
                 p->d_ptr->focusScopeItem = 0;
+                fsi->d_ptr->focusScopeItemChange(false);
             }
             break;
         }
@@ -1119,6 +1182,7 @@ void QGraphicsItemPrivate::setParentItemHelper(QGraphicsItem *newParent, const Q
         while (p) {
             if (p->d_ptr->flags & QGraphicsItem::ItemIsFocusScope) {
                 p->d_ptr->focusScopeItem = newFocusScopeItem;
+                newFocusScopeItem->d_ptr->focusScopeItemChange(true);
                 // Ensure the new item is no longer the subFocusItem. The
                 // only way to set focus on a child of a focus scope is
                 // by setting focus on the scope itself.
@@ -1184,6 +1248,8 @@ void QGraphicsItemPrivate::setParentItemHelper(QGraphicsItem *newParent, const Q
     }
 
     dirtySceneTransform = 1;
+    if (!inDestructor && (transformData || (newParent && newParent->d_ptr->transformData)))
+        transformChanged();
 
     // Restore the sub focus chain.
     if (subFocusItem) {
@@ -1216,14 +1282,14 @@ void QGraphicsItemPrivate::childrenBoundingRectHelper(QTransform *x, QRectF *rec
             QTransform matrix = childd->transformToParent();
             if (x)
                 matrix *= *x;
-            *rect |= matrix.mapRect(child->boundingRect());
+            *rect |= matrix.mapRect(child->d_ptr->effectiveBoundingRect());
             if (!childd->children.isEmpty())
                 childd->childrenBoundingRectHelper(&matrix, rect);
         } else {
             if (x)
-                *rect |= x->mapRect(child->boundingRect());
+                *rect |= x->mapRect(child->d_ptr->effectiveBoundingRect());
             else
-                *rect |= child->boundingRect();
+                *rect |= child->d_ptr->effectiveBoundingRect();
             if (!childd->children.isEmpty())
                 childd->childrenBoundingRectHelper(x, rect);
         }
@@ -1355,10 +1421,28 @@ QGraphicsItem::QGraphicsItem(QGraphicsItemPrivate &dd, QGraphicsItem *parent,
 */
 QGraphicsItem::~QGraphicsItem()
 {
-    if (d_ptr->isObject)
-        QObjectPrivate::get(static_cast<QGraphicsObject *>(this))->wasDeleted = true;
+    if (d_ptr->isObject) {
+        QGraphicsObject *o = static_cast<QGraphicsObject *>(this);
+        QObjectPrivate *p = QObjectPrivate::get(o);
+        p->wasDeleted = true;
+        if (p->declarativeData) {
+            QAbstractDeclarativeData::destroyed(p->declarativeData, o);
+            p->declarativeData = 0;
+        }
+    }
+
     d_ptr->inDestructor = 1;
     d_ptr->removeExtraItemCache();
+
+#ifndef QT_NO_GESTURES
+    if (d_ptr->isObject && !d_ptr->gestureContext.isEmpty()) {
+        QGraphicsObject *o = static_cast<QGraphicsObject *>(this);
+        if (QGestureManager *manager = QGestureManager::instance()) {
+            foreach (Qt::GestureType type, d_ptr->gestureContext.keys())
+                manager->cleanupCachedGestures(o, type);
+        }
+    }
+#endif
 
     clearFocus();
 
@@ -1733,9 +1817,6 @@ static void _q_qgraphicsItemSetFlag(QGraphicsItem *item, QGraphicsItem::Graphics
 */
 void QGraphicsItem::setFlags(GraphicsItemFlags flags)
 {
-    if (isWindow())
-        flags |= ItemIsPanel;
-
     // Notify change and check for adjustment.
     if (quint32(d_ptr->flags) == quint32(flags))
         return;
@@ -1749,7 +1830,7 @@ void QGraphicsItem::setFlags(GraphicsItemFlags flags)
     const quint32 geomChangeFlagsMask = (ItemClipsChildrenToShape | ItemClipsToShape | ItemIgnoresTransformations | ItemIsSelectable);
     bool fullUpdate = (quint32(flags) & geomChangeFlagsMask) != (d_ptr->flags & geomChangeFlagsMask);
     if (fullUpdate)
-        d_ptr->paintedViewBoundingRectsNeedRepaint = 1;
+        d_ptr->updatePaintedViewBoundingRects(/*children=*/true);
 
     // Keep the old flags to compare the diff.
     GraphicsItemFlags oldFlags = GraphicsItemFlags(d_ptr->flags);
@@ -3179,6 +3260,8 @@ void QGraphicsItemPrivate::setFocusHelper(Qt::FocusReason focusReason, bool clim
     }
 
     // Update the child focus chain.
+    if (scene && scene->focusItem())
+        scene->focusItem()->d_ptr->clearSubFocus();
     f->d_ptr->setSubFocus();
 
     // Update the scene's focus item.
@@ -3204,7 +3287,8 @@ void QGraphicsItemPrivate::setFocusHelper(Qt::FocusReason focusReason, bool clim
 */
 void QGraphicsItem::clearFocus()
 {
-    d_ptr->clearFocusHelper(/* giveFocusToParent = */ true);
+    if (hasFocus())
+        d_ptr->clearFocusHelper(/* giveFocusToParent = */ true);
 }
 
 /*!
@@ -3484,7 +3568,10 @@ void QGraphicsItem::setX(qreal x)
     if (d_ptr->inDestructor)
         return;
 
-    d_ptr->setPosHelper(QPointF(x, d_ptr->pos.y()));
+    if (qIsNaN(x))
+        return;
+
+    setPos(QPointF(x, d_ptr->pos.y()));
 }
 
 /*!
@@ -3508,7 +3595,10 @@ void QGraphicsItem::setY(qreal y)
     if (d_ptr->inDestructor)
         return;
 
-    d_ptr->setPosHelper(QPointF(d_ptr->pos.x(), y));
+    if (qIsNaN(y))
+        return;
+
+    setPos(QPointF(d_ptr->pos.x(), y));
 }
 
 /*!
@@ -3555,6 +3645,7 @@ void QGraphicsItemPrivate::setTransformHelper(const QTransform &transform)
     q_ptr->prepareGeometryChange();
     transformData->transform = transform;
     dirtySceneTransform = 1;
+    transformChanged();
 }
 
 /*!
@@ -3576,7 +3667,7 @@ void QGraphicsItem::setPos(const QPointF &pos)
         return;
 
     // Update and repositition.
-    if (!(d_ptr->flags & ItemSendsGeometryChanges)) {
+    if (!(d_ptr->flags & (ItemSendsGeometryChanges | ItemSendsScenePositionChanges))) {
         d_ptr->setPosHelper(pos);
         if (d_ptr->isWidget)
             static_cast<QGraphicsWidget *>(this)->d_func()->setGeometryFromSetPos();
@@ -3723,14 +3814,32 @@ qreal QGraphicsItem::rotation() const
 void QGraphicsItem::setRotation(qreal angle)
 {
     prepareGeometryChange();
+    qreal newRotation = angle;
+
+    if (d_ptr->flags & ItemSendsGeometryChanges) {
+        // Notify the item that the rotation is changing.
+        const QVariant newRotationVariant(itemChange(ItemRotationChange, angle));
+        newRotation = newRotationVariant.toReal();
+    }
+
     if (!d_ptr->transformData)
         d_ptr->transformData = new QGraphicsItemPrivate::TransformData;
-    d_ptr->transformData->rotation = angle;
+
+    if (d_ptr->transformData->rotation == newRotation)
+        return;
+
+    d_ptr->transformData->rotation = newRotation;
     d_ptr->transformData->onlyTransform = false;
     d_ptr->dirtySceneTransform = 1;
 
+    // Send post-notification.
+    if (d_ptr->flags & ItemSendsGeometryChanges)
+        itemChange(ItemRotationHasChanged, newRotation);
+
     if (d_ptr->isObject)
         emit static_cast<QGraphicsObject *>(this)->rotationChanged();
+
+    d_ptr->transformChanged();
 }
 
 /*!
@@ -3766,19 +3875,37 @@ qreal QGraphicsItem::scale() const
     The scale is combined with the item's rotation(), transform() and
     transformations() to map the item's coordinate system to the parent item.
 
-    \sa scale(), setTransformOriginPoint(), {Transformations}
+    \sa scale(), setTransformOriginPoint(), {Transformations Example}
 */
 void QGraphicsItem::setScale(qreal factor)
 {
     prepareGeometryChange();
+    qreal newScale = factor;
+
+    if (d_ptr->flags & ItemSendsGeometryChanges) {
+        // Notify the item that the scale is changing.
+        const QVariant newScaleVariant(itemChange(ItemScaleChange, factor));
+        newScale = newScaleVariant.toReal();
+    }
+
     if (!d_ptr->transformData)
         d_ptr->transformData = new QGraphicsItemPrivate::TransformData;
-    d_ptr->transformData->scale = factor;
+
+    if (d_ptr->transformData->scale == newScale)
+        return;
+
+    d_ptr->transformData->scale = newScale;
     d_ptr->transformData->onlyTransform = false;
     d_ptr->dirtySceneTransform = 1;
 
+    // Send post-notification.
+    if (d_ptr->flags & ItemSendsGeometryChanges)
+        itemChange(ItemScaleHasChanged, newScale);
+
     if (d_ptr->isObject)
         emit static_cast<QGraphicsObject *>(this)->scaleChanged();
+
+    d_ptr->transformChanged();
 }
 
 
@@ -3788,7 +3915,7 @@ void QGraphicsItem::setScale(qreal factor)
     Returns a list of graphics transforms that currently apply to this item.
 
     QGraphicsTransform is for applying and controlling a chain of individual
-    transformation operations on an item. It's particularily useful in
+    transformation operations on an item. It's particularly useful in
     animations, where each transform operation needs to be interpolated
     independently, or differently.
 
@@ -3815,7 +3942,7 @@ QList<QGraphicsTransform *> QGraphicsItem::transformations() const
     an item, you can call setTransform().
 
     QGraphicsTransform is for applying and controlling a chain of individual
-    transformation operations on an item. It's particularily useful in
+    transformation operations on an item. It's particularly useful in
     animations, where each transform operation needs to be interpolated
     independently, or differently.
 
@@ -3834,6 +3961,24 @@ void QGraphicsItem::setTransformations(const QList<QGraphicsTransform *> &transf
         transformations.at(i)->d_func()->setItem(this);
     d_ptr->transformData->onlyTransform = false;
     d_ptr->dirtySceneTransform = 1;
+    d_ptr->transformChanged();
+}
+
+/*!
+    \internal
+*/
+void QGraphicsItemPrivate::prependGraphicsTransform(QGraphicsTransform *t)
+{
+    if (!transformData)
+        transformData = new QGraphicsItemPrivate::TransformData;
+    if (!transformData->graphicsTransforms.contains(t))
+        transformData->graphicsTransforms.prepend(t);
+
+    Q_Q(QGraphicsItem);
+    t->d_func()->setItem(q);
+    transformData->onlyTransform = false;
+    dirtySceneTransform = 1;
+    transformChanged();
 }
 
 /*!
@@ -3850,6 +3995,7 @@ void QGraphicsItemPrivate::appendGraphicsTransform(QGraphicsTransform *t)
     t->d_func()->setItem(q);
     transformData->onlyTransform = false;
     dirtySceneTransform = 1;
+    transformChanged();
 }
 
 /*!
@@ -3878,12 +4024,31 @@ QPointF QGraphicsItem::transformOriginPoint() const
 void QGraphicsItem::setTransformOriginPoint(const QPointF &origin)
 {
     prepareGeometryChange();
+    QPointF newOrigin = origin;
+
+    if (d_ptr->flags & ItemSendsGeometryChanges) {
+        // Notify the item that the origin point is changing.
+        const QVariant newOriginVariant(itemChange(ItemTransformOriginPointChange,
+                                                   qVariantFromValue<QPointF>(origin)));
+        newOrigin = newOriginVariant.toPointF();
+    }
+
     if (!d_ptr->transformData)
         d_ptr->transformData = new QGraphicsItemPrivate::TransformData;
-    d_ptr->transformData->xOrigin = origin.x();
-    d_ptr->transformData->yOrigin = origin.y();
+
+    if (d_ptr->transformData->xOrigin == newOrigin.x()
+        && d_ptr->transformData->yOrigin == newOrigin.y()) {
+        return;
+    }
+
+    d_ptr->transformData->xOrigin = newOrigin.x();
+    d_ptr->transformData->yOrigin = newOrigin.y();
     d_ptr->transformData->onlyTransform = false;
     d_ptr->dirtySceneTransform = 1;
+
+    // Send post-notification.
+    if (d_ptr->flags & ItemSendsGeometryChanges)
+        itemChange(ItemTransformOriginPointHasChanged, qVariantFromValue<QPointF>(newOrigin));
 }
 
 /*!
@@ -4971,7 +5136,7 @@ QPainterPath QGraphicsItem::opaqueArea() const
     The bounding region describes a coarse outline of the item's visual
     contents. Although it's expensive to calculate, it's also more precise
     than boundingRect(), and it can help to avoid unnecessary repainting when
-    an item is updated. This is particularily efficient for thin items (e.g.,
+    an item is updated. This is particularly efficient for thin items (e.g.,
     lines or simple polygons). You can tune the granularity for the bounding
     region by calling setBoundingRegionGranularity(). The default granularity
     is 0; in which the item's bounding region is the same as its bounding
@@ -5227,6 +5392,8 @@ void QGraphicsItemPrivate::addChild(QGraphicsItem *child)
     needSortChildren = 1; // ### maybe 0
     child->d_ptr->siblingIndex = children.size();
     children.append(child);
+    if (isObject)
+        emit static_cast<QGraphicsObject *>(q_ptr)->childrenChanged();
 }
 
 /*!
@@ -5249,6 +5416,8 @@ void QGraphicsItemPrivate::removeChild(QGraphicsItem *child)
     // the child is not guaranteed to be at the index after the list is sorted.
     // (see ensureSortedChildren()).
     child->d_ptr->siblingIndex = -1;
+    if (isObject)
+        emit static_cast<QGraphicsObject *>(q_ptr)->childrenChanged();
 }
 
 /*!
@@ -5284,6 +5453,24 @@ void QGraphicsItemPrivate::removeExtraItemCache()
         delete c;
     }
     unsetExtra(ExtraCacheData);
+}
+
+void QGraphicsItemPrivate::updatePaintedViewBoundingRects(bool updateChildren)
+{
+    if (!scene)
+        return;
+
+    for (int i = 0; i < scene->d_func()->views.size(); ++i) {
+        QGraphicsViewPrivate *viewPrivate = scene->d_func()->views.at(i)->d_func();
+        QRect rect = paintedViewBoundingRects.value(viewPrivate->viewport);
+        rect.translate(viewPrivate->dirtyScrollOffset);
+        viewPrivate->updateRect(rect);
+    }
+
+    if (updateChildren) {
+        for (int i = 0; i < children.size(); ++i)
+            children.at(i)->d_ptr->updatePaintedViewBoundingRects(true);
+    }
 }
 
 // Traverses all the ancestors up to the top-level and updates the pointer to
@@ -5384,6 +5571,16 @@ void QGraphicsItemPrivate::subFocusItemChange()
 /*!
     \internal
 
+    Subclasses can reimplement this function to be notified when an item
+    becomes a focusScopeItem (or is no longer a focusScopeItem).
+*/
+void QGraphicsItemPrivate::focusScopeItemChange(bool isSubFocusItem)
+{
+}
+
+/*!
+    \internal
+
     Subclasses can reimplement this function to be notified when its
     siblingIndex order is changed.
 */
@@ -5469,6 +5666,14 @@ void QGraphicsItem::update(const QRectF &rect)
     viewport, which does not benefit from scroll optimizations), this function
     is equivalent to calling update(\a rect).
 
+    \bold{Note:} Scrolling is only supported when QGraphicsItem::ItemCoordinateCache
+    is enabled; in all other cases calling this function is equivalent to calling
+    update(\a rect). If you for sure know that the item is opaque and not overlapped
+    by other items, you can map the \a rect to viewport coordinates and scroll the
+    viewport.
+
+    \snippet doc/src/snippets/code/src_gui_graphicsview_qgraphicsitem.cpp 19
+
     \sa boundingRect()
 */
 void QGraphicsItem::scroll(qreal dx, qreal dy, const QRectF &rect)
@@ -5478,152 +5683,71 @@ void QGraphicsItem::scroll(qreal dx, qreal dy, const QRectF &rect)
         return;
     if (!d->scene)
         return;
-    if (d->cacheMode != NoCache) {
-        QGraphicsItemCache *c;
-        bool scrollCache = qFuzzyIsNull(dx - int(dx)) && qFuzzyIsNull(dy - int(dy))
-                           && (c = (QGraphicsItemCache *)qVariantValue<void *>(d_ptr->extra(QGraphicsItemPrivate::ExtraCacheData)))
-                           && (d->cacheMode == ItemCoordinateCache && !c->fixedSize.isValid());
-        if (scrollCache) {
-            QPixmap pix;
-            if (QPixmapCache::find(c->key, &pix)) {
-                // Adjust with 2 pixel margin. Notice the loss of precision
-                // when converting to QRect.
-                int adjust = 2;
-                QRectF br = boundingRect().adjusted(-adjust, -adjust, adjust, adjust);
-                QRect irect = rect.toRect().translated(-br.x(), -br.y());
 
-                pix.scroll(dx, dy, irect);
-
-                QPixmapCache::replace(c->key, pix);
-
-                // Translate the existing expose.
-                foreach (QRectF exposedRect, c->exposed)
-                    c->exposed += exposedRect.translated(dx, dy) & rect;
-
-                // Calculate exposure.
-                QRegion exposed;
-                QRect r = rect.toRect();
-                exposed += r;
-                exposed -= r.translated(dx, dy);
-                foreach (QRect rect, exposed.rects())
-                    update(rect);
-                d->scene->d_func()->markDirty(this);
-            } else {
-                update(rect);
-            }
-        } else {
-            // ### This is very slow, and can be done much better. If the cache is
-            // local and matches the below criteria for rotation and scaling, we
-            // can easily scroll. And if the cache is in device coordinates, we
-            // can scroll both the viewport and the cache.
-            update(rect);
-        }
+    // Accelerated scrolling means moving pixels from one location to another
+    // and only redraw the newly exposed area. The following requirements must
+    // be fulfilled in order to do that:
+    //
+    // 1) Item is opaque.
+    // 2) Item is not overlapped by other items.
+    //
+    // There's (yet) no way to detect whether an item is opaque or not, which means
+    // we cannot do accelerated scrolling unless the cache is enabled. In case of using
+    // DeviceCoordinate cache we also have to take the device transform into account in
+    // order to determine whether we can do accelerated scrolling or not. That's left out
+    // for simplicity here, but it is definitely something we can consider in the future
+    // as a performance improvement.
+    if (d->cacheMode != QGraphicsItem::ItemCoordinateCache
+        || !qFuzzyIsNull(dx - int(dx)) || !qFuzzyIsNull(dy - int(dy))) {
+        update(rect);
         return;
     }
 
-    QRectF scrollRect = !rect.isNull() ? rect : boundingRect();
-    int couldntScroll = d->scene->views().size();
-    foreach (QGraphicsView *view, d->scene->views()) {
-        if (view->viewport()->inherits("QGLWidget")) {
-            // ### Please replace with a widget attribute; any widget that
-            // doesn't support partial updates / doesn't support scrolling
-            // should be skipped in this code. Qt::WA_NoPartialUpdates or so.
-            continue;
-        }
-
-        static const QLineF up(0, 0, 0, -1);
-        static const QLineF down(0, 0, 0, 1);
-        static const QLineF left(0, 0, -1, 0);
-        static const QLineF right(0, 0, 1, 0);
-
-        QTransform deviceTr = deviceTransform(view->viewportTransform());
-        QRect deviceScrollRect = deviceTr.mapRect(scrollRect).toRect();
-        QLineF v1 = deviceTr.map(right);
-        QLineF v2 = deviceTr.map(down);
-        QLineF u1 = v1.unitVector(); u1.translate(-v1.p1());
-        QLineF u2 = v2.unitVector(); u2.translate(-v2.p1());
-        bool noScroll = false;
-
-        // Check if the delta resolves to ints in device space.
-        QPointF deviceDelta = deviceTr.map(QPointF(dx, dy));
-        if ((deviceDelta.x() - int(deviceDelta.x()))
-            || (deviceDelta.y() - int(deviceDelta.y()))) {
-            noScroll = true;
-        } else {
-            // Check if the unit vectors have no fraction in device space.
-            qreal v1l = v1.length();
-            if (v1l - int(v1l)) {
-                noScroll = true;
-            } else {
-                dx *= v1.length();
-            }
-            qreal v2l = v2.length();
-            if (v2l - int(v2l)) {
-                noScroll = true;
-            } else {
-                dy *= v2.length();
-            }
-        }
-
-        if (!noScroll) {
-            if (u1 == right) {
-                if (u2 == up) {
-                    // flipped
-                    dy = -dy;
-                } else if (u2 == down) {
-                    // normal
-                } else {
-                    noScroll = true;
-                }
-            } else if (u1 == left) {
-                if (u2 == up) {
-                    // mirrored & flipped / rotated 180 degrees
-                    dx = -dx;
-                    dy = -dy;
-                } else if (u2 == down) {
-                    // mirrored
-                    dx = -dx;
-                } else {
-                    noScroll = true;
-                }
-            } else if (u1 == up) {
-                if (u2 == left) {
-                    // rotated -90 & mirrored
-                    qreal tmp = dy;
-                    dy = -dx;
-                    dx = -tmp;
-                } else if (u2 == right) {
-                    // rotated -90
-                    qreal tmp = dy;
-                    dy = -dx;
-                    dx = tmp;
-                } else {
-                    noScroll = true;
-                }
-            } else if (u1 == down) {
-                if (u2 == left) {
-                    // rotated 90
-                    qreal tmp = dy;
-                    dy = dx;
-                    dx = -tmp;
-                } else if (u2 == right) {
-                    // rotated 90 & mirrored
-                    qreal tmp = dy;
-                    dy = dx;
-                    dx = tmp;
-                } else {
-                    noScroll = true;
-                }
-            }
-        }
-
-        if (!noScroll) {
-            view->viewport()->scroll(int(dx), int(dy), deviceScrollRect);
-            --couldntScroll;
-        }
-    }
-    if (couldntScroll)
+    QGraphicsItemCache *cache = d->extraItemCache();
+    if (cache->allExposed || cache->fixedSize.isValid()) {
+        // Cache is either invalidated or item is scaled (see QGraphicsItem::setCacheMode).
         update(rect);
+        return;
+    }
+
+    // Find pixmap in cache.
+    QPixmap cachedPixmap;
+    if (!QPixmapCache::find(cache->key, &cachedPixmap)) {
+        update(rect);
+        return;
+    }
+
+    QRect scrollRect = (rect.isNull() ? boundingRect() : rect).toAlignedRect();
+    if (!scrollRect.intersects(cache->boundingRect))
+        return; // Nothing to scroll.
+
+    // Remove from cache to avoid deep copy when modifying.
+    QPixmapCache::remove(cache->key);
+
+    QRegion exposed;
+    cachedPixmap.scroll(dx, dy, scrollRect.translated(-cache->boundingRect.topLeft()), &exposed);
+
+    // Reinsert into cache.
+    cache->key = QPixmapCache::insert(cachedPixmap);
+
+    // Translate the existing expose.
+    for (int i = 0; i < cache->exposed.size(); ++i) {
+        QRectF &e = cache->exposed[i];
+        if (!rect.isNull() && !e.intersects(rect))
+            continue;
+        e.translate(dx, dy);
+    }
+
+    // Append newly exposed areas. Note that the exposed region is currently
+    // in pixmap coordinates, so we have to translate it to item coordinates.
+    exposed.translate(cache->boundingRect.topLeft());
+    const QVector<QRect> exposedRects = exposed.rects();
+    for (int i = 0; i < exposedRects.size(); ++i)
+        cache->exposed += exposedRects.at(i);
+
+    // Trigger update. This will redraw the newly exposed area and make sure
+    // the pixmap is re-blitted in case there are overlapping items.
+    d->scene->d_func()->markDirty(this, rect);
 }
 
 /*!
@@ -6984,7 +7108,12 @@ void QGraphicsItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
                     // Root items that ignore transformations need to
                     // calculate their diff by mapping viewport coordinates
                     // directly to parent coordinates.
-                    QTransform viewToParentTransform = (item->transform().translate(item->d_ptr->pos.x(), item->d_ptr->pos.y()))
+                    // COMBINE
+                    QTransform itemTransform;
+                    if (item->d_ptr->transformData)
+                        itemTransform = item->d_ptr->transformData->computedFullTransform();
+                    itemTransform.translate(item->d_ptr->pos.x(), item->d_ptr->pos.y());
+                    QTransform viewToParentTransform = itemTransform
                                                        * (item->sceneTransform() * view->viewportTransform()).inverted();
                     currentParentPos = viewToParentTransform.map(QPointF(view->mapFromGlobal(event->screenPos())));
                     buttonDownParentPos = viewToParentTransform.map(QPointF(view->mapFromGlobal(event->buttonDownScreenPos(Qt::LeftButton))));
@@ -7178,6 +7307,44 @@ void QGraphicsItem::setInputMethodHints(Qt::InputMethodHints hints)
 {
     Q_D(QGraphicsItem);
     d->imHints = hints;
+    if (!hasFocus())
+        return;
+    d->scene->d_func()->updateInputMethodSensitivityInViews();
+#if !defined(QT_NO_IM) && (defined(Q_WS_X11) || defined(Q_WS_QWS) || defined(Q_OS_SYMBIAN))
+    QWidget *fw = QApplication::focusWidget();
+    if (!fw)
+        return;
+    for (int i = 0 ; i < scene()->views().count() ; ++i)
+        if (scene()->views().at(i) == fw)
+            if (QInputContext *inputContext = fw->inputContext())
+                inputContext->update();
+#endif
+}
+
+/*!
+    Updates the item's micro focus.
+
+    \since 4.7
+
+    \sa QInputContext
+*/
+void QGraphicsItem::updateMicroFocus()
+{
+#if !defined(QT_NO_IM) && (defined(Q_WS_X11) || defined(Q_WS_QWS) || defined(Q_OS_SYMBIAN))
+    if (QWidget *fw = QApplication::focusWidget()) {
+        if (scene()) {
+            for (int i = 0 ; i < scene()->views().count() ; ++i) {
+                if (scene()->views().at(i) == fw)
+                    if (QInputContext *inputContext = fw->inputContext())
+                        inputContext->update();
+            }
+        }
+#ifndef QT_NO_ACCESSIBILITY
+        // ##### is this correct
+        QAccessible::updateAccessibility(fw, 0, QAccessible::StateChanged);
+#endif
+    }
+#endif
 }
 
 /*!
@@ -7430,6 +7597,7 @@ QGraphicsObject::QGraphicsObject(QGraphicsItemPrivate &dd, QGraphicsItem *parent
     QGraphicsItem::d_ptr->isObject = true;
 }
 
+#ifndef QT_NO_GESTURES
 /*!
     Subscribes the graphics object to the given \a gesture with specific \a flags.
 
@@ -7437,9 +7605,10 @@ QGraphicsObject::QGraphicsObject(QGraphicsItemPrivate &dd, QGraphicsItem *parent
 */
 void QGraphicsObject::grabGesture(Qt::GestureType gesture, Qt::GestureFlags flags)
 {
-    QGraphicsItemPrivate * const d = QGraphicsItem::d_func();
-    d->gestureContext.insert(gesture, flags);
-    (void)QGestureManager::instance(); // create a gesture manager
+    bool contains = QGraphicsItem::d_ptr->gestureContext.contains(gesture);
+    QGraphicsItem::d_ptr->gestureContext.insert(gesture, flags);
+    if (!contains && QGraphicsItem::d_ptr->scene)
+        QGraphicsItem::d_ptr->scene->d_func()->grabGesture(this, gesture);
 }
 
 /*!
@@ -7449,12 +7618,135 @@ void QGraphicsObject::grabGesture(Qt::GestureType gesture, Qt::GestureFlags flag
 */
 void QGraphicsObject::ungrabGesture(Qt::GestureType gesture)
 {
-    QGraphicsItemPrivate * const d = QGraphicsItem::d_func();
-    if (d->gestureContext.remove(gesture)) {
-        QGestureManager *manager = QGestureManager::instance();
-        manager->cleanupCachedGestures(this, gesture);
+    if (QGraphicsItem::d_ptr->gestureContext.remove(gesture) && QGraphicsItem::d_ptr->scene)
+        QGraphicsItem::d_ptr->scene->d_func()->ungrabGesture(this, gesture);
+}
+#endif // QT_NO_GESTURES
+
+/*!
+    Updates the item's micro focus. This is slot for convenience.
+
+    \since 4.7
+
+    \sa QInputContext
+*/
+void QGraphicsObject::updateMicroFocus()
+{
+    QGraphicsItem::updateMicroFocus();
+}
+
+void QGraphicsItemPrivate::children_append(QDeclarativeListProperty<QGraphicsObject> *list, QGraphicsObject *item)
+{
+    QGraphicsItemPrivate::get(item)->setParentItemHelper(static_cast<QGraphicsObject *>(list->object), /*newParentVariant=*/0, /*thisPointerVariant=*/0);
+}
+
+int QGraphicsItemPrivate::children_count(QDeclarativeListProperty<QGraphicsObject> *list)
+{
+    QGraphicsItemPrivate *d = QGraphicsItemPrivate::get(static_cast<QGraphicsObject *>(list->object));
+    return d->children.count();
+}
+
+QGraphicsObject *QGraphicsItemPrivate::children_at(QDeclarativeListProperty<QGraphicsObject> *list, int index)
+{
+    QGraphicsItemPrivate *d = QGraphicsItemPrivate::get(static_cast<QGraphicsObject *>(list->object));
+    if (index >= 0 && index < d->children.count())
+        return d->children.at(index)->toGraphicsObject();
+    else
+        return 0;
+}
+
+/*!
+    Returns a list of this item's children.
+
+    The items are sorted by stacking order. This takes into account both the
+    items' insertion order and their Z-values.
+
+*/
+QDeclarativeListProperty<QGraphicsObject> QGraphicsItemPrivate::childrenList()
+{
+    Q_Q(QGraphicsItem);
+    if (isObject) {
+        QGraphicsObject *that = static_cast<QGraphicsObject *>(q);
+        return QDeclarativeListProperty<QGraphicsObject>(that, &children, children_append,
+                                                         children_count, children_at);
+    } else {
+        //QGraphicsItem is not supported for this property
+        return QDeclarativeListProperty<QGraphicsObject>();
     }
 }
+
+/*!
+  \internal
+  Returns the width of the item
+  Reimplemented by QGraphicsWidget
+*/
+qreal QGraphicsItemPrivate::width() const
+{
+    return 0;
+}
+
+/*!
+  \internal
+  Set the width of the item
+  Reimplemented by QGraphicsWidget
+*/
+void QGraphicsItemPrivate::setWidth(qreal w)
+{
+    Q_UNUSED(w);
+}
+
+/*!
+  \internal
+  Reset the width of the item
+  Reimplemented by QGraphicsWidget
+*/
+void QGraphicsItemPrivate::resetWidth()
+{
+}
+
+/*!
+  \internal
+  Returns the height of the item
+  Reimplemented by QGraphicsWidget
+*/
+qreal QGraphicsItemPrivate::height() const
+{
+    return 0;
+}
+
+/*!
+  \internal
+  Set the height of the item
+  Reimplemented by QGraphicsWidget
+*/
+void QGraphicsItemPrivate::setHeight(qreal h)
+{
+    Q_UNUSED(h);
+}
+
+/*!
+  \internal
+  Reset the height of the item
+  Reimplemented by QGraphicsWidget
+*/
+void QGraphicsItemPrivate::resetHeight()
+{
+}
+
+/*!
+  \property QGraphicsObject::children
+  \internal
+*/
+
+/*!
+  \property QGraphicsObject::width
+  \internal
+*/
+
+/*!
+  \property QGraphicsObject::height
+  \internal
+*/
 
 /*!
   \property QGraphicsObject::parent
@@ -7642,6 +7934,49 @@ void QGraphicsObject::ungrabGesture(Qt::GestureType gesture)
   \sa scale, rotation, QGraphicsItem::transformOriginPoint()
 */
 
+/*!
+    \fn void QGraphicsObject::widthChanged()
+    \internal
+*/
+
+/*!
+    \fn void QGraphicsObject::heightChanged()
+    \internal
+*/
+
+/*!
+
+  \fn QGraphicsObject::childrenChanged()
+
+  This signal gets emitted whenever the children list changes
+  \internal
+*/
+
+/*!
+  \property QGraphicsObject::effect
+  \since 4.7
+  \brief the effect attached to this item
+
+  \sa QGraphicsItem::setGraphicsEffect(), QGraphicsItem::graphicsEffect()
+*/
+
+/*!
+    \property QGraphicsObject::children
+    \since 4.7
+    \internal
+*/
+
+/*!
+    \property QGraphicsObject::width
+    \since 4.7
+    \internal
+*/
+
+/*!
+    \property QGraphicsObject::height
+    \since 4.7
+    \internal
+*/
 
 /*!
     \class QAbstractGraphicsShapeItem
@@ -7659,7 +7994,7 @@ void QGraphicsObject::ungrabGesture(Qt::GestureType gesture)
 
     \sa QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsPathItem,
     QGraphicsPolygonItem, QGraphicsTextItem, QGraphicsLineItem,
-    QGraphicsPixmapItem, {The Graphics View Framework}
+    QGraphicsPixmapItem, {Graphics View Framework}
 */
 
 class QAbstractGraphicsShapeItemPrivate : public QGraphicsItemPrivate
@@ -7798,7 +8133,7 @@ QPainterPath QAbstractGraphicsShapeItem::opaqueArea() const
     setBrush() functions.
 
     \sa QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsPolygonItem,
-    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPixmapItem, {The Graphics
+    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPixmapItem, {Graphics
     View Framework}
 */
 
@@ -8007,7 +8342,7 @@ QVariant QGraphicsPathItem::extension(const QVariant &variant) const
     those instead.
 
     \sa QGraphicsPathItem, QGraphicsEllipseItem, QGraphicsPolygonItem,
-    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPixmapItem, {The Graphics
+    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPixmapItem, {Graphics
     View Framework}
 */
 
@@ -8251,7 +8586,7 @@ QVariant QGraphicsRectItem::extension(const QVariant &variant) const
     brush, which you can set by calling setPen() and setBrush().
 
     \sa QGraphicsPathItem, QGraphicsRectItem, QGraphicsPolygonItem,
-    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPixmapItem, {The Graphics
+    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPixmapItem, {Graphics
     View Framework}
 */
 
@@ -8560,7 +8895,7 @@ QVariant QGraphicsEllipseItem::extension(const QVariant &variant) const
     setPen() and setBrush() functions.
 
     \sa QGraphicsPathItem, QGraphicsRectItem, QGraphicsEllipseItem,
-    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPixmapItem, {The Graphics
+    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPixmapItem, {Graphics
     View Framework}
 */
 
@@ -8792,8 +9127,8 @@ QVariant QGraphicsPolygonItem::extension(const QVariant &variant) const
     function draws the line using the item's associated pen.
 
     \sa QGraphicsPathItem, QGraphicsRectItem, QGraphicsEllipseItem,
-    QGraphicsTextItem, QGraphicsPolygonItem, QGraphicsPixmapItem, {The
-    Graphics View Framework}
+    QGraphicsTextItem, QGraphicsPolygonItem, QGraphicsPixmapItem,
+    {Graphics View Framework}
 */
 
 class QGraphicsLineItemPrivate : public QGraphicsItemPrivate
@@ -9062,8 +9397,8 @@ QVariant QGraphicsLineItem::extension(const QVariant &variant) const
     transformation mode for the item.
 
     \sa QGraphicsPathItem, QGraphicsRectItem, QGraphicsEllipseItem,
-    QGraphicsTextItem, QGraphicsPolygonItem, QGraphicsLineItem, {The
-    Graphics View Framework}
+    QGraphicsTextItem, QGraphicsPolygonItem, QGraphicsLineItem,
+    {Graphics View Framework}
 */
 
 /*!
@@ -9433,7 +9768,7 @@ QVariant QGraphicsPixmapItem::extension(const QVariant &variant) const
 
     \sa QGraphicsSimpleTextItem, QGraphicsPathItem, QGraphicsRectItem,
         QGraphicsEllipseItem, QGraphicsPixmapItem, QGraphicsPolygonItem,
-        QGraphicsLineItem, {The Graphics View Framework}
+        QGraphicsLineItem, {Graphics View Framework}
 */
 
 class QGraphicsTextItemPrivate
@@ -9804,6 +10139,9 @@ bool QGraphicsTextItem::sceneEvent(QEvent *event)
 #endif //QT_NO_IM
         }
         break;
+    case QEvent::ShortcutOverride:
+        dd->sendControlEvent(event);
+        return true;
     default:
         break;
     }
@@ -10346,9 +10684,9 @@ void QGraphicsSimpleTextItemPrivate::updateBoundingRect()
 
     \img graphicsview-simpletextitem.png
 
-    \sa QGraphicsTextItem, QGraphicsPathItem, QGraphicsRectItem, QGraphicsEllipseItem,
-    QGraphicsPixmapItem, QGraphicsPolygonItem, QGraphicsLineItem, {The
-    Graphics View Framework}
+    \sa QGraphicsTextItem, QGraphicsPathItem, QGraphicsRectItem,
+    QGraphicsEllipseItem, QGraphicsPixmapItem, QGraphicsPolygonItem,
+    QGraphicsLineItem, {Graphics View Framework}
 */
 
 /*!
@@ -10609,7 +10947,7 @@ QVariant QGraphicsSimpleTextItem::extension(const QVariant &variant) const
     item group. As with addToGroup(), the item's scene-relative
     position and transformation remain intact.
 
-    \sa QGraphicsItem, {The Graphics View Framework}
+    \sa QGraphicsItem, {Graphics View Framework}
 */
 
 class QGraphicsItemGroupPrivate : public QGraphicsItemPrivate
@@ -10930,14 +11268,14 @@ QPixmap QGraphicsItemEffectSourcePrivate::pixmap(Qt::CoordinateSystem system, QP
                      &newEffectTransform, false, true);
     } else if (deviceCoordinates) {
         // Device coordinates with info.
-        scened->draw(item, &pixmapPainter, info->viewTransform, info->transformPtr, info->exposedRegion,
+        scened->draw(item, &pixmapPainter, info->viewTransform, info->transformPtr, 0,
                      info->widget, info->opacity, &effectTransform, info->wasDirtySceneTransform,
                      info->drawItem);
     } else {
         // Item coordinates with info.
         QTransform newEffectTransform = info->transformPtr->inverted();
         newEffectTransform *= effectTransform;
-        scened->draw(item, &pixmapPainter, info->viewTransform, info->transformPtr, info->exposedRegion,
+        scened->draw(item, &pixmapPainter, info->viewTransform, info->transformPtr, 0,
                      info->widget, info->opacity, &newEffectTransform, info->wasDirtySceneTransform,
                      info->drawItem);
     }
@@ -11073,6 +11411,24 @@ QDebug operator<<(QDebug debug, QGraphicsItem::GraphicsItemChange change)
     case QGraphicsItem::ItemScenePositionHasChanged:
         str = "ItemScenePositionHasChanged";
         break;
+    case QGraphicsItem::ItemRotationChange:
+        str = "ItemRotationChange";
+        break;
+    case QGraphicsItem::ItemRotationHasChanged:
+        str = "ItemRotationHasChanged";
+        break;
+    case QGraphicsItem::ItemScaleChange:
+        str = "ItemScaleChange";
+        break;
+    case QGraphicsItem::ItemScaleHasChanged:
+        str = "ItemScaleHasChanged";
+        break;
+    case QGraphicsItem::ItemTransformOriginPointChange:
+        str = "ItemTransformOriginPointChange";
+        break;
+    case QGraphicsItem::ItemTransformOriginPointHasChanged:
+        str = "ItemTransformOriginPointHasChanged";
+        break;
     }
     debug << str;
     return debug;
@@ -11133,6 +11489,9 @@ QDebug operator<<(QDebug debug, QGraphicsItem::GraphicsItemFlag flag)
     case QGraphicsItem::ItemSendsScenePositionChanges:
         str = "ItemSendsScenePositionChanges";
         break;
+    case QGraphicsItem::ItemStopsClickFocusPropagation:
+        str = "ItemStopsClickFocusPropagation";
+        break;
     }
     debug << str;
     return debug;
@@ -11142,7 +11501,7 @@ QDebug operator<<(QDebug debug, QGraphicsItem::GraphicsItemFlags flags)
 {
     debug << '(';
     bool f = false;
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < 17; ++i) {
         if (flags & (1 << i)) {
             if (f)
                 debug << '|';

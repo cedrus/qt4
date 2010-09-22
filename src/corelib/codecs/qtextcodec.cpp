@@ -64,6 +64,7 @@
 #ifndef QT_NO_CODECS
 #  include "qtsciicodec_p.h"
 #  include "qisciicodec_p.h"
+#ifndef Q_OS_SYMBIAN
 #  if defined(QT_NO_ICONV) && !defined(QT_BOOTSTRAPPED)
 // no iconv(3) support, must build all codecs into the library
 #    include "../../plugins/codecs/cn/qgb18030codec.h"
@@ -77,6 +78,7 @@
 #    include "qfontlaocodec_p.h"
 #    include "../../plugins/codecs/jp/qfontjpcodec.h"
 #  endif
+#endif // QT_NO_SYMBIAN
 #endif // QT_NO_CODECS
 #include "qlocale.h"
 #include "qmutex.h"
@@ -93,12 +95,17 @@
 #  define QT_NO_SETLOCALE
 #endif
 
+#ifdef Q_OS_SYMBIAN
+#include "qtextcodec_symbian.cpp"
+#endif
+
+
 // enabling this is not exception safe!
 // #define Q_DEBUG_TEXTCODEC
 
 QT_BEGIN_NAMESPACE
 
-#ifndef QT_NO_TEXTCODECPLUGIN
+#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_TEXTCODECPLUGIN)
 Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
     (QTextCodecFactoryInterface_iid, QLatin1String("/codecs")))
 #endif
@@ -142,7 +149,7 @@ static bool nameMatch(const QByteArray &name, const QByteArray &test)
 
 static QTextCodec *createForName(const QByteArray &name)
 {
-#ifndef QT_NO_TEXTCODECPLUGIN
+#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_TEXTCODECPLUGIN)
     QFactoryLoader *l = loader();
     QStringList keys = l->keys();
     for (int i = 0; i < keys.size(); ++i) {
@@ -406,9 +413,35 @@ QString QWindowsLocalCodec::convertToUnicodeCharByChar(const char *chars, int le
     return s;
 }
 
-QByteArray QWindowsLocalCodec::convertFromUnicode(const QChar *uc, int len, ConverterState *) const
+QByteArray QWindowsLocalCodec::convertFromUnicode(const QChar *ch, int uclen, ConverterState *) const
 {
-    return qt_winQString2MB(uc, len);
+    if (!ch)
+        return QByteArray();
+    if (uclen == 0)
+        return QByteArray("");
+    BOOL used_def;
+    QByteArray mb(4096, 0);
+    int len;
+    while (!(len=WideCharToMultiByte(CP_ACP, 0, (const wchar_t*)ch, uclen,
+                mb.data(), mb.size()-1, 0, &used_def)))
+    {
+        int r = GetLastError();
+        if (r == ERROR_INSUFFICIENT_BUFFER) {
+            mb.resize(1+WideCharToMultiByte(CP_ACP, 0,
+                                (const wchar_t*)ch, uclen,
+                                0, 0, 0, &used_def));
+                // and try again...
+        } else {
+#ifndef QT_NO_DEBUG
+            // Fail.
+            qWarning("WideCharToMultiByte: Cannot convert multibyte text (error %d): %s (UTF-8)",
+                r, QString(ch, uclen).toLocal8Bit().data());
+#endif
+            break;
+        }
+    }
+    mb.resize(len);
+    return mb;
 }
 
 
@@ -551,6 +584,12 @@ static QTextCodec *checkForCodec(const QByteArray &name) {
 */
 static void setupLocaleMapper()
 {
+#ifdef Q_OS_SYMBIAN
+    localeMapper = QSymbianTextCodec::localeMapper;
+    if (localeMapper)
+        return;
+#endif
+
 #if defined(Q_OS_WIN32) || defined(Q_OS_WINCE)
     localeMapper = QTextCodec::codecForName("System");
 #else
@@ -702,6 +741,17 @@ static void setup()
     (void) createQTextCodecCleanup();
 
 #ifndef QT_NO_CODECS
+    (void)new QTsciiCodec;
+    for (int i = 0; i < 9; ++i)
+        (void)new QIsciiCodec(i);
+
+    for (int i = 0; i < QSimpleTextCodec::numSimpleCodecs; ++i)
+        (void)new QSimpleTextCodec(i);
+
+#ifdef Q_OS_SYMBIAN
+    localeMapper = QSymbianTextCodec::init();
+#endif
+
 #  if defined(Q_WS_X11) && !defined(QT_BOOTSTRAPPED)
     // no font codecs when bootstrapping
     (void)new QFontLaoCodec;
@@ -718,12 +768,8 @@ static void setup()
 #    endif // QT_NO_ICONV && !QT_BOOTSTRAPPED
 #  endif // Q_WS_X11
 
-    (void)new QTsciiCodec;
 
-    for (int i = 0; i < 9; ++i)
-        (void)new QIsciiCodec(i);
-
-
+#ifndef Q_OS_SYMBIAN
 #  if defined(QT_NO_ICONV) && !defined(QT_BOOTSTRAPPED)
     // no asian codecs when bootstrapping, sorry
     (void)new QGb18030Codec;
@@ -737,6 +783,7 @@ static void setup()
     (void)new QBig5Codec;
     (void)new QBig5hkscsCodec;
 #  endif // QT_NO_ICONV && !QT_BOOTSTRAPPED
+#endif //Q_OS_SYMBIAN
 #endif // QT_NO_CODECS
 
 #if defined(Q_OS_WIN32) || defined(Q_OS_WINCE)
@@ -749,16 +796,17 @@ static void setup()
     (void)new QUtf32Codec;
     (void)new QUtf32BECodec;
     (void)new QUtf32LECodec;
+#ifndef Q_OS_SYMBIAN
     (void)new QLatin15Codec;
+#endif
     (void)new QLatin1Codec;
     (void)new QUtf8Codec;
 
-    for (int i = 0; i < QSimpleTextCodec::numSimpleCodecs; ++i)
-        (void)new QSimpleTextCodec(i);
-
+#ifndef Q_OS_SYMBIAN
 #if defined(Q_OS_UNIX) && !defined(QT_NO_ICONV) && !defined(QT_BOOTSTRAPPED)
     // QIconvCodec depends on the UTF-16 codec, so it needs to be created last
     (void) new QIconvCodec();
+#endif
 #endif
 
     if (!localeMapper)
@@ -1093,7 +1141,7 @@ QList<QByteArray> QTextCodec::availableCodecs()
     locker.unlock();
 #endif
 
-#ifndef QT_NO_TEXTCODECPLUGIN
+#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_TEXTCODECPLUGIN)
     QFactoryLoader *l = loader();
     QStringList keys = l->keys();
     for (int i = 0; i < keys.size(); ++i) {
@@ -1133,7 +1181,7 @@ QList<int> QTextCodec::availableMibs()
     locker.unlock();
 #endif
 
-#ifndef QT_NO_TEXTCODECPLUGIN
+#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_TEXTCODECPLUGIN)
     QFactoryLoader *l = loader();
     QStringList keys = l->keys();
     for (int i = 0; i < keys.size(); ++i) {
@@ -1160,6 +1208,9 @@ QList<int> QTextCodec::availableMibs()
 */
 void QTextCodec::setCodecForLocale(QTextCodec *c)
 {
+#ifndef QT_NO_THREAD
+    QMutexLocker locker(textCodecsMutex());
+#endif
     localeMapper = c;
     if (!localeMapper)
         setupLocaleMapper();
@@ -1266,6 +1317,19 @@ QTextDecoder* QTextCodec::makeDecoder() const
     return new QTextDecoder(this);
 }
 
+/*!
+    Creates a QTextDecoder with a specified \a flags to decode chunks
+    of \c{char *} data to create chunks of Unicode data.
+
+    The caller is responsible for deleting the returned object.
+
+    \since 4.7
+*/
+QTextDecoder* QTextCodec::makeDecoder(QTextCodec::ConversionFlags flags) const
+{
+    return new QTextDecoder(this, flags);
+}
+
 
 /*!
     Creates a QTextEncoder which stores enough state to encode chunks
@@ -1276,6 +1340,19 @@ QTextDecoder* QTextCodec::makeDecoder() const
 QTextEncoder* QTextCodec::makeEncoder() const
 {
     return new QTextEncoder(this);
+}
+
+/*!
+    Creates a QTextEncoder with a specified \a flags to encode chunks
+    of Unicode data as \c{char *} data.
+
+    The caller is responsible for deleting the returned object.
+
+    \since 4.7
+*/
+QTextEncoder* QTextCodec::makeEncoder(QTextCodec::ConversionFlags flags) const
+{
+    return new QTextEncoder(this, flags);
 }
 
 /*!
@@ -1419,6 +1496,17 @@ QString QTextCodec::toUnicode(const char *chars) const
 */
 
 /*!
+    Constructs a text encoder for the given \a codec and conversion \a flags.
+
+    \since 4.7
+*/
+QTextEncoder::QTextEncoder(const QTextCodec *codec, QTextCodec::ConversionFlags flags)
+    : c(codec), state()
+{
+    state.flags = flags;
+}
+
+/*!
     Destroys the encoder.
 */
 QTextEncoder::~QTextEncoder()
@@ -1493,6 +1581,18 @@ QByteArray QTextEncoder::fromUnicode(const QString& uc, int& lenInOut)
 
     Constructs a text decoder for the given \a codec.
 */
+
+/*!
+    Constructs a text decoder for the given \a codec and conversion \a flags.
+
+    \since 4.7
+*/
+
+QTextDecoder::QTextDecoder(const QTextCodec *codec, QTextCodec::ConversionFlags flags)
+    : c(codec), state()
+{
+    state.flags = flags;
+}
 
 /*!
     Destroys the decoder.

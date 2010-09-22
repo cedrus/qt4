@@ -50,6 +50,7 @@
 #include <private/qgraphicssceneindex_p.h>
 #include <math.h>
 #include "../../shared/util.h"
+#include "../qpathclipper/pathcompare.h"
 
 #if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
 #include <windows.h>
@@ -274,6 +275,7 @@ private slots:
     void polishItems2();
     void isActive();
     void siblingIndexAlwaysValid();
+    void removeFullyTransparentItem();
 
     // task specific tests below me
     void task139710_bspTreeCrash();
@@ -1489,7 +1491,7 @@ void tst_QGraphicsScene::clear()
     scene.setItemIndexMethod(QGraphicsScene::NoIndex);
     scene.addItem(firstItem);
     scene.addItem(secondItem);
-    QCOMPARE(scene.items().at(0), firstItem);
+    QCOMPARE(scene.items().at(0), (QGraphicsItem*)firstItem);
     QCOMPARE(scene.items().at(1), secondItem);
 
     ClearTestItem *thirdItem = new ClearTestItem(firstItem);
@@ -3597,7 +3599,7 @@ void tst_QGraphicsScene::task250680_childClip()
 
     QPainterPath path;
     path.addRect(-25, -25, 50, 50);
-    QCOMPARE(rect->clipPath(), path);
+    QVERIFY(QPathCompare::comparePaths(rect->clipPath().simplified(), path));
 
     QCOMPARE(scene.items(QRectF(320, 240, 5, 5)).size(), 2);
     rect->rotate(45);
@@ -4330,6 +4332,48 @@ void tst_QGraphicsScene::siblingIndexAlwaysValid()
 
      //We should not crash
 
+}
+
+void tst_QGraphicsScene::removeFullyTransparentItem()
+{
+    QGraphicsScene scene;
+
+    QGraphicsItem *parent = scene.addRect(0, 0, 100, 100);
+    parent->setFlag(QGraphicsItem::ItemHasNoContents);
+
+    QGraphicsItem *child = scene.addRect(0, 0, 100, 100);
+    child->setParentItem(parent);
+
+    CustomView view;
+    view.setScene(&scene);
+    view.show();
+    QTest::qWaitForWindowShown(&view);
+
+    // NB! The parent has the ItemHasNoContents flag set, which means
+    // the parent itself doesn't generate any update requests, only the
+    // child can possibly trigger an update. Also note that the child
+    // is removed before processing events.
+    view.repaints = 0;
+    parent->setOpacity(0);
+    QVERIFY(qFuzzyIsNull(child->effectiveOpacity()));
+    scene.removeItem(child);
+    QVERIFY(!scene.items().contains(child));
+    QTRY_VERIFY(view.repaints > 0);
+
+    // Re-add child. There's nothing new to display (child is still
+    // effectively hidden), so it shouldn't trigger an update.
+    view.repaints = 0;
+    child->setParentItem(parent);
+    QVERIFY(scene.items().contains(child));
+    QVERIFY(qFuzzyIsNull(child->effectiveOpacity()));
+    QApplication::processEvents();
+    QCOMPARE(view.repaints, 0);
+
+    // Nothing is visible on the screen, removing child item shouldn't trigger an update.
+    scene.removeItem(child);
+    QApplication::processEvents();
+    QCOMPARE(view.repaints, 0);
+    delete child;
 }
 
 void tst_QGraphicsScene::taskQTBUG_5904_crashWithDeviceCoordinateCache()

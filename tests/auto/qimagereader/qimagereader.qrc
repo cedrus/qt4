@@ -38,8 +38,6 @@
         <file>images/noclearcode.bmp</file>
         <file>images/noclearcode.gif</file>
         <file>images/nontransparent.xpm</file>
-        <file>images/pngwithcompressedtext.png</file>
-        <file>images/pngwithtext.png</file>
         <file>images/runners.ppm</file>
         <file>images/teapot.ppm</file>
         <file>images/test.ppm</file>
@@ -61,5 +59,9 @@
         <file>images/four-frames.gif</file>
         <file>images/qt-gif-anim.gif</file>
         <file>images/qt-gif-noanim.gif</file>
+        <file>images/rect.svg</file>
+        <file>images/rect.svgz</file>
+        <file>images/corrupt.svg</file>
+        <file>images/corrupt.svgz</file>
     </qresource>
 </RCC>

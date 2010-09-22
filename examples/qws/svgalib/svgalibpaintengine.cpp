@@ -6,35 +6,34 @@
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial Usage
-** Licensees holding valid Qt Commercial licenses may use this file in
-** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** $QT_BEGIN_LICENSE:BSD$
+** You may use this file under the terms of the BSD license as follows:
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of Nokia Corporation and its Subsidiary(-ies) nor
+**     the names of its contributors may be used to endorse or promote
+**     products derived from this software without specific prior written
+**     permission.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
-** If you have questions regarding the use of this file, please contact
-** Nokia at qt-info@nokia.com.
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -45,7 +44,8 @@
 #include <vga.h>
 #include <vgagl.h>
 
-SvgalibPaintEngine::SvgalibPaintEngine()
+SvgalibPaintEngine::SvgalibPaintEngine(QPaintDevice *device)
+    : QRasterPaintEngine(device)
 {
 }
 
@@ -61,7 +61,7 @@ bool SvgalibPaintEngine::begin(QPaintDevice *dev)
     simplePen = true;
     brush = Qt::NoBrush;
     simpleBrush = true;
-    matrix = QMatrix();
+    matrix = QTransform();
     simpleMatrix = true;
     setClip(QRect(0, 0, device->width(), device->height()));
     opaque = true;
@@ -81,54 +81,52 @@ bool SvgalibPaintEngine::end()
 //! [1]
 
 //! [2]
-void SvgalibPaintEngine::updateState(const QPaintEngineState &state)
+void SvgalibPaintEngine::updateState()
 {
-    QPaintEngine::DirtyFlags flags = state.state();
+    QRasterPaintEngineState *s = state();
 
-    if (flags & DirtyTransform) {
-        matrix = state.matrix();
+    if (s->dirty & DirtyTransform) {
+        matrix = s->matrix;
         simpleMatrix = (matrix.m12() == 0 && matrix.m21() == 0);
     }
 
-    if (flags & DirtyPen) {
-        pen = state.pen();
+    if (s->dirty & DirtyPen) {
+        pen = s->pen;
         simplePen = (pen.width() == 0 || pen.widthF() <= 1)
                     && (pen.style() == Qt::NoPen || pen.style() == Qt::SolidLine)
                     && (pen.color().alpha() == 255);
     }
 
-    if (flags & DirtyBrush) {
-        brush = state.brush();
+    if (s->dirty & DirtyBrush) {
+        brush = s->brush;
         simpleBrush = (brush.style() == Qt::SolidPattern
                        || brush.style() == Qt::NoBrush)
                       && (brush.color().alpha() == 255);
     }
 
-    if (flags & DirtyClipRegion)
-        setClip(state.clipRegion());
+    if (s->dirty & DirtyClipRegion)
+        setClip(s->clipRegion);
 
-    if (flags & DirtyClipEnabled) {
-        clipEnabled = state.isClipEnabled();
+    if (s->dirty & DirtyClipEnabled) {
+        clipEnabled = s->isClipEnabled();
         updateClip();
     }
 
-    if (flags & DirtyClipPath) {
+    if (s->dirty & DirtyClipPath) {
         setClip(QRegion());
         simpleClip = false;
     }
 
-    if (flags & DirtyCompositionMode) {
-        const QPainter::CompositionMode m = state.compositionMode();
+    if (s->dirty & DirtyCompositionMode) {
+        const QPainter::CompositionMode m = s->composition_mode;
         sourceOver = (m == QPainter::CompositionMode_SourceOver);
     }
 
-    if (flags & DirtyOpacity)
-        opaque = (state.opacity() == 256);
+    if (s->dirty & DirtyOpacity)
+        opaque = (s->opacity == 256);
 
-    if (flags & DirtyHints)
-        aliased = !(state.renderHints() & QPainter::Antialiasing);
-
-    QRasterPaintEngine::updateState(state);
+    if (s->dirty & DirtyHints)
+        aliased = !(s->flags.antialiased);
 }
 //! [2]
 

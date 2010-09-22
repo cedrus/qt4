@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -60,7 +46,7 @@
     Qt contains some code that is not provided under the
     \l{GNU General Public License (GPL)},
     \l{GNU Lesser General Public License (LGPL)} or the
-    \l{Qt Commercial Editions}{Qt Commercial License Agreement}, but rather under
+    \l{Qt Commercial Edition}{Qt Commercial License Agreement}, but rather under
     specific licenses from the original authors. Some pieces of code were developed
     by Nokia and others originated from third parties.
     This page lists the licenses used, names the authors, and links
@@ -276,14 +262,14 @@
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions are met:\br
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.\br
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in the
-          documentation and/or other materials provided with the distribution.\br
-        * Neither the name of Research In Motion Limited nor the
-          names of its contributors may be used to endorse or promote products
-          derived from this software without specific prior written permission.
+    Â  Â  * Redistributions of source code must retain the above copyright
+    Â  Â  Â  notice, this list of conditions and the following disclaimer.\br
+    Â  Â  * Redistributions in binary form must reproduce the above copyright
+    Â  Â  Â  notice, this list of conditions and the following disclaimer in the
+    Â  Â  Â  documentation and/or other materials provided with the distribution.\br
+    Â  Â  * Neither the name of Research In Motion Limited nor the
+    Â  Â  Â  names of its contributors may be used to endorse or promote products
+    Â  Â  Â  derived from this software without specific prior written permission.
 
     THIS SOFTWARE IS PROVIDED BY Research In Motion Limited ''AS IS'' AND ANY
     EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -342,7 +328,7 @@
     LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
     NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-    
+
     \list
     \o Parts of WebKit used by the QtWebKit module
     \endlist
@@ -729,6 +715,53 @@
 
     \list
     \o Parts of WebKit used by the QtWebKit module
+    \endlist
+
+    \hr
+
+    Copyright (c) 1991-2009 Unicode, Inc. All rights reserved.
+    Distributed under the Terms of Use in
+    http://www.unicode.org/copyright.html.
+
+    Permission is hereby granted, free of charge, to any person
+    obtaining a copy of the Unicode data files and any associated
+    documentation (the "Data Files") or Unicode software and any
+    associated documentation (the "Software") to deal in the Data
+    Files or Software without restriction, including without
+    limitation the rights to use, copy, modify, merge, publish,
+    distribute, and/or sell copies of the Data Files or Software,
+    and to permit persons to whom the Data Files or Software are
+    furnished to do so, provided that (a) the above copyright
+    notice(s) and this permission notice appear with all copies
+    of the Data Files or Software, (b) both the above copyright
+    notice(s) and this permission notice appear in associated
+    documentation, and (c) there is clear notice in each modified
+    Data File or in the Software as well as in the documentation
+    associated with the Data File(s) or Software that the data or
+    software has been modified.
+
+    THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT
+    WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+    LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+    PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS.
+    IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED
+    IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT
+    OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING
+    FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF
+    CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA FILES
+    OR SOFTWARE.
+
+    Except as contained in this notice, the name of a copyright
+    holder shall not be used in advertising or otherwise to promote
+    the sale, use or other dealings in these Data Files or Software
+    without prior written authorization of the copyright holder.
+
+    \list
+    \o Included in \c{util/unicode/data},
+    \c{tests/auto/qtextboundaryfinder/data} and
+    \c{tests/auto/qchar}
+    \o Parts of the \l makeqpf tool
     \endlist
 */
 

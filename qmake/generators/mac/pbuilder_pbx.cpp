@@ -523,9 +523,7 @@ ProjectBuilderMakefileGenerator::writeMakeParts(QTextStream &t)
             debug_msg(1, "pbuilder: Creating file: %s", mkfile.toLatin1().constData());
             QTextStream mkt(&mkf);
             writeHeader(mkt);
-            mkt << "QMAKE    = "        << (project->isEmpty("QMAKE_QMAKE") ?
-                                            QString((QLibraryInfo::location(QLibraryInfo::BinariesPath) + "/qmake")) :
-                                            var("QMAKE_QMAKE")) << endl;
+            mkt << "QMAKE    = " << var("QMAKE_QMAKE") << endl;
             writeMakeQmake(mkt);
             mkt.flush();
             mkf.close();
@@ -542,7 +540,7 @@ ProjectBuilderMakefileGenerator::writeMakeParts(QTextStream &t)
           << "\t\t\t" << writeSettings("name", "Qt Qmake") << ";" << "\n"
           << "\t\t\t" << writeSettings("neededFileNames", QStringList(), SettingsAsList, 4) << ";" << "\n"
           << "\t\t\t" << writeSettings("shellPath", "/bin/sh") << ";" << "\n"
-          << "\t\t\t" << writeSettings("shellScript", fixForOutput("make -C " + escapeFilePath(qmake_getpwd()) + " -f " + escapeFilePath(mkfile))) << ";" << "\n"
+          << "\t\t\t" << writeSettings("shellScript", fixForOutput("make -C " + escapeFilePath(qmake_getpwd()) + " -f '" + escapeFilePath(mkfile) + "'")) << ";" << "\n"
           << "\t\t" << "};" << "\n";
     }
 
@@ -791,7 +789,7 @@ ProjectBuilderMakefileGenerator::writeMakeParts(QTextStream &t)
           << "\t\t\t" << writeSettings("name", "Qt Preprocessors") << ";" << "\n"
           << "\t\t\t" << writeSettings("neededFileNames", fixListForOutput("QMAKE_PBX_OBJ"), SettingsAsList, 4) << ";" << "\n"
           << "\t\t\t" << writeSettings("shellPath", "/bin/sh") << ";" << "\n"
-          << "\t\t\t" << writeSettings("shellScript", fixForOutput("make -C " + escapeFilePath(qmake_getpwd()) + " -f " + escapeFilePath(mkfile))) << ";" << "\n"
+          << "\t\t\t" << writeSettings("shellScript", fixForOutput("make -C " + escapeFilePath(qmake_getpwd()) + " -f '" + escapeFilePath(mkfile) + "'")) << ";" << "\n"
           << "\t\t" << "};" << "\n";
    }
 
@@ -970,7 +968,7 @@ ProjectBuilderMakefileGenerator::writeMakeParts(QTextStream &t)
           << "\t\t\t" << writeSettings("name", "Qt Sublibs") << ";" << "\n"
           << "\t\t\t" << writeSettings("neededFileNames", QStringList(), SettingsAsList, 4) << ";" << "\n"
           << "\t\t\t" << writeSettings("shellPath", "/bin/sh") << "\n"
-          << "\t\t\t" << writeSettings("shellScript", fixForOutput("make -C " + escapeFilePath(qmake_getpwd()) + " -f " + escapeFilePath(mkfile))) << ";" << "\n"
+          << "\t\t\t" << writeSettings("shellScript", fixForOutput("make -C " + escapeFilePath(qmake_getpwd()) + " -f '" + escapeFilePath(mkfile) + "'")) << ";" << "\n"
           << "\t\t" << "};" << "\n";
     }
     //LIBRARY BUILDPHASE

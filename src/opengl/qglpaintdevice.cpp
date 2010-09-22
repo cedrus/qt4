@@ -48,12 +48,8 @@
 #include <private/qpixmapdata_x11gl_p.h>
 #endif
 
-#if !defined(QT_OPENGL_ES_1) && !defined(QT_OPENGL_ES_1_CL)
+#if !defined(QT_OPENGL_ES_1)
 #include <private/qpixmapdata_gl_p.h>
-#endif
-
-#if defined(QT_OPENGL_ES_1_CL)
-#include "qgl_cl_p.h"
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -67,6 +63,22 @@ QGLPaintDevice::~QGLPaintDevice()
 {
 }
 
+int QGLPaintDevice::metric(QPaintDevice::PaintDeviceMetric metric) const
+{
+    switch(metric) {
+    case PdmWidth:
+        return size().width();
+    case PdmHeight:
+        return size().height();
+    case PdmDepth: {
+        const QGLFormat f = format();
+        return f.redBufferSize() + f.greenBufferSize() + f.blueBufferSize() + f.alphaBufferSize();
+    }
+    default:
+        qWarning("QGLPaintDevice::metric() - metric %d not known", metric);
+        return 0;
+    }
+}
 
 void QGLPaintDevice::beginPaint()
 {
@@ -163,7 +175,10 @@ void QGLWidgetGLPaintDevice::beginPaint()
             float alpha = c.alphaF();
             glClearColor(c.redF() * alpha, c.greenF() * alpha, c.blueF() * alpha, alpha);
         }
-        glClear(GL_COLOR_BUFFER_BIT);
+        if (context()->d_func()->workaround_needsFullClearOnEveryFrame)
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        else
+            glClear(GL_COLOR_BUFFER_BIT);
     }
 }
 
@@ -203,7 +218,7 @@ QGLPaintDevice* QGLPaintDevice::getDevice(QPaintDevice* pd)
             glpd = &(static_cast<QGLFramebufferObject*>(pd)->d_func()->glDevice);
             break;
         case QInternal::Pixmap: {
-#if !defined(QT_OPENGL_ES_1) && !defined(QT_OPENGL_ES_1_CL)
+#if !defined(QT_OPENGL_ES_1)
             QPixmapData* pmd = static_cast<QPixmap*>(pd)->pixmapData();
             if (pmd->classId() == QPixmapData::OpenGLClass)
                 glpd = static_cast<QGLPixmapData*>(pmd)->glDevice();

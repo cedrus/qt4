@@ -87,6 +87,7 @@ public:
     bool contains();
 
     static bool pathToRect(const QPainterPath &path, QRectF *rect = 0);
+    static QPainterPath intersect(const QPainterPath &path, const QRectF &rect);
 
 private:
     Q_DISABLE_COPY(QPathClipper)
@@ -147,12 +148,8 @@ public:
     int first;
     int second;
 
-    qreal angle;
-    qreal invAngle;
-
-    const QBezier *bezier;
-    qreal t0;
-    qreal t1;
+    double angle;
+    double invAngle;
 
     int next(Traversal traversal, Direction direction) const;
 
@@ -181,9 +178,8 @@ public:
     };
 
     struct Segment {
-        Segment(int pathId, int vertexA, int vertexB, int bezierIndex = -1)
+        Segment(int pathId, int vertexA, int vertexB)
             : path(pathId)
-            , bezier(bezierIndex)
             , va(vertexA)
             , vb(vertexB)
             , intersection(-1)
@@ -191,7 +187,6 @@ public:
         }
 
         int path;
-        int bezier;
 
         // vertices
         int va;
@@ -204,7 +199,7 @@ public:
     };
 
 
-    QPathSegments();
+    QPathSegments(int reserve);
 
     void setPath(const QPainterPath &path);
     void addPath(const QPainterPath &path);
@@ -215,7 +210,6 @@ public:
 
     const Segment &segmentAt(int index) const;
     const QLineF lineAt(int index) const;
-    const QBezier *bezierAt(int index) const;
     const QRectF &elementBounds(int index) const;
     int pathId(int index) const;
 
@@ -230,7 +224,6 @@ public:
 private:
     QDataBuffer<QPointF> m_points;
     QDataBuffer<Segment> m_segments;
-    QDataBuffer<QBezier> m_beziers;
     QDataBuffer<Intersection> m_intersections;
 
     int m_pathId;
@@ -271,8 +264,8 @@ public:
 
     TraversalStatus next(const TraversalStatus &status) const;
 
-    int addEdge(const QPointF &a, const QPointF &b, const QBezier *bezier = 0, qreal t0 = 0, qreal t1 = 1);
-    int addEdge(int vertexA, int vertexB, const QBezier *bezier = 0, qreal t0 = 0, qreal t1 = 1);
+    int addEdge(const QPointF &a, const QPointF &b);
+    int addEdge(int vertexA, int vertexB);
 
     bool isInside(qreal x, qreal y) const;
 
@@ -284,11 +277,7 @@ private:
 
     void printNode(int i, FILE *handle);
 
-    QBezier bezierFromIndex(int index) const;
-
     void removeEdge(int ei);
-    void addBezierEdge(const QBezier *bezier, const QPointF &a, const QPointF &b, qreal alphaA, qreal alphaB, int path);
-    void addBezierEdge(const QBezier *bezier, int vertexA, int vertexB, qreal alphaA, qreal alphaB, int path);
 
     int insert(const QPathVertex &vertex);
     TraversalStatus findInsertStatus(int vertex, int edge) const;
@@ -311,9 +300,6 @@ inline QPathEdge::QPathEdge(int a, int b)
     , second(b)
     , angle(0)
     , invAngle(0)
-    , bezier(0)
-    , t0(0)
-    , t1(0)
 {
     m_next[0][0] = -1;
     m_next[1][0] = -1;
@@ -359,7 +345,10 @@ inline QPathVertex::operator QPointF() const
     return QPointF(x, y);
 }
 
-inline QPathSegments::QPathSegments()
+inline QPathSegments::QPathSegments(int reserve) :
+    m_points(reserve),
+    m_segments(reserve),
+    m_intersections(reserve)
 {
 }
 
@@ -393,15 +382,6 @@ inline const QLineF QPathSegments::lineAt(int index) const
 {
     const Segment &segment = m_segments.at(index);
     return QLineF(m_points.at(segment.va), m_points.at(segment.vb));
-}
-
-inline const QBezier *QPathSegments::bezierAt(int index) const
-{
-    const Segment &segment = m_segments.at(index);
-    if (segment.bezier >= 0)
-        return &m_beziers.at(segment.bezier);
-    else
-        return 0;
 }
 
 inline const QRectF &QPathSegments::elementBounds(int index) const

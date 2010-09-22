@@ -47,6 +47,7 @@
 #include <qhash.h>
 #include <qregexp.h>
 #include <qstring.h>
+#include <qtextcodec.h>
 
 #include <ctype.h>
 #include <string.h>
@@ -66,7 +67,11 @@ static const char *kwords[] = {
     "private", "protected", "public", "short", "signals", "signed",
     "slots", "static", "struct", "template", "typedef", "typename",
     "union", "unsigned", "using", "virtual", "void", "volatile",
-    "__int64", "Q_OBJECT", "Q_OVERRIDE", "Q_PROPERTY",
+    "__int64",
+    "Q_OBJECT",
+    "Q_OVERRIDE",
+    "Q_PROPERTY",
+    "Q_PRIVATE_PROPERTY",
     "Q_DECLARE_SEQUENTIAL_ITERATOR",
     "Q_DECLARE_MUTABLE_SEQUENTIAL_ITERATOR",
     "Q_DECLARE_ASSOCIATIVE_ITERATOR",
@@ -97,6 +102,8 @@ static QRegExp *definedX = 0;
 static QRegExp *defines = 0;
 static QRegExp *falsehoods = 0;
 
+static QTextCodec *sourceCodec = 0;
+
 /*
   This function is a perfect hash function for the 37 keywords of C99
   (with a hash table size of 512). It should perform well on our
@@ -118,13 +125,10 @@ static void insertKwordIntoHash(const char *s, int number)
     kwordHashTable[k] = number;
 }
 
-Tokenizer::Tokenizer(const Location& loc, FILE *in)
+Tokenizer::Tokenizer(const Location& loc, QFile &in)
 {
     init();
-    QFile file;
-    file.open(in, QIODevice::ReadOnly);
-    yyIn = file.readAll();
-    file.close();
+    yyIn = in.readAll();
     yyPos = 0;
     start(loc);
 }
@@ -483,6 +487,11 @@ void Tokenizer::initialize(const Config &config)
 {
     QString versionSym = config.getString(CONFIG_VERSIONSYM);
 
+    QString sourceEncoding = config.getString(CONFIG_SOURCEENCODING);
+    if (sourceEncoding.isEmpty())
+        sourceEncoding = QLatin1String("ISO-8859-1");
+    sourceCodec = QTextCodec::codecForName(sourceEncoding.toLocal8Bit());
+
     comment = new QRegExp("/(?:\\*.*\\*/|/.*\n|/[^\n]*$)");
     comment->setMinimal(true);
     versionX = new QRegExp("$cannot possibly match^");
@@ -748,6 +757,16 @@ bool Tokenizer::isTrue(const QString &condition)
         return defines->exactMatch(definedX->cap(1));
     else
         return !falsehoods->exactMatch(t);
+}
+
+QString Tokenizer::lexeme() const
+{
+    return sourceCodec->toUnicode(yyLex);
+}
+
+QString Tokenizer::previousLexeme() const
+{
+    return sourceCodec->toUnicode(yyPrevLex);
 }
 
 QT_END_NAMESPACE

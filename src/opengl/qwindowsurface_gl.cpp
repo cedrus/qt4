@@ -82,12 +82,8 @@
 #define GLX_SAMPLES_ARB         100001
 #endif
 
-#ifdef QT_OPENGL_ES_1_CL
-#include "qgl_cl_p.h"
-#endif
-
-#ifdef QT_OPENGL_ES
-#include <private/qegl_p.h>
+#ifndef QT_NO_EGL
+#include <private/qeglcontext_p.h>
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -98,8 +94,8 @@ QT_BEGIN_NAMESPACE
 #ifdef Q_WS_WIN
 extern Q_GUI_EXPORT bool qt_win_owndc_required;
 #endif
-QGLGraphicsSystem::QGLGraphicsSystem()
-    : QGraphicsSystem()
+QGLGraphicsSystem::QGLGraphicsSystem(bool useX11GL)
+    : QGraphicsSystem(), m_useX11GL(useX11GL)
 {
 #if defined(Q_WS_X11) && !defined(QT_OPENGL_ES)
     // only override the system defaults if the user hasn't already
@@ -357,16 +353,23 @@ void QGLWindowSurface::hijackWindow(QWidget *widget)
     QGLContext *ctx = new QGLContext(surfaceFormat, widget);
     ctx->create(qt_gl_share_widget()->context());
 
-#if defined(Q_WS_X11) && defined(QT_OPENGL_ES)
-    // Create the EGL surface to draw into.  QGLContext::chooseContext()
-    // does not do this for X11/EGL, but does do it for other platforms.
-    // This probably belongs in qgl_x11egl.cpp.
-    QGLContextPrivate *ctxpriv = ctx->d_func();
-    ctxpriv->eglSurface = ctxpriv->eglContext->createSurface(widget);
-    if (ctxpriv->eglSurface == EGL_NO_SURFACE) {
-        qWarning() << "hijackWindow() could not create EGL surface";
+#ifndef QT_NO_EGL
+    static bool checkedForNOKSwapRegion = false;
+    static bool haveNOKSwapRegion = false;
+
+    if (!checkedForNOKSwapRegion) {
+        haveNOKSwapRegion = QEgl::hasExtension("EGL_NOK_swap_region2");
+        checkedForNOKSwapRegion = true;
+
+        if (haveNOKSwapRegion)
+            qDebug() << "Found EGL_NOK_swap_region2 extension. Using partial updates.";
     }
-    qDebug("QGLWindowSurface - using EGLConfig %d", reinterpret_cast<int>(ctxpriv->eglContext->config()));
+
+    if (ctx->d_func()->eglContext->configAttrib(EGL_SWAP_BEHAVIOR) != EGL_BUFFER_PRESERVED &&
+        ! haveNOKSwapRegion)
+        setPartialUpdateSupport(false); // Force full-screen updates
+    else
+        setPartialUpdateSupport(true);
 #endif
 
     widgetPrivate->extraData()->glContext = ctx;
@@ -491,8 +494,13 @@ void QGLWindowSurface::flush(QWidget *widget, const QRegion &rgn, const QPoint &
                 }
             }
 #endif
+            if (d_ptr->paintedRegion.boundingRect() != geometry() && 
+                hasPartialUpdateSupport()) {
+                context()->d_func()->swapRegion(&d_ptr->paintedRegion);             
+            } else
+                context()->swapBuffers();
+
             d_ptr->paintedRegion = QRegion();
-            context()->swapBuffers();
         } else {
             glFlush();
         }
@@ -838,22 +846,22 @@ static void drawTexture(const QRectF &rect, GLuint tex_id, const QSize &texSize,
         src.setBottom(src.bottom() / height);
     }
 
-    const q_vertexType tx1 = f2vt(src.left());
-    const q_vertexType tx2 = f2vt(src.right());
-    const q_vertexType ty1 = f2vt(src.top());
-    const q_vertexType ty2 = f2vt(src.bottom());
+    const GLfloat tx1 = src.left();
+    const GLfloat tx2 = src.right();
+    const GLfloat ty1 = src.top();
+    const GLfloat ty2 = src.bottom();
 
-    q_vertexType texCoordArray[4*2] = {
+    GLfloat texCoordArray[4*2] = {
         tx1, ty2, tx2, ty2, tx2, ty1, tx1, ty1
     };
 
-    q_vertexType vertexArray[4*2];
-    extern void qt_add_rect_to_array(const QRectF &r, q_vertexType *array); // qpaintengine_opengl.cpp
+    GLfloat vertexArray[4*2];
+    extern void qt_add_rect_to_array(const QRectF &r, GLfloat *array); // qpaintengine_opengl.cpp
     qt_add_rect_to_array(rect, vertexArray);
 
 #if !defined(QT_OPENGL_ES_2)
-    glVertexPointer(2, q_vertexTypeEnum, 0, vertexArray);
-    glTexCoordPointer(2, q_vertexTypeEnum, 0, texCoordArray);
+    glVertexPointer(2, GL_FLOAT, 0, vertexArray);
+    glTexCoordPointer(2, GL_FLOAT, 0, texCoordArray);
 
     glBindTexture(target, tex_id);
     glEnable(target);

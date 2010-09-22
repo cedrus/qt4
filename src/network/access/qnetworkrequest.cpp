@@ -174,15 +174,67 @@ QT_BEGIN_NAMESPACE
         When using this flag with sequential upload data, the ContentLengthHeader
         header must be set.
 
-     \value HttpPipeliningAllowedAttribute
+    \value HttpPipeliningAllowedAttribute
         Requests only, type: QVariant::Bool (default: false)
         Indicates whether the QNetworkAccessManager code is
         allowed to use HTTP pipelining with this request.
 
-     \value HttpPipeliningWasUsedAttribute
+    \value HttpPipeliningWasUsedAttribute
         Replies only, type: QVariant::Bool
         Indicates whether the HTTP pipelining was used for receiving
         this reply.
+
+    \value CustomVerbAttribute
+       Requests only, type: QVariant::ByteArray
+        Holds the value for the custom HTTP verb to send (destined for usage
+        of other verbs than GET, POST, PUT and DELETE). This verb is set
+        when calling QNetworkAccessManager::sendCustomRequest().
+
+    \value CookieLoadControlAttribute
+        Requests only, type: QVariant::Int (default: QNetworkRequest::Automatic)
+        Indicates whether to send 'Cookie' headers in the request.
+
+        This attribute is set to false by QtWebKit when creating a cross-origin
+        XMLHttpRequest where withCredentials has not been set explicitly to true by the
+        Javascript that created the request.
+
+        See http://www.w3.org/TR/XMLHttpRequest2/#credentials-flag for more information.
+
+        (This value was introduced in 4.7.)
+
+    \value CookieSaveControlAttribute
+        Requests only, type: QVariant::Int (default: QNetworkRequest::Automatic)
+        Indicates whether to save 'Cookie' headers received from the server in reply
+        to the request.
+
+        This attribute is set to false by QtWebKit when creating a cross-origin
+        XMLHttpRequest where withCredentials has not been set explicitly to true by the
+        Javascript that created the request.
+
+        See http://www.w3.org/TR/XMLHttpRequest2/#credentials-flag for more information.
+
+        (This value was introduced in 4.7.)
+
+    \value AuthenticationReuseAttribute
+        Requests only, type: QVariant::Int (default: QNetworkRequest::Automatic)
+        Indicates whether to use cached authorization credentials in the request,
+        if available. If this is set to QNetworkRequest::Manual and the authentication
+        mechanism is 'Basic' or 'Digest', Qt will not send an an 'Authorization' HTTP
+        header with any cached credentials it may have for the request's URL.
+
+        This attribute is set to QNetworkRequest::Manual by QtWebKit when creating a cross-origin
+        XMLHttpRequest where withCredentials has not been set explicitly to true by the
+        Javascript that created the request.
+
+        See http://www.w3.org/TR/XMLHttpRequest2/#credentials-flag for more information.
+
+        (This value was introduced in 4.7.)
+
+    \omitvalue MaximumDownloadBufferSizeAttribute
+        (This value was introduced in 4.7.)
+
+    \omitvalue DownloadBufferAttribute
+        (This value was introduced in 4.7.)
 
     \value User
         Special type. Additional information can be passed in
@@ -216,12 +268,25 @@ QT_BEGIN_NAMESPACE
     if the item was not cached (i.e., off-line mode)
 */
 
+/*!
+    \enum QNetworkRequest::LoadControl
+    \since 4.7
+
+    Indicates if an aspect of the request's loading mechanism has been
+    manually overridden, e.g. by QtWebKit.
+
+    \value Automatic            default value: indicates default behaviour.
+
+    \value Manual               indicates behaviour has been manually overridden.
+*/
+
 class QNetworkRequestPrivate: public QSharedData, public QNetworkHeadersPrivate
 {
 public:
     inline QNetworkRequestPrivate()
+        : priority(QNetworkRequest::NormalPriority)
 #ifndef QT_NO_OPENSSL
-        : sslConfiguration(0)
+        , sslConfiguration(0)
 #endif
     { qRegisterMetaType<QNetworkRequest>(); }
     ~QNetworkRequestPrivate()
@@ -236,6 +301,7 @@ public:
         : QSharedData(other), QNetworkHeadersPrivate(other)
     {
         url = other.url;
+        priority = other.priority;
 
 #ifndef QT_NO_OPENSSL
         sslConfiguration = 0;
@@ -247,12 +313,14 @@ public:
     inline bool operator==(const QNetworkRequestPrivate &other) const
     {
         return url == other.url &&
+            priority == other.priority &&
             rawHeaders == other.rawHeaders &&
             attributes == other.attributes;
         // don't compare cookedHeaders
     }
 
     QUrl url;
+    QNetworkRequest::Priority priority;
 #ifndef QT_NO_OPENSSL
     mutable QSslConfiguration *sslConfiguration;
 #endif
@@ -516,6 +584,45 @@ void QNetworkRequest::setOriginatingObject(QObject *object)
 QObject *QNetworkRequest::originatingObject() const
 {
     return d->originatingObject.data();
+}
+
+/*!
+    \since 4.7
+
+    Return the priority of this request.
+
+    \sa setPriority()
+*/
+QNetworkRequest::Priority QNetworkRequest::priority() const
+{
+    return d->priority;
+}
+
+/*! \enum QNetworkRequest::Priority
+
+  \since 4.7
+  
+  This enum lists the possible network request priorities.
+
+  \value HighPriority   High priority
+  \value NormalPriority Normal priority
+  \value LowPriority    Low priority
+ */
+
+/*!
+    \since 4.7
+
+    Set the priority of this request to \a priority.
+
+    \note The \a priority is only a hint to the network access
+    manager.  It can use it or not. Currently it is used for HTTP to
+    decide which request should be sent first to a server.
+
+    \sa priority()
+*/
+void QNetworkRequest::setPriority(Priority priority)
+{
+    d->priority = priority;
 }
 
 static QByteArray headerName(QNetworkRequest::KnownHeaders header)

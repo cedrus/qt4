@@ -136,9 +136,9 @@ void QLineControl::copy(QClipboard::Mode mode) const
 
     \sa insert()
 */
-void QLineControl::paste()
+void QLineControl::paste(QClipboard::Mode clipboardMode)
 {
-    QString clip = QApplication::clipboard()->text(QClipboard::Clipboard);
+    QString clip = QApplication::clipboard()->text(clipboardMode);
     if (!clip.isEmpty() || hasSelectedText()) {
         separate(); //make it a separate undo/redo command
         insert(clip);
@@ -419,7 +419,7 @@ void QLineControl::processInputMethodEvent(QInputMethodEvent *event)
 
 
     int c = m_cursor; // cursor position after insertion of commit string
-    if (event->replacementStart() == 0)
+    if (event->replacementStart() <= 0)
         c += event->commitString().length() + qMin(-event->replacementStart(), event->replacementLength());
 
     m_cursor += event->replacementStart();
@@ -1350,6 +1350,7 @@ bool QLineControl::processEvent(QEvent* ev)
 #endif
     switch(ev->type()){
 #ifndef QT_NO_GRAPHICSVIEW
+        case QEvent::GraphicsSceneMouseDoubleClick:
         case QEvent::GraphicsSceneMouseMove:
         case QEvent::GraphicsSceneMouseRelease:
         case QEvent::GraphicsSceneMousePress:{
@@ -1439,6 +1440,7 @@ void QLineControl::processMouseEvent(QMouseEvent* ev)
             moveCursor(cursor, mark);
             break;
         }
+        case QEvent::GraphicsSceneMouseDoubleClick:
         case QEvent::MouseButtonDblClick:
             if (ev->button() == Qt::LeftButton) {
                 selectWordAtPos(xToPos(ev->pos().x()));
@@ -1576,8 +1578,14 @@ void QLineControl::processKeyEvent(QKeyEvent* event)
         copy();
     }
     else if (event == QKeySequence::Paste) {
-        if (!isReadOnly())
-            paste();
+        if (!isReadOnly()) {
+            QClipboard::Mode mode = QClipboard::Clipboard;
+#ifdef Q_WS_X11
+            if (event->modifiers() == (Qt::CTRL | Qt::SHIFT) && event->key() == Qt::Key_Insert)
+                mode = QClipboard::Selection;
+#endif
+            paste(mode);
+        }
     }
     else if (event == QKeySequence::Cut) {
         if (!isReadOnly()) {
@@ -1761,7 +1769,6 @@ void QLineControl::processKeyEvent(QKeyEvent* event)
                 }
                 break;
 #endif
-
             default:
                 if (!handled)
                     unknown = true;

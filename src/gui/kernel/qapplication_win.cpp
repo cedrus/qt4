@@ -52,7 +52,9 @@ extern void qt_wince_hide_taskbar(HWND hwnd); //defined in qguifunctions_wince.c
 #include <windowsm.h>
 #include <tpcshell.h>
 #ifdef QT_WINCE_GESTURES
+#ifndef QT_NO_GESTURES
 #include <gesture.h>
+#endif
 #endif
 #endif
 
@@ -79,6 +81,7 @@ extern void qt_wince_hide_taskbar(HWND hwnd); //defined in qguifunctions_wince.c
 #include "qlayout.h"
 #include "qtooltip.h"
 #include "qt_windows.h"
+#include "qscrollbar.h"
 #if defined(QT_NON_COMMERCIAL)
 #include "qnc_win.h"
 #endif
@@ -114,8 +117,6 @@ extern void qt_wince_hide_taskbar(HWND hwnd); //defined in qguifunctions_wince.c
 #  endif
 #  include <winable.h>
 #endif
-
-#include "private/qwinnativepangesturerecognizer_win_p.h"
 
 #ifndef WM_TOUCH
 #  define WM_TOUCH 0x0240
@@ -197,6 +198,7 @@ struct SHRGINFO {
 #define SPI_SETSIPINFO        224
 #endif
 
+#ifndef QT_NO_GESTURES
 typedef DWORD (API *AygRecognizeGesture)(SHRGINFO*);
 static AygRecognizeGesture ptrRecognizeGesture = 0;
 static bool aygResolved = false;
@@ -210,6 +212,7 @@ static void resolveAygLibs()
         ptrRecognizeGesture = (AygRecognizeGesture) ayglib.resolve("SHRecognizeGesture");
     }
 }
+#endif // QT_NO_GESTURES
 
 #endif
 
@@ -441,7 +444,7 @@ extern QCursor *qt_grab_cursor();
 #define __export
 #endif
 
-extern "C" LRESULT CALLBACK QtWndProc(HWND, UINT, WPARAM, LPARAM);
+extern "C" LRESULT QT_WIN_CALLBACK QtWndProc(HWND, UINT, WPARAM, LPARAM);
 
 class QETWidget : public QWidget                // event translator widget
 {
@@ -462,7 +465,9 @@ public:
     bool        translateConfigEvent(const MSG &msg);
     bool        translateCloseEvent(const MSG &msg);
     bool        translateTabletEvent(const MSG &msg, PACKET *localPacketBuf, int numPackets);
+#ifndef QT_NO_GESTURES
     bool        translateGestureEvent(const MSG &msg, const GESTUREINFO &gi);
+#endif
     void        repolishStyle(QStyle &style);
     inline void showChildren(bool spontaneous) { d_func()->showChildren(spontaneous); }
     inline void hideChildren(bool spontaneous) { d_func()->hideChildren(spontaneous); }
@@ -701,6 +706,21 @@ void QApplicationPrivate::initializeWidgetPaletteHash()
     QApplication::setPalette(menu, "QMenuBar");
 }
 
+static void qt_set_windows_updateScrollBar(QWidget *widget)
+{
+    QList<QObject*> children = widget->children();
+    for (int i = 0; i < children.size(); ++i) {
+        QObject *o = children.at(i);
+        if(!o->isWidgetType())
+            continue;
+        if (QWidget *w = static_cast<QWidget *>(o))
+            qt_set_windows_updateScrollBar(w);
+    }
+    if (qobject_cast<QScrollBar*>(widget))
+        widget->updateGeometry();
+}
+
+
 /*****************************************************************************
   qt_init() - initializes Qt for Windows
  *****************************************************************************/
@@ -827,6 +847,7 @@ void qt_init(QApplicationPrivate *priv, int)
         ptrSetProcessDPIAware();
 #endif
 
+#ifndef QT_NO_GESTURES
     priv->GetGestureInfo = 0;
     priv->GetGestureExtraArgs = 0;
     priv->CloseGestureInfoHandle = 0;
@@ -867,6 +888,7 @@ void qt_init(QApplicationPrivate *priv, int)
         (PtrEndPanningFeedback)QLibrary::resolve(QLatin1String("uxtheme"),
                                                    "EndPanningFeedback");
 #endif
+#endif // QT_NO_GESTURES
 }
 
 /*****************************************************************************
@@ -933,6 +955,9 @@ const QString qt_reg_winclass(QWidget *w)        // register window class
     if (qt_widget_private(w)->isGLWidget) {
         cname = QLatin1String("QGLWidget");
         style = CS_DBLCLKS;
+#ifndef Q_WS_WINCE
+        style |= CS_OWNDC;
+#endif
         icon  = true;
     } else if (flags & Qt::MSWindowsOwnDC) {
         cname = QLatin1String("QWidgetOwnDC");
@@ -1400,8 +1425,7 @@ static bool qt_is_translatable_mouse_event(UINT message)
             ;
 }
 
-extern "C"
-LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+extern "C" LRESULT QT_WIN_CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     bool result = true;
     QEvent::Type evt_type = QEvent::None;
@@ -1527,7 +1551,7 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
     case WM_SETTINGCHANGE:
 #ifdef Q_WS_WINCE
         // CE SIP hide/show
-        if (wParam == SPI_SETSIPINFO) {
+        if (qt_desktopWidget && wParam == SPI_SETSIPINFO) {
             QResizeEvent re(QSize(0, 0), QSize(0, 0)); // Calculated by QDesktopWidget
             QApplication::sendEvent(qt_desktopWidget, &re);
             break;
@@ -1579,6 +1603,10 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
     case WM_MBUTTONDOWN:
     case WM_RBUTTONDOWN:
     case WM_XBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
+    case WM_RBUTTONDBLCLK:
+    case WM_MBUTTONDBLCLK:
+    case WM_XBUTTONDBLCLK:
         if (qt_win_ignoreNextMouseReleaseEvent)
             qt_win_ignoreNextMouseReleaseEvent = false;
         break;
@@ -1648,12 +1676,14 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
                         shrg.ptDown.y = GET_Y_LPARAM(lParam);
                         shrg.dwFlags = SHRG_RETURNCMD | SHRG_NOANIMATION;
                         resolveAygLibs();
+#ifndef QT_NO_GESTURES
                         if (ptrRecognizeGesture && (ptrRecognizeGesture(&shrg) == GN_CONTEXTMENU)) {
                             if (QApplication::activePopupWidget())
                                 QApplication::activePopupWidget()->close();
                             QContextMenuEvent e(QContextMenuEvent::Mouse, pos, globalPos);
                             result = qt_sendSpontaneousEvent(alienWidget, &e);
                         }
+#endif // QT_NO_GESTURES
                     }
                 }
             }
@@ -1917,6 +1947,8 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
                     QLocalePrivate::updateSystemPrivate();
                     if (!widget->testAttribute(Qt::WA_SetLocale))
                         widget->dptr()->setLocale_helper(QLocale(), true);
+                    QEvent e(QEvent::LocaleChange);
+                    QApplication::sendEvent(qApp, &e);
                 }
             }
             else if (msg.wParam == SPI_SETICONTITLELOGFONT) {
@@ -1927,6 +1959,15 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
                     }
                 }
             }
+            else if (msg.wParam == SPI_SETNONCLIENTMETRICS) {
+                widget = (QETWidget*)QWidget::find(hwnd);
+                if (widget && !widget->parentWidget()) {
+                    qt_set_windows_updateScrollBar(widget);
+                    QEvent e(QEvent::LayoutRequest);
+                    QApplication::sendEvent(widget, &e);
+                }
+        }
+
             break;
 
         case WM_PAINT:                                // paint event
@@ -2279,7 +2320,7 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
         case WM_GETOBJECT:
             {
                 // Ignoring all requests while starting up
-                if (QApplication::startingUp() || QApplication::closingDown() || (DWORD)lParam != OBJID_CLIENT) {
+                if (QApplication::startingUp() || QApplication::closingDown() || (LONG)lParam != OBJID_CLIENT) {
                     result = false;
                     break;
                 }
@@ -2444,7 +2485,7 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
             if (OkCommand)
                 QApplication::postEvent(widget, new QEvent(QEvent::OkRequest));
             if (CancelCommand)
-                QApplication::postEvent(widget, new QEvent(QEvent::Close));
+                widget->showMinimized();
             else
 #ifndef QT_NO_MENUBAR
                 QMenuBar::wceCommands(LOWORD(wParam));
@@ -2526,6 +2567,7 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
             }
             result = false;
             break;
+#ifndef QT_NO_GESTURES
 #if !defined(Q_WS_WINCE) || defined(QT_WINCE_GESTURES)
         case WM_GESTURE: {
             GESTUREINFO gi;
@@ -2560,6 +2602,18 @@ LRESULT CALLBACK QtWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
             break;
         }
 #endif // !defined(Q_WS_WINCE) || defined(QT_WINCE_GESTURES)
+#endif // QT_NO_GESTURES
+#ifndef QT_NO_CURSOR
+        case WM_SETCURSOR: {
+            QCursor *ovr = QApplication::overrideCursor();
+            if (ovr) {
+                SetCursor(ovr->handle());
+                RETURN(TRUE);
+            }
+            result = false;
+            break;
+        }
+#endif
         default:
             result = false;                        // event was not processed
             break;
@@ -2982,7 +3036,10 @@ bool QETWidget::translateMouseEvent(const MSG &msg)
                 // most recent one.
                 msgPtr->lParam = mouseMsg.lParam;
                 msgPtr->wParam = mouseMsg.wParam;
-                msgPtr->pt = mouseMsg.pt;
+                // Extract the x,y coordinates from the lParam as we do in the WndProc
+                msgPtr->pt.x = GET_X_LPARAM(mouseMsg.lParam);
+                msgPtr->pt.y = GET_Y_LPARAM(mouseMsg.lParam);
+                ClientToScreen(msg.hwnd, &(msgPtr->pt));
                 // Remove the mouse move message
                 PeekMessage(&mouseMsg, msg.hwnd, WM_MOUSEMOVE,
                             WM_MOUSEMOVE, PM_REMOVE);
@@ -3008,6 +3065,11 @@ bool QETWidget::translateMouseEvent(const MSG &msg)
             break;
         }
     }
+#ifndef Q_OS_WINCE
+    static bool trackMouseEventLookup = false;
+    typedef BOOL (WINAPI *PtrTrackMouseEvent)(LPTRACKMOUSEEVENT);
+    static PtrTrackMouseEvent ptrTrackMouseEvent = 0;
+#endif
     state  = translateButtonState(msg.wParam, type, button); // button state
     const QPoint widgetPos = mapFromGlobal(QPoint(msg.pt.x, msg.pt.y));
     QWidget *alienWidget = !internalWinId() ? this : childAt(widgetPos);
@@ -3072,9 +3134,6 @@ bool QETWidget::translateMouseEvent(const MSG &msg)
 #ifndef Q_OS_WINCE
 
             if (curWin != 0) {
-                static bool trackMouseEventLookup = false;
-                typedef BOOL (WINAPI *PtrTrackMouseEvent)(LPTRACKMOUSEEVENT);
-                static PtrTrackMouseEvent ptrTrackMouseEvent = 0;
                 if (!trackMouseEventLookup) {
                     trackMouseEventLookup = true;
                     ptrTrackMouseEvent = (PtrTrackMouseEvent)QLibrary::resolve(QLatin1String("comctl32"), "_TrackMouseEvent");
@@ -3188,6 +3247,21 @@ bool QETWidget::translateMouseEvent(const MSG &msg)
             qt_button_down = 0;
         }
 
+#ifndef Q_OS_WINCE
+        if (type == QEvent::MouseButtonPress
+            && QApplication::activePopupWidget() != activePopupWidget
+            && ptrTrackMouseEvent
+            && curWin) {
+            // Since curWin is already the window we clicked on,
+            // we have to setup the mouse tracking here.
+            TRACKMOUSEEVENT tme;
+            tme.cbSize = sizeof(TRACKMOUSEEVENT);
+            tme.dwFlags = 0x00000002;    // TME_LEAVE
+            tme.hwndTrack = curWin;      // Track on window receiving msgs
+            tme.dwHoverTime = (DWORD)-1; // HOVER_DEFAULT
+            ptrTrackMouseEvent(&tme);
+        }
+#endif
         if (type == QEvent::MouseButtonPress
             && QApplication::activePopupWidget() != activePopupWidget
             && replayPopupMouseEvent) {
@@ -3781,6 +3855,7 @@ bool QETWidget::translateCloseEvent(const MSG &)
     return d_func()->close_helper(QWidgetPrivate::CloseWithSpontaneousEvent);
 }
 
+#ifndef QT_NO_GESTURES
 bool QETWidget::translateGestureEvent(const MSG &, const GESTUREINFO &gi)
 {
     const QPoint widgetPos = QPoint(gi.ptsLocation.x, gi.ptsLocation.y);
@@ -3819,7 +3894,7 @@ bool QETWidget::translateGestureEvent(const MSG &, const GESTUREINFO &gi)
         qt_sendSpontaneousEvent(widget, &event);
     return true;
 }
-
+#endif // QT_NO_GESTURES
 
 void  QApplication::setCursorFlashTime(int msecs)
 {
@@ -4009,36 +4084,14 @@ PtrCloseTouchInputHandle QApplicationPrivate::CloseTouchInputHandle = 0;
 
 void QApplicationPrivate::initializeMultitouch_sys()
 {
-    static const IID QT_IID_IInkTablets = {0x112086D9, 0x7779, 0x4535, {0xA6, 0x99, 0x86, 0x2B, 0x43, 0xAC, 0x18, 0x63} };
-    static const IID QT_IID_IInkTablet2 = {0x90c91ad2, 0xfa36, 0x49d6, {0x95, 0x16, 0xce, 0x8d, 0x57, 0x0f, 0x6f, 0x85} };
-    static const CLSID QT_CLSID_InkTablets = {0x6E4FCB12, 0x510A, 0x4d40, {0x93, 0x04, 0x1D, 0xA1, 0x0A, 0xE9, 0x14, 0x7C} };
-
-    IInkTablets *iInkTablets = 0;
-    HRESULT hr = CoCreateInstance(QT_CLSID_InkTablets, NULL, CLSCTX_ALL, QT_IID_IInkTablets, (void**)&iInkTablets);
-    if (SUCCEEDED(hr)) {
-        long count = 0;
-        iInkTablets->get_Count(&count);
-        for (long i = 0; i < count; ++i) {
-            IInkTablet *iInkTablet = 0;
-            hr = iInkTablets->Item(i, &iInkTablet);
-            if (FAILED(hr))
-                continue;
-            IInkTablet2 *iInkTablet2 = 0;
-            hr = iInkTablet->QueryInterface(QT_IID_IInkTablet2, (void**)&iInkTablet2);
-            iInkTablet->Release();
-            if (FAILED(hr))
-                continue;
-            TabletDeviceKind kind;
-            hr = iInkTablet2->get_DeviceKind(&kind);
-            iInkTablet2->Release();
-            if (FAILED(hr))
-                continue;
-            if (kind == TDK_Touch) {
-                QApplicationPrivate::HasTouchSupport = true;
-                break;
-            }
-        }
-        iInkTablets->Release();
+    if (QSysInfo::windowsVersion() >= QSysInfo::WV_WINDOWS7) {
+        static const int QT_SM_DIGITIZER = 94;
+        int value = GetSystemMetrics(QT_SM_DIGITIZER);
+        static const int QT_NID_INTEGRATED_TOUCH = 0x01;
+        static const int QT_NID_EXTERNAL_TOUCH   = 0x02;
+        static const int QT_NID_MULTI_INPUT      = 0x40;
+        QApplicationPrivate::HasTouchSupport =
+                value & (QT_NID_INTEGRATED_TOUCH | QT_NID_EXTERNAL_TOUCH | QT_NID_MULTI_INPUT);
     }
 
     QLibrary library(QLatin1String("user32"));

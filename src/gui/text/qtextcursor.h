@@ -89,6 +89,7 @@ public:
 
     void setPosition(int pos, MoveMode mode = MoveAnchor);
     int position() const;
+    int positionInBlock() const;
 
     int anchor() const;
 
@@ -130,6 +131,12 @@ public:
 
     bool visualNavigation() const;
     void setVisualNavigation(bool b);
+
+    void setVerticalMovementX(int x);
+    int verticalMovementX() const;
+
+    void setKeepPositionOnInsert(bool b);
+    bool keepPositionOnInsert() const;
 
     void deleteChar();
     void deletePreviousChar();

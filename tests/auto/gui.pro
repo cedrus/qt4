@@ -78,7 +78,6 @@ SUBDIRS=\
     qgraphicswidget \
     qgridlayout \
     qgroupbox \
-    qguard \
     qguivariant \
     qheaderview \
     qhelpcontentmodel \
@@ -159,6 +158,7 @@ SUBDIRS=\
     qstandarditem \
     qstandarditemmodel \
     qstatemachine \
+    qstatictext \
     qstatusbar \
     qstringlistmodel \
     qstyle \
@@ -219,4 +219,12 @@ win32:SUBDIRS -= qtextpiecetable
            qpathclipper \
            qstylesheetstyle \
            qtextpiecetable \
+
+symbian:SUBDIRS -= \
+    qhelpcontentmodel \
+    qhelpenginecore \
+    qhelpgenerator \
+    qhelpindexmodel \
+    qhelpprojectdata \
+    qsystemtrayicon \
 

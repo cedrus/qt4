@@ -77,6 +77,7 @@ private slots:
     void isRegistered_data();
     void isRegistered();
     void unregisterType();
+    void QTBUG11316_registerStreamBuiltin();
 
 };
 
@@ -241,6 +242,9 @@ void tst_QMetaType::construct()
     QMetaType::destroy(QMetaType::QSize, size);
 }
 
+typedef QString CustomString;
+Q_DECLARE_METATYPE(CustomString) //this line is useless
+
 void tst_QMetaType::typedefs()
 {
     QCOMPARE(QMetaType::type("long long"), int(QMetaType::LongLong));
@@ -256,6 +260,13 @@ void tst_QMetaType::typedefs()
 
     // make sure the qreal typeId is the type id of the type it's defined to
     QCOMPARE(QMetaType::type("qreal"), ::qMetaTypeId<qreal>());
+
+    qRegisterMetaType<CustomString>("CustomString");
+    QCOMPARE(QMetaType::type("CustomString"), ::qMetaTypeId<CustomString>());
+
+    typedef Whity<double> WhityDouble;
+    qRegisterMetaType<WhityDouble>("WhityDouble");
+    QCOMPARE(QMetaType::type("WhityDouble"), ::qMetaTypeId<WhityDouble>());
 }
 
 class IsRegisteredDummyType { };
@@ -286,9 +297,9 @@ void tst_QMetaType::isRegistered()
     QCOMPARE(QMetaType::isRegistered(typeId), registered);
 }
 
-class RegUnreg 
+class RegUnreg
 {
-public: 
+public:
     RegUnreg() {};
     RegUnreg(const RegUnreg &) {};
     ~RegUnreg() {};
@@ -306,6 +317,13 @@ void tst_QMetaType::unregisterType()
     QCOMPARE(QMetaType::isRegistered(typeId), true);
     QMetaType::unregisterType("RegUnreg");
     QCOMPARE(QMetaType::isRegistered(typeId), false);
+}
+
+void tst_QMetaType::QTBUG11316_registerStreamBuiltin()
+{
+    //should not crash;
+    qRegisterMetaTypeStreamOperators<QString>("QString");
+    qRegisterMetaTypeStreamOperators<QVariant>("QVariant");
 }
 
 QTEST_MAIN(tst_QMetaType)

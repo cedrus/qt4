@@ -57,6 +57,7 @@
 #include <qbytearray.h>
 #include <qstring.h>
 #include <qauthenticator.h>
+#include <qvariant.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -71,7 +72,7 @@ public:
     QAtomicInt ref;
     QString user;
     QString password;
-    QHash<QByteArray, QByteArray> options;
+    QVariantHash options;
     Method method;
     QString realm;
     QByteArray challenge;
@@ -102,6 +103,7 @@ public:
 #ifndef QT_NO_HTTP
     void parseHttpResponse(const QHttpResponseHeader &, bool isProxy);
 #endif
+    void parseHttpResponse(const QList<QPair<QByteArray, QByteArray> >&, bool isProxy);
 
 };
 

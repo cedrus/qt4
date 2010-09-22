@@ -24,6 +24,7 @@ SUBDIRS=\
    qdebug \
    qdiriterator \
    qeasingcurve \
+   qelapsedtimer \
    qevent \
    qexplicitlyshareddatapointer \
    qfileinfo \
@@ -99,4 +100,11 @@ SUBDIRS=\
    qwritelocker \
    selftests \
    utf8 \
+
+symbian:SUBDIRS -= \
+   qtconcurrentfilter \
+   qtconcurrentiteratekernel \
+   qtconcurrentmap \
+   qtconcurrentrun \
+   qtconcurrentthreadengine \
 

@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -1000,8 +986,8 @@
     \row \o \c QCanvasView \o Q3CanvasView
     \endtable
 
-    \l{The Graphics View Framework} replaces QCanvas. For more on porting to
-    Graphics View, see \l{Porting to Graphics View}.
+    The \l{Graphics View Framework} replaces QCanvas. For more on
+    porting to Graphics View, see \l{Porting to Graphics View}.
 
     \section1 QColor
 
@@ -3793,11 +3779,10 @@
     multimedia timer API, which gives us 1 millisecond resolution for
     QTimer.
 
-    Note that other versions of Windows have a lower timer resolution,
-    and that code relying on underlying system timer restrictions
-    encounters no such limitations using Qt 4 (e.g., setting an
-    interval of 0 millisecond results in Qt occupying all of the
-    processor time when no GUI events need processing).
+    Note that Windows 2000 has a lower timer resolution, and that code relying
+    on underlying system timer restrictions encounters no such limitations
+    using Qt 4 (e.g., setting an interval of 0 millisecond results in Qt
+    occupying all of the processor time when no GUI events need processing).
 
     \section1 QToolBar
 

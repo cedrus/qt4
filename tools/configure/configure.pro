@@ -8,7 +8,7 @@ DEFINES  += QT_BOOTSTRAPPED
 
 win32 : LIBS += -lole32 -ladvapi32
 win32-msvc.net | win32-msvc2* : QMAKE_CXXFLAGS += /EHsc
-win32-g++ : LIBS += -luuid
+win32-g++* : LIBS += -luuid
 
 win32-msvc* {
     QMAKE_CFLAGS_RELEASE -= -MD
@@ -23,7 +23,8 @@ win32-msvc* {
 
 PRECOMPILED_HEADER = configure_pch.h
 
-INCPATH += $$QT_SOURCE_TREE/src/corelib/arch/generic \
+INCLUDEPATH += \
+           $$QT_SOURCE_TREE/src/corelib/arch/generic \
            $$QT_SOURCE_TREE/src/corelib/global \
            $$QT_BUILD_TREE/include \
            $$QT_BUILD_TREE/include/QtCore \
@@ -119,3 +120,4 @@ DEFINES += COMMERCIAL_VERSION
 
 INCLUDEPATH += $$QT_SOURCE_TREE/src/corelib/arch/generic \
                $$QT_SOURCE_TREE/include/QtCore \
+               $$QT_SOURCE_TREE/tools/shared

@@ -60,16 +60,20 @@ QT_BEGIN_NAMESPACE
 template <typename Type> class QDataBuffer
 {
 public:
-    QDataBuffer(int res = 64)
+    QDataBuffer(int res)
     {
         capacity = res;
-        buffer = (Type*) qMalloc(capacity * sizeof(Type));
+        if (res)
+            buffer = (Type*) qMalloc(capacity * sizeof(Type));
+        else
+            buffer = 0;
         siz = 0;
     }
 
     ~QDataBuffer()
     {
-        qFree(buffer);
+        if (buffer)
+            qFree(buffer);
     }
 
     inline void reset() { siz = 0; }
@@ -81,13 +85,20 @@ public:
 
     inline Type &at(int i) { Q_ASSERT(i >= 0 && i < siz); return buffer[i]; }
     inline const Type &at(int i) const { Q_ASSERT(i >= 0 && i < siz); return buffer[i]; }
+    inline Type &last() { Q_ASSERT(!isEmpty()); return buffer[siz-1]; }
     inline const Type &last() const { Q_ASSERT(!isEmpty()); return buffer[siz-1]; }
+    inline Type &first() { Q_ASSERT(!isEmpty()); return buffer[0]; }
     inline const Type &first() const { Q_ASSERT(!isEmpty()); return buffer[0]; }
 
     inline void add(const Type &t) {
         reserve(siz + 1);
         buffer[siz] = t;
         ++siz;
+    }
+
+    inline void pop_back() {
+        Q_ASSERT(siz > 0);
+        --siz;
     }
 
     inline void resize(int size) {
@@ -97,6 +108,8 @@ public:
 
     inline void reserve(int size) {
         if (size > capacity) {
+            if (capacity == 0)
+                capacity = 1;
             while (capacity < size)
                 capacity *= 2;
             buffer = (Type*) qRealloc(buffer, capacity * sizeof(Type));
@@ -105,7 +118,12 @@ public:
 
     inline void shrink(int size) {
         capacity = size;
-        buffer = (Type*) qRealloc(buffer, capacity * sizeof(Type));
+        if (size)
+            buffer = (Type*) qRealloc(buffer, capacity * sizeof(Type));
+        else {
+            qFree(buffer);
+            buffer = 0;
+        }
     }
 
     inline void swap(QDataBuffer<Type> &other) {

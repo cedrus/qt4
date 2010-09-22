@@ -43,10 +43,17 @@
 
 #include "simtexth.h"
 
+#include <iostream>
+
 #include <stdio.h>
 #ifdef Q_OS_WIN
-#include <io.h> // required for _setmode, to avoid _O_TEXT streams...
-#include <fcntl.h> // for _O_BINARY
+// required for _setmode, to avoid _O_TEXT streams...
+# ifdef Q_OS_WINCE
+#  include <stdlib.h>
+# else
+#  include <io.h> // for _setmode
+#  include <fcntl.h> // for _O_BINARY
+# endif
 #endif
 
 #include <QtCore/QDebug>
@@ -213,7 +220,11 @@ bool Translator::load(const QString &filename, ConversionData &cd, const QString
     if (filename.isEmpty() || filename == QLatin1String("-")) {
 #ifdef Q_OS_WIN
         // QFile is broken for text files
+# ifdef Q_OS_WINCE
+        ::_setmode(stdin, _O_BINARY);
+# else
         ::_setmode(0, _O_BINARY);
+# endif
 #endif
         if (!file.open(stdin, QIODevice::ReadOnly)) {
             cd.appendError(QString::fromLatin1("Cannot open stdin!? (%1)")
@@ -253,7 +264,11 @@ bool Translator::save(const QString &filename, ConversionData &cd, const QString
     if (filename.isEmpty() || filename == QLatin1String("-")) {
 #ifdef Q_OS_WIN
         // QFile is broken for text files
+# ifdef Q_OS_WINCE
+        ::_setmode(stdout, _O_BINARY);
+# else
         ::_setmode(1, _O_BINARY);
+# endif
 #endif
         if (!file.open(stdout, QIODevice::WriteOnly)) {
             cd.appendError(QString::fromLatin1("Cannot open stdout!? (%1)")
@@ -573,22 +588,21 @@ void Translator::reportDuplicates(const Duplicates &dupes,
                                   const QString &fileName, bool verbose)
 {
     if (!dupes.byId.isEmpty() || !dupes.byContents.isEmpty()) {
+        std::cerr << "Warning: dropping duplicate messages in '" << qPrintable(fileName);
         if (!verbose) {
-            qWarning("Warning: dropping duplicate messages in '%s'\n(try -verbose for more info).",
-                     qPrintable(fileName));
+            std::cerr << "'\n(try -verbose for more info).\n";
         } else {
-            qWarning("Warning: dropping duplicate messages in '%s':", qPrintable(fileName));
+            std::cerr << "':\n";
             foreach (int i, dupes.byId)
-                qWarning("\n* ID: %s", qPrintable(message(i).id()));
+                std::cerr << "\n* ID: " << qPrintable(message(i).id()) << std::endl;
             foreach (int j, dupes.byContents) {
                 const TranslatorMessage &msg = message(j);
-                qWarning("\n* Context: %s\n* Source: %s",
-                        qPrintable(msg.context()),
-                        qPrintable(msg.sourceText()));
+                std::cerr << "\n* Context: " << qPrintable(msg.context())
+                          << "\n* Source: " << qPrintable(msg.sourceText()) << std::endl;
                 if (!msg.comment().isEmpty())
-                    qWarning("* Comment: %s", qPrintable(msg.comment()));
+                    std::cerr << "* Comment: " << qPrintable(msg.comment()) << std::endl;
             }
-            qWarning();
+            std::cerr << std::endl;
         }
     }
 }
@@ -652,7 +666,7 @@ void Translator::normalizeTranslations(ConversionData &cd)
     int numPlurals = 1;
     if (l != QLocale::C) {
         QStringList forms;
-        if (getNumerusInfo(l, c, 0, &forms))
+        if (getNumerusInfo(l, c, 0, &forms, 0))
             numPlurals = forms.count(); // includes singular
     }
     for (int i = 0; i < m_messages.count(); ++i) {
@@ -675,7 +689,7 @@ void Translator::normalizeTranslations(ConversionData &cd)
         cd.appendError(QLatin1String(
             "Removed plural forms as the target language has less "
             "forms.\nIf this sounds wrong, possibly the target language is "
-            "not set or recognized.\n"));
+            "not set or recognized."));
 }
 
 QString Translator::guessLanguageCodeFromFileName(const QString &filename)
@@ -724,7 +738,7 @@ void Translator::setCodecName(const QByteArray &name)
     QTextCodec *codec = QTextCodec::codecForName(name);
     if (!codec) {
         if (!name.isEmpty())
-            qWarning("No QTextCodec for %s available. Using Latin1\n", name.constData());
+            std::cerr << "No QTextCodec for " << name.constData() << " available. Using Latin1.\n";
         m_codec = QTextCodec::codecForName("ISO-8859-1");
     } else {
         m_codec = codec;

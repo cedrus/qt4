@@ -38,7 +38,6 @@
 #include "NodeList.h"
 #include "PropertyNameArray.h"
 #include "RenderImage.h"
-#include "ScriptFunctionCall.h"
 #include "StaticNodeList.h"
 #include "qt_runtime.h"
 #include "qwebframe.h"
@@ -85,12 +84,26 @@ public:
 
     \snippet webkitsnippets/webelement/main.cpp Traversing with QWebElement
 
+    Individual elements can be inspected or changed using methods such as attribute()
+    or setAttribute(). For examle, to capture the user's input in a text field for later
+    use (auto-completion), a browser could do something like this:
+
+    \snippet webkitsnippets/webelement/main.cpp autocomplete1
+
+    When the same page is later revisited, the browser can fill in the text field automatically
+    by modifying the value attribute of the input element:
+
+    \snippet webkitsnippets/webelement/main.cpp autocomplete2
+
+    Another use case is to emulate a click event on an element. The following
+    code snippet demonstrates how to call the JavaScript DOM method click() of
+    a submit button:
+
+    \snippet webkitsnippets/webelement/main.cpp Calling a DOM element method
+
     The underlying content of QWebElement is explicitly shared. Creating a copy
     of a QWebElement does not create a copy of the content. Instead, both
     instances point to the same element.
-
-    The element's attributes can be read using attribute() and modified with
-    setAttribute().
 
     The contents of child elements can be converted to plain text with
     toPlainText(); to XHTML using toInnerXml(). To include the element's tag in
@@ -865,25 +878,7 @@ QStringList QWebElement::classes() const
         return QStringList();
 
     QStringList classes =  attribute(QLatin1String("class")).simplified().split(QLatin1Char(' '), QString::SkipEmptyParts);
-#if QT_VERSION >= 0x040500
     classes.removeDuplicates();
-#else
-    int n = classes.size();
-    int j = 0;
-    QSet<QString> seen;
-    seen.reserve(n);
-    for (int i = 0; i < n; ++i) {
-        const QString& s = classes.at(i);
-        if (seen.contains(s))
-            continue;
-        seen.insert(s);
-        if (j != i)
-            classes[j] = s;
-        ++j;
-    }
-    if (n != j)
-        classes.erase(classes.begin() + j, classes.end());
-#endif
     return classes;
 }
 

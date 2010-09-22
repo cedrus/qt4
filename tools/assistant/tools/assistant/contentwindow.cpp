@@ -38,25 +38,26 @@
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+#include "tracer.h"
 
 #include "contentwindow.h"
 #include "centralwidget.h"
+#include "helpenginewrapper.h"
+#include "helpviewer.h"
 
 #include <QtGui/QLayout>
 #include <QtGui/QFocusEvent>
 #include <QtGui/QMenu>
 
-#include <QtHelp/QHelpEngine>
 #include <QtHelp/QHelpContentWidget>
 
 QT_BEGIN_NAMESPACE
 
-ContentWindow::ContentWindow(QHelpEngine *helpEngine)
-    : m_helpEngine(helpEngine)
-    , m_contentWidget(0)
+ContentWindow::ContentWindow()
+    : m_contentWidget(HelpEngineWrapper::instance().contentWidget())
     , m_expandDepth(-2)
 {
-    m_contentWidget = m_helpEngine->contentWidget();
+    TRACE_OBJ
     m_contentWidget->viewport()->installEventFilter(this);
     m_contentWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -76,10 +77,12 @@ ContentWindow::ContentWindow(QHelpEngine *helpEngine)
 
 ContentWindow::~ContentWindow()
 {
+    TRACE_OBJ
 }
 
 bool ContentWindow::syncToContent(const QUrl& url)
 {
+    TRACE_OBJ
     QModelIndex idx = m_contentWidget->indexOf(url);
     if (!idx.isValid())
         return false;
@@ -89,6 +92,8 @@ bool ContentWindow::syncToContent(const QUrl& url)
 
 void ContentWindow::expandTOC()
 {
+    TRACE_OBJ
+    Q_ASSERT(m_expandDepth >= -2);
     if (m_expandDepth > -2) {
         expandToDepth(m_expandDepth);
         m_expandDepth = -2;
@@ -97,42 +102,51 @@ void ContentWindow::expandTOC()
 
 void ContentWindow::expandToDepth(int depth)
 {
+    TRACE_OBJ
+    Q_ASSERT(depth >= -2);
     m_expandDepth = depth;
     if (depth == -1)
         m_contentWidget->expandAll();
+    else if (depth == 0)
+        m_contentWidget->collapseAll();
     else
-        m_contentWidget->expandToDepth(depth);
+        m_contentWidget->expandToDepth(depth - 1);
 }
 
 void ContentWindow::focusInEvent(QFocusEvent *e)
 {
+    TRACE_OBJ
     if (e->reason() != Qt::MouseFocusReason)
         m_contentWidget->setFocus();
 }
 
 void ContentWindow::keyPressEvent(QKeyEvent *e)
 {
+    TRACE_OBJ
     if (e->key() == Qt::Key_Escape)
         emit escapePressed();
 }
 
 bool ContentWindow::eventFilter(QObject *o, QEvent *e)
 {
+    TRACE_OBJ
     if (m_contentWidget && o == m_contentWidget->viewport()
         && e->type() == QEvent::MouseButtonRelease) {
         QMouseEvent *me = static_cast<QMouseEvent*>(e);
-        QModelIndex index = m_contentWidget->indexAt(me->pos());
-        QItemSelectionModel *sm = m_contentWidget->selectionModel();
+        const QModelIndex &index = m_contentWidget->indexAt(me->pos());
+        if (!index.isValid())
+            return QWidget::eventFilter(o, e);
 
-        Qt::MouseButtons button = me->button();
-        if (index.isValid() && (sm && sm->isSelected(index))) {
+        const Qt::MouseButtons button = me->button();
+        QItemSelectionModel *sm = m_contentWidget->selectionModel();
+        if (sm->isSelected(index)) {
             if ((button == Qt::LeftButton && (me->modifiers() & Qt::ControlModifier))
                 || (button == Qt::MidButton)) {
                 QHelpContentModel *contentModel =
                     qobject_cast<QHelpContentModel*>(m_contentWidget->model());
                 if (contentModel) {
                     QHelpContentItem *itm = contentModel->contentItemAt(index);
-                    if (itm && !isPdfFile(itm))
+                    if (itm && AbstractHelpViewer::canOpenPage(itm->url().path()))
                         CentralWidget::instance()->setSourceInNewTab(itm->url());
                 }
             } else if (button == Qt::LeftButton) {
@@ -146,6 +160,7 @@ bool ContentWindow::eventFilter(QObject *o, QEvent *e)
 
 void ContentWindow::showContextMenu(const QPoint &pos)
 {
+    TRACE_OBJ
     if (!m_contentWidget->indexAt(pos).isValid())
         return;
 
@@ -157,7 +172,7 @@ void ContentWindow::showContextMenu(const QPoint &pos)
     QMenu menu;
     QAction *curTab = menu.addAction(tr("Open Link"));
     QAction *newTab = menu.addAction(tr("Open Link in New Tab"));
-    if (isPdfFile(itm))
+    if (!AbstractHelpViewer::canOpenPage(itm->url().path()))
         newTab->setEnabled(false);
     
     menu.move(m_contentWidget->mapToGlobal(pos));
@@ -171,20 +186,17 @@ void ContentWindow::showContextMenu(const QPoint &pos)
 
 void ContentWindow::itemClicked(const QModelIndex &index)
 {
+    TRACE_OBJ
     QHelpContentModel *contentModel =
         qobject_cast<QHelpContentModel*>(m_contentWidget->model());
 
     if (contentModel) {
-        QHelpContentItem *itm = contentModel->contentItemAt(index);
-        if (itm)
-            emit linkActivated(itm->url());
+        if (QHelpContentItem *itm = contentModel->contentItemAt(index)) {
+            const QUrl &url = itm->url();
+            if (url != CentralWidget::instance()->currentSource())
+                emit linkActivated(url);
+        }
     }
-}
-
-bool ContentWindow::isPdfFile(QHelpContentItem *item) const
-{
-    const QString &path = item->url().path();
-    return path.endsWith(QLatin1String(".pdf"), Qt::CaseInsensitive);
 }
 
 QT_END_NAMESPACE

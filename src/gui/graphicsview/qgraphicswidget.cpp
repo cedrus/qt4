@@ -324,6 +324,12 @@ void QGraphicsWidget::resize(const QSizeF &size)
 */
 
 /*!
+  \fn QGraphicsWidget::geometryChanged()
+
+  This signal gets emitted whenever the geometry is changed in setGeometry().
+*/
+
+/*!
     \property QGraphicsWidget::geometry
     \brief the geometry of the widget
 
@@ -379,20 +385,25 @@ void QGraphicsWidget::setGeometry(const QRectF &rect)
         if (wd->inSetPos) {
             //set the new pos
             d->geom.moveTopLeft(pos());
+            emit geometryChanged();
             return;
         }
     }
     QSizeF oldSize = size();
     QGraphicsLayoutItem::setGeometry(newGeom);
-
     // Send resize event
     bool resized = newGeom.size() != oldSize;
     if (resized) {
         QGraphicsSceneResizeEvent re;
         re.setOldSize(oldSize);
         re.setNewSize(newGeom.size());
+        if (oldSize.width() != newGeom.size().width())
+            emit widthChanged();
+        if (oldSize.height() != newGeom.size().height())
+            emit heightChanged();
         QApplication::sendEvent(this, &re);
     }
+    emit geometryChanged();
 }
 
 /*!
@@ -737,6 +748,17 @@ QSizeF QGraphicsWidget::sizeHint(Qt::SizeHint which, const QSizeF &constraint) c
 }
 
 /*!
+    \property QGraphicsWidget::layout
+    \brief The layout of the widget
+*/
+
+/*!
+    \fn void QGraphicsWidget::layoutChanged()
+    This signal gets emitted whenever the layout of the item changes
+    \internal
+*/
+
+/*!
     Returns this widget's layout, or 0 if no layout is currently managing this
     widget.
 
@@ -789,6 +811,7 @@ void QGraphicsWidget::setLayout(QGraphicsLayout *l)
     l->setParentLayoutItem(this);
     l->d_func()->reparentChildItems(this);
     l->invalidate();
+    emit layoutChanged();
 }
 
 /*!
@@ -967,6 +990,36 @@ void QGraphicsWidget::setPalette(const QPalette &palette)
 }
 
 /*!
+    \property QGraphicsWidget::autoFillBackground
+    \brief whether the widget background is filled automatically
+    \since 4.7
+
+    If enabled, this property will cause Qt to fill the background of the
+    widget before invoking the paint() method. The color used is defined by the
+    QPalette::Window color role from the widget's \l{QPalette}{palette}.
+
+    In addition, Windows are always filled with QPalette::Window, unless the
+    WA_OpaquePaintEvent or WA_NoSystemBackground attributes are set.
+
+    By default, this property is false.
+
+    \sa Qt::WA_OpaquePaintEvent, Qt::WA_NoSystemBackground,
+*/
+bool QGraphicsWidget::autoFillBackground() const
+{
+    Q_D(const QGraphicsWidget);
+    return d->autoFillBackground;
+}
+void QGraphicsWidget::setAutoFillBackground(bool enabled)
+{
+    Q_D(QGraphicsWidget);
+    if (d->autoFillBackground != enabled) {
+        d->autoFillBackground = enabled;
+        update();
+    }
+}
+
+/*!
     If this widget is currently managed by a layout, this function notifies
     the layout that the widget's size hints have changed and the layout
     may need to resize and reposition the widget accordingly.
@@ -1047,9 +1100,6 @@ QVariant QGraphicsWidget::itemChange(GraphicsItemChange change, const QVariant &
         d->setGeometryFromSetPos();
         break;
     case ItemParentChange: {
-        QGraphicsItem *parent = qVariantValue<QGraphicsItem *>(value);
-        d->fixFocusChainBeforeReparenting((parent && parent->isWidget()) ? static_cast<QGraphicsWidget *>(parent) : 0, scene());
-
         // Deliver ParentAboutToChange.
         QEvent event(QEvent::ParentAboutToChange);
         QApplication::sendEvent(this, &event);

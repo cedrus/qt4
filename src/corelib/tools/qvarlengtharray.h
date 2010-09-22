@@ -107,6 +107,10 @@ public:
         Q_ASSERT(idx >= 0 && idx < s);
         return ptr[idx];
     }
+    inline const T &at(int idx) const { return operator[](idx); }
+
+    T value(int i) const;
+    T value(int i, const T &defaultValue) const;
 
     inline void append(const T &t) {
         if (s == a)   // i.e. s != 0
@@ -123,6 +127,13 @@ public:
     inline T *data() { return ptr; }
     inline const T *data() const { return ptr; }
     inline const T * constData() const { return ptr; }
+    typedef int size_type;
+    typedef T value_type;
+    typedef value_type *pointer;
+    typedef const value_type *const_pointer;
+    typedef value_type &reference;
+    typedef const value_type &const_reference;
+    typedef qptrdiff difference_type;
 
 private:
     friend class QPodList<T, Prealloc>;
@@ -246,6 +257,21 @@ Q_OUTOFLINE_TEMPLATE void QVarLengthArray<T, Prealloc>::realloc(int asize, int a
         s = asize;
     }
 }
+
+template <class T, int Prealloc>
+Q_OUTOFLINE_TEMPLATE T QVarLengthArray<T, Prealloc>::value(int i) const
+{
+    if (i < 0 || i >= size()) {
+        return T();
+    }
+    return at(i);
+}
+template <class T, int Prealloc>
+Q_OUTOFLINE_TEMPLATE T QVarLengthArray<T, Prealloc>::value(int i, const T &defaultValue) const
+{
+    return (i < 0 || i >= size()) ? defaultValue : at(i);
+}
+
 
 QT_END_NAMESPACE
 

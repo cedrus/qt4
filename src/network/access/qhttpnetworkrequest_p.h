@@ -72,7 +72,8 @@ public:
         Put,
         Delete,
         Trace,
-        Connect
+        Connect,
+        Custom
     };
 
     enum Priority {
@@ -103,11 +104,17 @@ public:
     Operation operation() const;
     void setOperation(Operation operation);
 
+    QByteArray customVerb() const;
+    void setCustomVerb(const QByteArray &customOperation);
+
     Priority priority() const;
     void setPriority(Priority priority);
 
     bool isPipeliningAllowed() const;
     void setPipeliningAllowed(bool b);
+
+    bool withCredentials() const;
+    void setWithCredentials(bool b);
 
     void setUploadByteDevice(QNonContiguousByteDevice *bd);
     QNonContiguousByteDevice* uploadByteDevice() const;
@@ -133,10 +140,12 @@ public:
     static QByteArray header(const QHttpNetworkRequest &request, bool throughProxy);
 
     QHttpNetworkRequest::Operation operation;
+    QByteArray customVerb;
     QHttpNetworkRequest::Priority priority;
     mutable QNonContiguousByteDevice* uploadByteDevice;
     bool autoDecompress;
     bool pipeliningAllowed;
+    bool withCredentials;
 };
 
 

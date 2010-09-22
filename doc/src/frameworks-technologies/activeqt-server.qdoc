@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -41,10 +27,10 @@
 
 /*!
     \page activeqt-server.html
-    \title Building ActiveX servers and controls with Qt
+    \title Building ActiveX servers in Qt
+    \ingroup qt-activex
 
-    \brief The QAxServer module is a Windows-only static library that
-    you can use to turn a standard Qt binary into a COM server.
+    \brief A Windows-only static library for turning a Qt binary into a COM server.
 
     The QAxServer module is part of the \l ActiveQt framework. It
     consists of three classes:
@@ -98,10 +84,6 @@
     binary (again using the \l idc tool)
     \o Register the server
     \endlist
-
-    Note that the QAxServer build system is not supported on Windows 98/ME
-    (attaching of resources to a binary is not possible there), but a server 
-    built on Windows NT/2000/XP will work on previous Windows versions as well.
 
     To skip the post-processing step, also set the \c qaxserver_no_postlink
     configuration.
@@ -413,8 +395,7 @@
     \footnote
     OLE needs to marshal user defined types by reference (ByRef), and cannot 
     marshal them by value (ByVal). This is why const-references and object
-    parameters are not supported for QRect, QSize and QPoint. Also note that
-    servers with this datatype require Windows 98 or DCOM 1.2 to be installed.
+    parameters are not supported for QRect, QSize and QPoint.
     \endfootnote
     \o [in, out] struct QRect (user defined)
     \row

@@ -45,10 +45,25 @@
 #         INCLUDEPATH += $$OS_LAYER_DBUS_SYSTEMINCLUDE
 #         INCLUDEPATH += $$OS_LAYER_LIBUTILITY_SYSTEMINCLUDE
 #
+#     These paths are primarily meant to be used as is in bld.inf and .mmp
+#     files, so they do not contain epocroot when using official symbian
+#     toolchains (symbian-abld or symbian-sbsv2).
+#     For makefile based mkspecs, epocroot is prepended to all paths for
+#     convenience.
 #
-#       
+#     To use paths defined here in other contexts that require epocroot to be
+#     prepended always, such as exists checks, please use prependEpocroot
+#     replacement function:
+#
+#         exists($$prependEpocroot($$MW_LAYER_PUBLIC_EXPORT_PATH(foobar.h)))
 #
 # ==============================================================================
+
+symbian-abld|symbian-sbsv2 {
+    epocroot_prefix = /
+} else {
+    epocroot_prefix = $${EPOCROOT}
+}
 
 exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
     
@@ -66,10 +81,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(APP_LAYER_SDK_EXPORT_PATH) {
-             return (/epoc32/include/app/$$1)
+             return ($${epocroot_prefix}epoc32/include/app/$$1)
         }
         defineReplace(APP_LAYER_PUBLIC_EXPORT_PATH) {
-             return (/epoc32/include/app/$$1)
+             return ($${epocroot_prefix}epoc32/include/app/$$1)
         }
 
         # ---------------------------------------
@@ -77,10 +92,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(APP_LAYER_DOMAIN_EXPORT_PATH) {
-             return (/epoc32/include/platform/app/$$1)
+             return ($${epocroot_prefix}epoc32/include/platform/app/$$1)
         }
         defineReplace(APP_LAYER_PLATFORM_EXPORT_PATH) {
-             return (/epoc32/include/platform/app/$$1)
+             return ($${epocroot_prefix}epoc32/include/platform/app/$$1)
         }
 
         # ---------------------------------------
@@ -88,10 +103,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(MW_LAYER_SDK_EXPORT_PATH) {
-             return (/epoc32/include/mw/$$1)
+             return ($${epocroot_prefix}epoc32/include/mw/$$1)
         }
         defineReplace(MW_LAYER_PUBLIC_EXPORT_PATH) {
-             return (/epoc32/include/mw/$$1)
+             return ($${epocroot_prefix}epoc32/include/mw/$$1)
         }
 
         # ---------------------------------------
@@ -99,10 +114,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(MW_LAYER_DOMAIN_EXPORT_PATH) {
-             return (/epoc32/include/platform/mw/$$1)
+             return ($${epocroot_prefix}epoc32/include/platform/mw/$$1)
         }
         defineReplace(MW_LAYER_PLATFORM_EXPORT_PATH) {
-             return (/epoc32/include/platform/mw/$$1)
+             return ($${epocroot_prefix}epoc32/include/platform/mw/$$1)
         }
 
         # ---------------------------------------
@@ -110,11 +125,11 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(OSEXT_LAYER_SDK_EXPORT_PATH) {
-             return (/epoc32/include/$$1)
+             return ($${epocroot_prefix}epoc32/include/$$1)
         }
         # WARNING: If the following path changes see the exists() function around line 219
         defineReplace(OS_LAYER_PUBLIC_EXPORT_PATH) {
-             return (/epoc32/include/$$1)
+             return ($${epocroot_prefix}epoc32/include/$$1)
         }
 
         # ---------------------------------------
@@ -122,10 +137,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(OSEXT_LAYER_DOMAIN_EXPORT_PATH) {
-             return (/epoc32/include/platform/$$1)
+             return ($${epocroot_prefix}epoc32/include/platform/$$1)
         }
         defineReplace(OS_LAYER_PLATFORM_EXPORT_PATH) {
-             return (/epoc32/include/platform/$$1)
+             return ($${epocroot_prefix}epoc32/include/platform/$$1)
         }
 
         # ---------------------------------------
@@ -152,18 +167,18 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # the headers come from middleware or os-layer  => thus they are first.
 
         APP_LAYER_SYSTEMINCLUDE = \
-         /epoc32/include \
-         /epoc32/include/mw \
-         /epoc32/include/platform/mw \
-         /epoc32/include/platform \
-         /epoc32/include/app \
-         /epoc32/include/platform/app \
-         /epoc32/include/platform/loc \
-         /epoc32/include/platform/mw/loc \
-         /epoc32/include/platform/app/loc \
-         /epoc32/include/platform/loc/sc \
-         /epoc32/include/platform/mw/loc/sc \
-         /epoc32/include/platform/app/loc/sc
+         $${epocroot_prefix}epoc32/include \
+         $${epocroot_prefix}epoc32/include/mw \
+         $${epocroot_prefix}epoc32/include/platform/mw \
+         $${epocroot_prefix}epoc32/include/platform \
+         $${epocroot_prefix}epoc32/include/app \
+         $${epocroot_prefix}epoc32/include/platform/app \
+         $${epocroot_prefix}epoc32/include/platform/loc \
+         $${epocroot_prefix}epoc32/include/platform/mw/loc \
+         $${epocroot_prefix}epoc32/include/platform/app/loc \
+         $${epocroot_prefix}epoc32/include/platform/loc/sc \
+         $${epocroot_prefix}epoc32/include/platform/mw/loc/sc \
+         $${epocroot_prefix}epoc32/include/platform/app/loc/sc
 
         # This define statements defines the include paths, which are intended to be
         # used in the pro-files that are part of the middleware-layer. It includes all 
@@ -171,14 +186,14 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # middleware-layer components. 
 
         MW_LAYER_SYSTEMINCLUDE = \
-         /epoc32/include \
-         /epoc32/include/mw \
-         /epoc32/include/platform/mw \
-         /epoc32/include/platform \
-         /epoc32/include/platform/loc \
-         /epoc32/include/platform/mw/loc \
-         /epoc32/include/platform/loc/sc \
-         /epoc32/include/platform/mw/loc/sc
+         $${epocroot_prefix}epoc32/include \
+         $${epocroot_prefix}epoc32/include/mw \
+         $${epocroot_prefix}epoc32/include/platform/mw \
+         $${epocroot_prefix}epoc32/include/platform \
+         $${epocroot_prefix}epoc32/include/platform/loc \
+         $${epocroot_prefix}epoc32/include/platform/mw/loc \
+         $${epocroot_prefix}epoc32/include/platform/loc/sc \
+         $${epocroot_prefix}epoc32/include/platform/mw/loc/sc
 
         # This define statements defines the include paths, which are intended to be
         # used in the pro-files that are part of the  osextensions-layer. It includes all
@@ -186,10 +201,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # os-layer components. 
 
         OS_LAYER_SYSTEMINCLUDE = \
-         /epoc32/include \
-         /epoc32/include/platform \
-         /epoc32/include/platform/loc \
-         /epoc32/include/platform/loc/sc
+         $${epocroot_prefix}epoc32/include \
+         $${epocroot_prefix}epoc32/include/platform \
+         $${epocroot_prefix}epoc32/include/platform/loc \
+         $${epocroot_prefix}epoc32/include/platform/loc/sc
 
         # This define statements defines the include paths, which are intended to be
         # used in the pro-files that are part of the os-layer. This is intended 
@@ -198,7 +213,7 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # 2 files already contain the /epoc32/include  as system include path.
 
         OS_LAYER_KERNEL_SYSTEMINCLUDE = \
-         /epoc32/include/platform
+         $${epocroot_prefix}epoc32/include/platform
 
 
         # ---------------------------------------
@@ -237,10 +252,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(APP_LAYER_SDK_EXPORT_PATH) {
-             return (/epoc32/include/applications/$$1)
+             return ($${epocroot_prefix}epoc32/include/applications/$$1)
         }
         defineReplace(APP_LAYER_PUBLIC_EXPORT_PATH) {
-             return (/epoc32/include/applications/$$1)
+             return ($${epocroot_prefix}epoc32/include/applications/$$1)
         }
 
         # ---------------------------------------
@@ -248,10 +263,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(APP_LAYER_DOMAIN_EXPORT_PATH) {
-             return (/epoc32/include/domain/applications/$$1)
+             return ($${epocroot_prefix}epoc32/include/domain/applications/$$1)
         }
         defineReplace(APP_LAYER_PLATFORM_EXPORT_PATH) {
-             return (/epoc32/include/domain/applications/$$1)
+             return ($${epocroot_prefix}epoc32/include/domain/applications/$$1)
         }
 
         # ---------------------------------------
@@ -259,10 +274,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(MW_LAYER_SDK_EXPORT_PATH) {
-             return (/epoc32/include/middleware/$$1)
+             return ($${epocroot_prefix}epoc32/include/middleware/$$1)
         }
         defineReplace(MW_LAYER_PUBLIC_EXPORT_PATH) {
-             return (/epoc32/include/middleware/$$1)
+             return ($${epocroot_prefix}epoc32/include/middleware/$$1)
         }
 
         # ---------------------------------------
@@ -270,10 +285,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(MW_LAYER_DOMAIN_EXPORT_PATH) {
-             return (/epoc32/include/domain/middleware/$$1)
+             return ($${epocroot_prefix}epoc32/include/domain/middleware/$$1)
         }
         defineReplace(MW_LAYER_PLATFORM_EXPORT_PATH) {
-             return (/epoc32/include/domain/middleware/$$1)
+             return ($${epocroot_prefix}epoc32/include/domain/middleware/$$1)
         }
 
         # ---------------------------------------
@@ -281,11 +296,11 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(OSEXT_LAYER_SDK_EXPORT_PATH) {
-             return (/epoc32/include/osextensions/$$1)
+             return ($${epocroot_prefix}epoc32/include/osextensions/$$1)
         }
         # WARNING: If the following path changes see the exists() function around line 430
         defineReplace(OS_LAYER_PUBLIC_EXPORT_PATH) {
-             return (/epoc32/include/osextensions/$$1)
+             return ($${epocroot_prefix}epoc32/include/osextensions/$$1)
         }
 
         # ---------------------------------------
@@ -293,10 +308,10 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # ---------------------------------------
 
         defineReplace(OSEXT_LAYER_DOMAIN_EXPORT_PATH) {
-             return (/epoc32/include/domain/osextensions/$$1)
+             return ($${epocroot_prefix}epoc32/include/domain/osextensions/$$1)
         }
         defineReplace(OS_LAYER_PLATFORM_EXPORT_PATH) {
-             return (/epoc32/include/domain/osextensions/$$1)
+             return ($${epocroot_prefix}epoc32/include/domain/osextensions/$$1)
         }
 
         # ---------------------------------------
@@ -323,20 +338,20 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # the headers come from middleware or os-layer  => thus they are first.
 
         APP_LAYER_SYSTEMINCLUDE = \
-         /epoc32/include \
-         /epoc32/include/oem \
-         /epoc32/include/middleware \
-         /epoc32/include/domain/middleware \
-         /epoc32/include/osextensions \
-         /epoc32/include/domain/osextensions \
-         /epoc32/include/applications \
-         /epoc32/include/domain/applications \
-         /epoc32/include/domain/osextensions/loc \
-         /epoc32/include/domain/middleware/loc \
-         /epoc32/include/domain/applications/loc \
-         /epoc32/include/domain/osextensions/loc/sc \
-         /epoc32/include/domain/middleware/loc/sc \
-         /epoc32/include/domain/applications/loc/sc
+         $${epocroot_prefix}epoc32/include \
+         $${epocroot_prefix}epoc32/include/oem \
+         $${epocroot_prefix}epoc32/include/middleware \
+         $${epocroot_prefix}epoc32/include/domain/middleware \
+         $${epocroot_prefix}epoc32/include/osextensions \
+         $${epocroot_prefix}epoc32/include/domain/osextensions \
+         $${epocroot_prefix}epoc32/include/applications \
+         $${epocroot_prefix}epoc32/include/domain/applications \
+         $${epocroot_prefix}epoc32/include/domain/osextensions/loc \
+         $${epocroot_prefix}epoc32/include/domain/middleware/loc \
+         $${epocroot_prefix}epoc32/include/domain/applications/loc \
+         $${epocroot_prefix}epoc32/include/domain/osextensions/loc/sc \
+         $${epocroot_prefix}epoc32/include/domain/middleware/loc/sc \
+         $${epocroot_prefix}epoc32/include/domain/applications/loc/sc
 
         # This define statements defines the include paths, which are intended to be
         # used in the pro-files that are part of the middleware-layer. It includes all 
@@ -344,16 +359,16 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # middleware-layer components. 
 
         MW_LAYER_SYSTEMINCLUDE = \
-         /epoc32/include \
-         /epoc32/include/oem \
-         /epoc32/include/middleware \
-         /epoc32/include/domain/middleware \
-         /epoc32/include/osextensions \
-         /epoc32/include/domain/osextensions \
-         /epoc32/include/domain/osextensions/loc \
-         /epoc32/include/domain/middleware/loc \
-         /epoc32/include/domain/osextensions/loc/sc \
-         /epoc32/include/domain/middleware/loc/sc
+         $${epocroot_prefix}epoc32/include \
+         $${epocroot_prefix}epoc32/include/oem \
+         $${epocroot_prefix}epoc32/include/middleware \
+         $${epocroot_prefix}epoc32/include/domain/middleware \
+         $${epocroot_prefix}epoc32/include/osextensions \
+         $${epocroot_prefix}epoc32/include/domain/osextensions \
+         $${epocroot_prefix}epoc32/include/domain/osextensions/loc \
+         $${epocroot_prefix}epoc32/include/domain/middleware/loc \
+         $${epocroot_prefix}epoc32/include/domain/osextensions/loc/sc \
+         $${epocroot_prefix}epoc32/include/domain/middleware/loc/sc
 
         # This define statements defines the include paths, which are intended to be
         # used in the pro-files that are part of the  osextensions-layer. It includes all
@@ -361,12 +376,12 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # os-layer components. 
 
         OS_LAYER_SYSTEMINCLUDE = \
-         /epoc32/include \
-         /epoc32/include/oem \
-         /epoc32/include/osextensions \
-         /epoc32/include/domain/osextensions \
-         /epoc32/include/domain/osextensions/loc \
-         /epoc32/include/domain/osextensions/loc/sc
+         $${epocroot_prefix}epoc32/include \
+         $${epocroot_prefix}epoc32/include/oem \
+         $${epocroot_prefix}epoc32/include/osextensions \
+         $${epocroot_prefix}epoc32/include/domain/osextensions \
+         $${epocroot_prefix}epoc32/include/domain/osextensions/loc \
+         $${epocroot_prefix}epoc32/include/domain/osextensions/loc/sc
 
         # This define statements defines the include paths, which are intended to be
         # used in the pro-files that are part of the os-layer. This is intended 
@@ -375,9 +390,9 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
         # 2 files already contain the /epoc32/include  as system include path.
 
         OS_LAYER_KERNEL_SYSTEMINCLUDE = \
-         /epoc32/include/oem \
-         /epoc32/include/osextensions \
-         /epoc32/include/domain/osextensions
+         $${epocroot_prefix}epoc32/include/oem \
+         $${epocroot_prefix}epoc32/include/osextensions \
+         $${epocroot_prefix}epoc32/include/domain/osextensions
 
 
         # ---------------------------------------
@@ -387,41 +402,41 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
 
         OS_LAYER_LIBC_SYSTEMINCLUDE = $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis) \
                                       $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/sys) \
-                                      /epoc32/include/stdapis \
-                                      /epoc32/include/stdapis/sys
+                                      $${epocroot_prefix}epoc32/include/stdapis \
+                                      $${epocroot_prefix}epoc32/include/stdapis/sys
 
         OS_LAYER_GLIB_SYSTEMINCLUDE = $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/glib-2.0) \
                                       $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/glib-2.0/glib) \
                                       $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/glib-2.0/gObject) \
-                                      /epoc32/include/stdapis/glib-2.0 \
-                                      /epoc32/include/stdapis/glib-2.0/glib \
-                                      /epoc32/include/stdapis/glib-2.0/gObject
+                                      $${epocroot_prefix}epoc32/include/stdapis/glib-2.0 \
+                                      $${epocroot_prefix}epoc32/include/stdapis/glib-2.0/glib \
+                                      $${epocroot_prefix}epoc32/include/stdapis/glib-2.0/gObject
 
         OS_LAYER_SSL_SYSTEMINCLUDE = $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/openssl) \
-                                     /epoc32/include/stdapis/openssl
+                                     $${epocroot_prefix}epoc32/include/stdapis/openssl
 
         # stlportv5 is preferred over stlport as it has the throwing version of operator new
         OS_LAYER_STDCPP_SYSTEMINCLUDE = $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/stlportv5) \
-                                        /epoc32/include/stdapis/stlportv5
+                                        $${epocroot_prefix}epoc32/include/stdapis/stlportv5
         exists($${EPOCROOT}epoc32/include/osextensions/stdapis/stlport) \
         |exists($${EPOCROOT}epoc32/include/stdapis/stlport) {
             !exists($${EPOCROOT}epoc32/include/osextensions/stdapis/stlportv5) \
             :!exists($${EPOCROOT}epoc32/include/stdapis/stlportv5) {
                 OS_LAYER_STDCPP_SYSTEMINCLUDE = $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/stlport) \
-                                                /epoc32/include/stdapis/stlport
+                                                $${epocroot_prefix}epoc32/include/stdapis/stlport
             }
         }
         
         OS_LAYER_BOOST_SYSTEMINCLUDE = $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/boost) \
-                                       /epoc32/include/stdapis/boost
+                                       $${epocroot_prefix}epoc32/include/stdapis/boost
 
         OS_LAYER_DBUS_SYSTEMINCLUDE = $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/dbus-1.0) \
                                       $$OS_LAYER_PUBLIC_EXPORT_PATH(stdapis/dbus-1.0/dbus) \
-                                      /epoc32/include/stdapis/dbus-1.0 \
-                                      /epoc32/include/stdapis/dbus-1.0/dbus
+                                      $${epocroot_prefix}epoc32/include/stdapis/dbus-1.0 \
+                                      $${epocroot_prefix}epoc32/include/stdapis/dbus-1.0/dbus
 
         OS_LAYER_LIBUTILITY_SYSTEMINCLUDE = $$OS_LAYER_PLATFORM_EXPORT_PATH(stdapis/utility) \
-                                            /epoc32/include/stdapis/utility
+                                            $${epocroot_prefix}epoc32/include/stdapis/utility
 
     } 
 
@@ -433,31 +448,31 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
     # ---------------------------------------
 
     defineReplace(CORE_APP_LAYER_IBY_EXPORT_PATH) {
-        return(/epoc32/rom/include/core/app/$$1)
+        return($${epocroot_prefix}epoc32/rom/include/core/app/$$1)
     }
     defineReplace(CORE_MW_LAYER_IBY_EXPORT_PATH) {
-        return(/epoc32/rom/include/core/mw/$$1)
+        return($${epocroot_prefix}epoc32/rom/include/core/mw/$$1)
     }
 
     defineReplace(LANGUAGE_APP_LAYER_IBY_EXPORT_PATH) {
-        return(/epoc32/rom/include/language/app/$$1)
+        return($${epocroot_prefix}epoc32/rom/include/language/app/$$1)
     }
     defineReplace(LANGUAGE_MW_LAYER_IBY_EXPORT_PATH) {
-        return(/epoc32/rom/include/language/mw/$$1)
+        return($${epocroot_prefix}epoc32/rom/include/language/mw/$$1)
     }
 
     defineReplace(CUSTOMER_APP_LAYER_IBY_EXPORT_PATH) {
-        return(/epoc32/rom/include/customer/app/$$1)
+        return($${epocroot_prefix}epoc32/rom/include/customer/app/$$1)
     }
     defineReplace(CUSTOMER_MW_LAYER_IBY_EXPORT_PATH) {
-        return(/epoc32/rom/include/customer/mw/$$1)
+        return($${epocroot_prefix}epoc32/rom/include/customer/mw/$$1)
     }
 
     defineReplace(CUSTOMER_VARIANT_APP_LAYER_IBY_EXPORT_PATH) {
-        return(/epoc32/rom/include/customervariant/app/$$1)
+        return($${epocroot_prefix}epoc32/rom/include/customervariant/app/$$1)
     }
     defineReplace(CUSTOMER_VARIANT_MW_LAYER_IBY_EXPORT_PATH) {
-        return(/epoc32/rom/include/customervariant/mw/$$1)
+        return($${epocroot_prefix}epoc32/rom/include/customervariant/mw/$$1)
     }
 
     # You need to define the following in pro-file, if you are using the stllib:
@@ -466,7 +481,13 @@ exists($${EPOCROOT}epoc32/include/platform_paths.prf) {
     STLLIB_USAGE_CW_FLAGS = "-wchar_t on"
     STLLIB_USAGE_DEFINES = _WCHAR_T_DECLARED
 
+    # Smart prepend of EPOCROOT to a string
+    defineReplace(prependEpocroot) {
+        contains(1, ^$${EPOCROOT}) {
+            return($$1)
+        } else {
+            return($${EPOCROOT}$$replace(1,"^/",))
+        }
+    }
+
 }
-
-
-    

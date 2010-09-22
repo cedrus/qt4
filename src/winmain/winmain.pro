@@ -8,11 +8,10 @@ CONFIG	+= staticlib warn_on
 CONFIG	-= qt shared
 
 win32 {
-	win32-g++:DEFINES += QT_NEEDS_QMAIN
+	win32-g++*:DEFINES += QT_NEEDS_QMAIN
 	win32-borland:DEFINES += QT_NEEDS_QMAIN
 	SOURCES		= qtmain_win.cpp
-	CONFIG		+= png zlib
-	CONFIG		-= jpeg
+	CONFIG		+= png
 	INCLUDEPATH	+= tmp $$QMAKE_INCDIR_QT/QtCore
 }
 

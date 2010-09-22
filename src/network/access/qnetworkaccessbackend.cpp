@@ -46,9 +46,11 @@
 #include "qnetworkreply_p.h"
 #include "QtCore/qhash.h"
 #include "QtCore/qmutex.h"
+#include "QtNetwork/qnetworksession.h"
 
 #include "qnetworkaccesscachebackend_p.h"
 #include "qabstractnetworkcache.h"
+#include "qhostinfo.h"
 
 #include "private/qnoncontiguousbytedevice_p.h"
 
@@ -120,8 +122,11 @@ QNonContiguousByteDevice* QNetworkAccessBackend::createUploadByteDevice()
 
     if (reply->outgoingDataBuffer)
         device = QNonContiguousByteDeviceFactory::create(reply->outgoingDataBuffer);
-    else
+    else if (reply->outgoingData) {
         device = QNonContiguousByteDeviceFactory::create(reply->outgoingData);
+    } else {
+        return 0;
+    }
 
     bool bufferDisallowed =
             reply->request.attribute(QNetworkRequest::DoNotBufferUploadDataAttribute,
@@ -322,6 +327,11 @@ void QNetworkAccessBackend::authenticationRequired(QAuthenticator *authenticator
     manager->authenticationRequired(this, authenticator);
 }
 
+void QNetworkAccessBackend::cacheCredentials(QAuthenticator *authenticator)
+{
+    manager->addCredentials(this->reply->url, authenticator);
+}
+
 void QNetworkAccessBackend::metaDataChanged()
 {
     reply->metaDataChanged();
@@ -340,5 +350,39 @@ void QNetworkAccessBackend::sslErrors(const QList<QSslError> &errors)
     Q_UNUSED(errors);
 #endif
 }
+
+#ifndef QT_NO_BEARERMANAGEMENT
+
+/*!
+    Starts the backend.  Returns true if the backend is started.  Returns false if the backend
+    could not be started due to an unopened or roaming session.  The caller should recall this
+    function once the session has been opened or the roaming process has finished.
+*/
+bool QNetworkAccessBackend::start()
+{
+    if (!manager->networkSession) {
+        open();
+        return true;
+    }
+
+    // This is not ideal.
+    const QString host = reply->url.host();
+    if (host == QLatin1String("localhost") ||
+        QHostAddress(host) == QHostAddress::LocalHost ||
+        QHostAddress(host) == QHostAddress::LocalHostIPv6) {
+        // Don't need an open session for localhost access.
+        open();
+        return true;
+    }
+
+    if (manager->networkSession->isOpen() &&
+        manager->networkSession->state() == QNetworkSession::Connected) {
+        open();
+        return true;
+    }
+
+    return false;
+}
+#endif
 
 QT_END_NAMESPACE

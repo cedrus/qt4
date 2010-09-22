@@ -43,10 +43,15 @@
 
 #include <QtGui/qpaintdevice.h>
 #include <private/qwidget_p.h>
-#include "qwindowsurface_s60_p.h"
-#include "qpixmap_s60_p.h"
-#include "qt_s60_p.h"
-#include "private/qdrawhelper_p.h"
+#include <private/qwindowsurface_s60_p.h>
+#include <private/qpixmap_s60_p.h>
+#include <private/qt_s60_p.h>
+#include <private/qapplication_p.h>
+#include <private/qdrawhelper_p.h>
+
+#ifdef QT_GRAPHICSSYSTEM_RUNTIME
+#include <private/qgraphicssystem_runtime_p.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -62,10 +67,14 @@ QS60WindowSurface::QS60WindowSurface(QWidget* widget)
 
     TDisplayMode mode = S60->screenDevice()->DisplayMode();
     bool isOpaque = qt_widget_private(widget)->isOpaque;
-    if (mode == EColor16MA && isOpaque)
-        mode = EColor16MU; // Faster since 16MU -> 16MA is typically accelerated
-    else if (mode == EColor16MU && !isOpaque)
-        mode = EColor16MA; // Try for transparency anyway
+    if (isOpaque) {
+        mode = EColor16MU;
+    } else  {
+        if (QSysInfo::symbianVersion() >= QSysInfo::SV_SF_3)
+            mode = Q_SYMBIAN_ECOLOR16MAP; // Symbian^3 WServ has support for ARGB32_PRE
+        else
+            mode = EColor16MA; // Symbian prior to Symbian^3 sw accelerates EColor16MA
+    }
 
     // We create empty CFbsBitmap here -> it will be resized in setGeometry
     CFbsBitmap *bitmap = q_check_ptr(new CFbsBitmap);	// CBase derived object needs check on new
@@ -79,13 +88,35 @@ QS60WindowSurface::QS60WindowSurface(QWidget* widget)
 
     setStaticContentsSupport(true);
 }
+
 QS60WindowSurface::~QS60WindowSurface()
 {
+#if defined(QT_GRAPHICSSYSTEM_RUNTIME) && defined(Q_SYMBIAN_SUPPORTS_SURFACES)
+    if(QApplicationPrivate::runtime_graphics_system) {
+        QRuntimeGraphicsSystem *runtimeGraphicsSystem =
+                static_cast<QRuntimeGraphicsSystem*>(QApplicationPrivate::graphics_system);
+        if(runtimeGraphicsSystem->graphicsSystemName() == QLatin1String("openvg")) {
+
+            // Graphics system has been switched from raster to openvg.
+            // Issue empty redraw to clear the UI surface
+
+            QWidget *w = window();
+            RWindow *const window = static_cast<RWindow *>(w->winId()->DrawableWindow());
+            window->BeginRedraw();
+            window->EndRedraw();
+        }
+    }
+#endif
+
     delete d_ptr;
 }
 
 void QS60WindowSurface::beginPaint(const QRegion &rgn)
 {
+#ifdef Q_SYMBIAN_SUPPORTS_SURFACES
+    S60->wsSession().Finish();
+#endif
+
     if (!qt_widget_private(window())->isOpaque) {
         QS60PixmapData *pixmapData = static_cast<QS60PixmapData *>(d_ptr->device.data_ptr().data());
         pixmapData->beginDataAccess();

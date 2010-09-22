@@ -911,6 +911,7 @@ void QPlainTextEditPrivate::pageUpDown(QTextCursor::MoveOperation op, QTextCurso
         setTopBlock(block.blockNumber(), line);
 
         if (moveCursor) {
+            cursor.setVisualNavigation(true);
             // move using movePosition to keep the cursor's x
             lastY += verticalOffset();
             bool moved = false;
@@ -943,8 +944,8 @@ void QPlainTextEditPrivate::_q_adjustScrollbars()
     int vSliderLength = 0;
     if (!centerOnScroll && q->isVisible()) {
         QTextBlock block = doc->lastBlock();
-        const int visible = static_cast<int>(viewport->rect().height() - margin - 1);
-        int y = 0;
+        const qreal visible = viewport->rect().height() - margin - 1;
+        qreal y = 0;
         int visibleFromBottom = 0;
 
         while (block.isValid()) {
@@ -952,7 +953,7 @@ void QPlainTextEditPrivate::_q_adjustScrollbars()
                 block = block.previous();
                 continue;
             }
-            y += int(documentLayout->blockBoundingRect(block).height());
+            y += documentLayout->blockBoundingRect(block).height();
 
             QTextLayout *layout = block.layout();
             int layoutLineCount = layout->lineCount();
@@ -961,7 +962,7 @@ void QPlainTextEditPrivate::_q_adjustScrollbars()
                 while (lineNumber < layoutLineCount) {
                     QTextLine line = layout->lineAt(lineNumber);
                     const QRectF lr = line.naturalTextRect();
-                    if (int(lr.top()) >= y - visible)
+                    if (lr.top() >= y - visible)
                         break;
                     ++lineNumber;
                 }
@@ -1319,6 +1320,26 @@ QTextCursor QPlainTextEdit::textCursor() const
     return d->control->textCursor();
 }
 
+/*!
+    Returns the reference of the anchor at position \a pos, or an
+    empty string if no anchor exists at that point.
+
+    \since 4.7
+ */
+QString QPlainTextEdit::anchorAt(const QPoint &pos) const
+{
+    Q_D(const QPlainTextEdit);
+    int cursorPos = d->control->hitTest(pos + QPoint(d->horizontalOffset(),
+                                                     d->verticalOffset()),
+                                        Qt::ExactHit);
+    if (cursorPos < 0)
+        return QString();
+
+    QTextDocumentPrivate *pieceTable = document()->docHandle();
+    QTextDocumentPrivate::FragmentIterator it = pieceTable->find(cursorPos);
+    QTextCharFormat fmt = pieceTable->formatCollection()->charFormat(it->format);
+    return fmt.anchorHref();
+}
 
 /*!
     Undoes the last operation.
@@ -1455,6 +1476,7 @@ bool QPlainTextEdit::event(QEvent *e)
             d->sendControlEvent(e);
     }
 #endif
+#ifndef QT_NO_GESTURES
     else if (e->type() == QEvent::Gesture) {
         QGestureEvent *ge = static_cast<QGestureEvent *>(e);
         QPanGesture *g = static_cast<QPanGesture *>(ge->gesture(Qt::PanGesture));
@@ -1478,6 +1500,7 @@ bool QPlainTextEdit::event(QEvent *e)
         }
         return true;
     }
+#endif // QT_NO_GESTURES
     return QAbstractScrollArea::event(e);
 }
 
@@ -2393,7 +2416,7 @@ void QPlainTextEdit::setReadOnly(bool ro)
     then the focus policy is also automatically set to Qt::ClickFocus.
 
     The default value depends on whether the QPlainTextEdit is read-only
-    or editable, and whether it is a QTextBrowser or not.
+    or editable.
 */
 
 void QPlainTextEdit::setTextInteractionFlags(Qt::TextInteractionFlags flags)

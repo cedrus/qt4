@@ -146,7 +146,8 @@ public:
         NoButton         = 0x00000000,
         LeftButton       = 0x00000001,
         RightButton      = 0x00000002,
-        MidButton        = 0x00000004,
+        MidButton        = 0x00000004, // ### Qt 5: remove me
+        MiddleButton     = MidButton,
         XButton1         = 0x00000008,
         XButton2         = 0x00000010,
         MouseButtonMask  = 0x000000ff
@@ -235,7 +236,8 @@ public:
         TextJustificationForced = 0x10000,
         TextForceLeftToRight = 0x20000,
         TextForceRightToLeft = 0x40000,
-        TextLongestVariant = 0x80000
+        TextLongestVariant = 0x80000,
+        TextBypassShaping = 0x100000
 
 #if defined(QT3_SUPPORT) && !defined(Q_MOC_RUN)
         ,SingleLine = TextSingleLine,
@@ -501,6 +503,17 @@ public:
 
         WA_MergeSoftkeys =  124,
         WA_MergeSoftkeysRecursively =  125,
+
+#if 0 // these values are reserved for Maemo5 - do not re-use them
+        WA_Maemo5NonComposited = 126,
+        WA_Maemo5StackedWindow = 127,
+        WA_Maemo5PortraitOrientation = 128,
+        WA_Maemo5LandscapeOrientation = 129,
+        WA_Maemo5AutoOrientation = 130,
+        WA_Maemo5ShowProgressIndicator = 131,
+#endif
+
+        WA_X11DoNotAcceptFocus = 132,
 
         // Add new attributes before this line
         WA_AttributeCount
@@ -935,6 +948,8 @@ public:
 #endif
         Key_MediaNext  = 0x01000083,
         Key_MediaRecord = 0x01000084,
+        Key_MediaPause = 0x1000085,
+        Key_MediaTogglePlayPause = 0x1000086,
         Key_HomePage  = 0x01000090,
         Key_Favorites  = 0x01000091,
         Key_Search  = 0x01000092,
@@ -1051,6 +1066,9 @@ public:
         Key_Suspend = 0x0100010c,
         Key_ContrastAdjust = 0x0100010d,
 
+        Key_LaunchG  = 0x0100010e,
+        Key_LaunchH  = 0x0100010f,
+
         Key_MediaLast = 0x0100ffff,
 
         // Keypad navigation keys
@@ -1074,9 +1092,15 @@ public:
         Key_Context2 = 0x01100001,
         Key_Context3 = 0x01100002,
         Key_Context4 = 0x01100003,
-        Key_Call = 0x01100004,
-        Key_Hangup = 0x01100005,
+        Key_Call = 0x01100004,      // set absolute state to in a call (do not toggle state)
+        Key_Hangup = 0x01100005,    // set absolute state to hang up (do not toggle state)
         Key_Flip = 0x01100006,
+        Key_ToggleCallHangup = 0x01100007, // a toggle key for answering, or hanging up, based on current call state
+        Key_VoiceDial = 0x01100008,
+        Key_LastNumberRedial = 0x01100009,
+
+        Key_Camera = 0x01100020,
+        Key_CameraFocus = 0x01100021,
 
         Key_unknown = 0x01ffffff
     };
@@ -1237,7 +1261,10 @@ public:
         BusyCursor,
         OpenHandCursor,
         ClosedHandCursor,
-        LastCursor = ClosedHandCursor,
+        DragCopyCursor,
+        DragMoveCursor,
+        DragLinkCursor,
+        LastCursor = DragLinkCursor,
         BitmapCursor = 24,
         CustomCursor = 25
 
@@ -1534,7 +1561,8 @@ public:
 
     enum LayoutDirection {
         LeftToRight,
-        RightToLeft
+        RightToLeft,
+        LayoutDirectionAuto
     };
 
     enum AnchorPoint {
@@ -1699,6 +1727,7 @@ public:
     };
     Q_DECLARE_FLAGS(TouchPointStates, TouchPointState)
 
+#ifndef QT_NO_GESTURES
     enum GestureState
     {
         NoGesture,
@@ -1724,9 +1753,11 @@ public:
     enum GestureFlag
     {
         DontStartGestureOnChildren = 0x01,
-        ReceivePartialGestures     = 0x02
+        ReceivePartialGestures     = 0x02,
+        IgnoredGesturesPropagateToParent = 0x04
     };
     Q_DECLARE_FLAGS(GestureFlags, GestureFlag)
+#endif // QT_NO_GESTURES
 
     enum NavigationMode
     {
@@ -1756,7 +1787,9 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(Qt::MatchFlags)
 Q_DECLARE_OPERATORS_FOR_FLAGS(Qt::TextInteractionFlags)
 Q_DECLARE_OPERATORS_FOR_FLAGS(Qt::InputMethodHints)
 Q_DECLARE_OPERATORS_FOR_FLAGS(Qt::TouchPointStates)
+#ifndef QT_NO_GESTURES
 Q_DECLARE_OPERATORS_FOR_FLAGS(Qt::GestureFlags)
+#endif
 
 typedef bool (*qInternalCallback)(void **);
 

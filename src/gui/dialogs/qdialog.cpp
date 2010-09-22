@@ -67,12 +67,12 @@ extern bool qt_wince_is_smartphone(); //is defined in qguifunctions_wce.cpp
 #elif defined(Q_OS_SYMBIAN)
 #   include "qfiledialog.h"
 #   include "qfontdialog.h"
-#   include "qcolordialog.h"
 #   include "qwizard.h"
+#   include "private/qt_s60_p.h"
 #endif
 
 #if defined(Q_WS_S60)
-#include "private/qt_s60_p.h"
+#include <AknUtils.h>               // AknLayoutUtils
 #endif
 
 #ifndef SPI_GETSNAPTODEFBUTTON
@@ -258,7 +258,7 @@ QT_BEGIN_NAMESPACE
 
 QDialog::QDialog(QWidget *parent, Qt::WindowFlags f)
     : QWidget(*new QDialogPrivate, parent,
-              f | QFlag((f & Qt::WindowType_Mask) == 0 ? Qt::Dialog : 0))
+              f | ((f & Qt::WindowType_Mask) == 0 ? Qt::Dialog : Qt::WindowType(0)))
 {
 #ifdef Q_WS_WINCE
     if (!qt_wince_is_smartphone())
@@ -295,7 +295,7 @@ QDialog::QDialog(QWidget *parent, const char *name, bool modal, Qt::WindowFlags 
   \internal
 */
 QDialog::QDialog(QDialogPrivate &dd, QWidget *parent, Qt::WindowFlags f)
-    : QWidget(dd, parent, f | QFlag((f & Qt::WindowType_Mask) == 0 ? Qt::Dialog : 0))
+    : QWidget(dd, parent, f | ((f & Qt::WindowType_Mask) == 0 ? Qt::Dialog : Qt::WindowType(0)))
 {
 #ifdef Q_WS_WINCE
     if (!qt_wince_is_smartphone())
@@ -393,7 +393,7 @@ void QDialogPrivate::resetModalitySetByOpen()
     resetModalityTo = -1;
 }
 
-#if defined(Q_WS_WINCE) || defined(Q_WS_S60)
+#if defined(Q_WS_WINCE) || defined(Q_OS_SYMBIAN)
 #ifdef Q_WS_WINCE_WM
 void QDialogPrivate::_q_doneAction()
 {
@@ -413,7 +413,7 @@ bool QDialog::event(QEvent *e)
         accept();
         result = true;
      }
-#else
+#elif defined(Q_WS_S60)
     if ((e->type() == QEvent::StyleChange) || (e->type() == QEvent::Resize )) {
         if (!testAttribute(Qt::WA_Moved)) {
             Qt::WindowStates state = windowState();
@@ -423,6 +423,7 @@ bool QDialog::event(QEvent *e)
                 setWindowState(state);
         }
     }
+    // TODO is Symbian, non-S60 behaviour required?
 #endif
     return result;
 }
@@ -527,14 +528,19 @@ int QDialog::exec()
 #endif //QT_NO_MENUBAR
 #endif //Q_WS_WINCE_WM
 
+    bool showSystemDialogFullScreen = false;
 #ifdef Q_OS_SYMBIAN
     if (qobject_cast<QFileDialog *>(this) || qobject_cast<QFontDialog *>(this) ||
-        qobject_cast<QColorDialog *>(this) || qobject_cast<QWizard *>(this))
-        showMaximized();
-    else
+        qobject_cast<QWizard *>(this)) {
+        showSystemDialogFullScreen = true;
+    }
 #endif // Q_OS_SYMBIAN
 
-        show();
+    if (showSystemDialogFullScreen) {
+        setWindowFlags(windowFlags() | Qt::WindowSoftkeysVisibleHint);
+        setWindowState(Qt::WindowFullScreen);
+    }
+    show();
 
 #ifdef Q_WS_MAC
     d->mac_nativeDialogModalHelp();
@@ -641,13 +647,14 @@ void QDialog::contextMenuEvent(QContextMenuEvent *e)
     while (w && w->whatsThis().size() == 0 && !w->testAttribute(Qt::WA_CustomWhatsThis))
         w = w->isWindow() ? 0 : w->parentWidget();
     if (w) {
-        QMenu p(this);
-        QAction *wt = p.addAction(tr("What's This?"));
-        if (p.exec(e->globalPos()) == wt) {
+        QWeakPointer<QMenu> p = new QMenu(this);
+        QAction *wt = p.data()->addAction(tr("What's This?"));
+        if (p.data()->exec(e->globalPos()) == wt) {
             QHelpEvent e(QEvent::WhatsThis, w->rect().center(),
                          w->mapToGlobal(w->rect().center()));
             QApplication::sendEvent(w, &e);
         }
+        delete p.data();
     }
 #endif
 }
@@ -817,8 +824,8 @@ void QDialog::adjustPosition(QWidget* w)
         return;
 #endif
 
-#ifdef Q_WS_S60
-    if (s60AdjustedPosition())
+#ifdef Q_OS_SYMBIAN
+    if (symbianAdjustedPosition())
         //dialog has already been positioned
         return;
 #endif
@@ -886,13 +893,12 @@ void QDialog::adjustPosition(QWidget* w)
     move(p);
 }
 
-#if defined(Q_WS_S60)
+#if defined(Q_OS_SYMBIAN)
 /*! \internal */
-bool QDialog::s60AdjustedPosition()
+bool QDialog::symbianAdjustedPosition()
 {
+#if defined(Q_WS_S60)
     QPoint p;
-    const QSize mainAreaSize = QApplication::desktop()->availableGeometry(QCursor::pos()).size();
-    const int statusPaneHeight = (S60->screenHeightInPixels - mainAreaSize.height())>>1;
     const bool doS60Positioning = !(isFullScreen()||isMaximized());
     if (doS60Positioning) {
         // naive way to deduce screen orientation
@@ -936,6 +942,10 @@ bool QDialog::s60AdjustedPosition()
         move(p);
     }
     return doS60Positioning;
+#else
+    // TODO - check positioning requirement for Symbian, non-s60
+    return false;
+#endif
 }
 #endif
 

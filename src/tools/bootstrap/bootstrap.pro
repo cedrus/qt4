@@ -95,21 +95,18 @@ macx: {
    LIBS += -framework CoreServices
 }
 
-contains(QT_CONFIG, zlib) {
-   INCLUDEPATH += ../../3rdparty/zlib
-   SOURCES+= \
-        ../3rdparty/zlib/adler32.c \
-        ../3rdparty/zlib/compress.c \
-        ../3rdparty/zlib/crc32.c \
-        ../3rdparty/zlib/deflate.c \
-        ../3rdparty/zlib/gzio.c \
-        ../3rdparty/zlib/inffast.c \
-        ../3rdparty/zlib/inflate.c \
-        ../3rdparty/zlib/inftrees.c \
-        ../3rdparty/zlib/trees.c \
-        ../3rdparty/zlib/uncompr.c \
-        ../3rdparty/zlib/zutil.c
-}
+if(contains(QT_CONFIG, zlib)|cross_compile):include(../../3rdparty/zlib.pri)
+else:include(../../3rdparty/zlib_dependency.pri)
 
 lib.CONFIG = dummy_install
 INSTALLS += lib
+
+# Make dummy "sis" and "freeze" target to keep recursive "make sis/freeze" working.
+sis_target.target = sis
+sis_target.commands =
+sis_target.depends = first
+QMAKE_EXTRA_TARGETS += sis_target
+freeze_target.target = freeze
+freeze_target.commands =
+freeze_target.depends = first
+QMAKE_EXTRA_TARGETS += freeze_target

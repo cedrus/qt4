@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -120,6 +106,8 @@
     this ByteArrayClass object, so that the constructor, when it is invoked, can extract the
     pointer and use it to create a new \c{ByteArray} object.
 
+    \snippet examples/script/customclass/bytearrayclass.cpp 10
+
     \snippet examples/script/customclass/bytearrayclass.cpp 1
 
     The newInstance() function isn't part of the QScriptClass API; its purpose is to offer
@@ -127,6 +115,11 @@
     QByteArray as the internal data of the new object, and return the new object.
     QScriptEngine::newObject() will call the prototype() function of our class, ensuring that
     the prototype of the new object will be the standard \c{ByteArray} prototype.
+
+    QScriptEngine::reportAdditionalMemoryCost() is called to inform the script engine of the
+    memory occupied by the QByteArray. This gives the garbage collector a hint that it should
+    perhaps trigger more frequently, possibly freeing up memory associated with large ByteArray
+    objects that are no longer in use.
 
     \snippet examples/script/customclass/bytearrayclass.cpp 2
 
@@ -158,6 +151,12 @@
     is being set, we resize the underlying QByteArray to the given length. Otherwise, we grab the
     array index that was calculated in the queryProperty() function, enlarge the array if necessary,
     and write the given value to the array.
+
+    \snippet examples/script/customclass/bytearrayclass.cpp 9
+
+    The resize() function is a helper function that resizes the QByteArray to a new size, and,
+    if the new size is greater than the old, reports the additional memory cost to the script
+    engine.
 
     \snippet examples/script/customclass/bytearrayclass.cpp 6
 

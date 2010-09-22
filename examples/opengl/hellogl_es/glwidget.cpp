@@ -6,35 +6,34 @@
 **
 ** This file is part of the examples of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial Usage
-** Licensees holding valid Qt Commercial licenses may use this file in
-** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** $QT_BEGIN_LICENSE:BSD$
+** You may use this file under the terms of the BSD license as follows:
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** "Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions are
+** met:
+**   * Redistributions of source code must retain the above copyright
+**     notice, this list of conditions and the following disclaimer.
+**   * Redistributions in binary form must reproduce the above copyright
+**     notice, this list of conditions and the following disclaimer in
+**     the documentation and/or other materials provided with the
+**     distribution.
+**   * Neither the name of Nokia Corporation and its Subsidiary(-ies) nor
+**     the names of its contributors may be used to endorse or promote
+**     products derived from this software without specific prior written
+**     permission.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
-**
-** If you have questions regarding the use of this file, please contact
-** Nokia at qt-info@nokia.com.
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+** "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
@@ -44,7 +43,6 @@
 #include <math.h>
 
 #include "bubble.h"
-#include "cl_helper.h"
 
 
 const int bubbleNum = 8;
@@ -114,9 +112,9 @@ void GLWidget::paintQtLogo()
 {
     glDisable(GL_TEXTURE_2D);
     glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3,q_vertexTypeEnum,0, createdVertices);
+    glVertexPointer(3,GL_FLOAT,0, createdVertices);
     glEnableClientState(GL_NORMAL_ARRAY);
-    glNormalPointer(q_vertexTypeEnum,0,createdNormals);
+    glNormalPointer(GL_FLOAT,0,createdNormals);
     glDrawArrays(GL_TRIANGLES, 0, m_vertexNumber / 3);
 }
 //! [2]
@@ -125,83 +123,83 @@ void GLWidget::paintTexturedCube()
 {
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_uiTexture);
-    q_vertexType afVertices[] = {
-        f2vt(-0.5), f2vt(0.5), f2vt(0.5), f2vt(0.5),f2vt(-0.5),f2vt(0.5),f2vt(-0.5),f2vt(-0.5),f2vt(0.5),
-        f2vt(0.5), f2vt(-0.5), f2vt(0.5), f2vt(-0.5),f2vt(0.5),f2vt(0.5),f2vt(0.5),f2vt(0.5),f2vt(0.5),
-        f2vt(-0.5), f2vt(-0.5), f2vt(-0.5), f2vt(0.5),f2vt(-0.5),f2vt(-0.5),f2vt(-0.5),f2vt(0.5),f2vt(-0.5),
-        f2vt(0.5), f2vt(0.5), f2vt(-0.5), f2vt(-0.5),f2vt(0.5),f2vt(-0.5),f2vt(0.5),f2vt(-0.5),f2vt(-0.5),
+    GLfloat afVertices[] = {
+        -0.5, 0.5, 0.5, 0.5,-0.5,0.5,-0.5,-0.5,0.5,
+        0.5, -0.5, 0.5, -0.5,0.5,0.5,0.5,0.5,0.5,
+        -0.5, -0.5, -0.5, 0.5,-0.5,-0.5,-0.5,0.5,-0.5,
+        0.5, 0.5, -0.5, -0.5,0.5,-0.5,0.5,-0.5,-0.5,
 
-        f2vt(0.5), f2vt(-0.5), f2vt(-0.5), f2vt(0.5),f2vt(-0.5),f2vt(0.5),f2vt(0.5),f2vt(0.5),f2vt(-0.5),
-        f2vt(0.5), f2vt(0.5), f2vt(0.5), f2vt(0.5),f2vt(0.5),f2vt(-0.5),f2vt(0.5),f2vt(-0.5),f2vt(0.5),
-        f2vt(-0.5), f2vt(0.5), f2vt(-0.5), f2vt(-0.5),f2vt(-0.5),f2vt(0.5),f2vt(-0.5),f2vt(-0.5),f2vt(-0.5),
-        f2vt(-0.5), f2vt(-0.5), f2vt(0.5), f2vt(-0.5),f2vt(0.5),f2vt(-0.5),f2vt(-0.5),f2vt(0.5),f2vt(0.5),
+        0.5, -0.5, -0.5, 0.5,-0.5,0.5,0.5,0.5,-0.5,
+        0.5, 0.5, 0.5, 0.5,0.5,-0.5,0.5,-0.5,0.5,
+        -0.5, 0.5, -0.5, -0.5,-0.5,0.5,-0.5,-0.5,-0.5,
+        -0.5, -0.5, 0.5, -0.5,0.5,-0.5,-0.5,0.5,0.5,
 
-        f2vt(0.5), f2vt(0.5),  f2vt(-0.5), f2vt(-0.5), f2vt(0.5),  f2vt(0.5),  f2vt(-0.5),  f2vt(0.5),  f2vt(-0.5),
-        f2vt(-0.5),  f2vt(0.5),  f2vt(0.5),  f2vt(0.5),  f2vt(0.5),  f2vt(-0.5), f2vt(0.5), f2vt(0.5),  f2vt(0.5),
-        f2vt(-0.5),  f2vt(-0.5), f2vt(-0.5), f2vt(-0.5), f2vt(-0.5), f2vt(0.5),  f2vt(0.5), f2vt(-0.5), f2vt(-0.5),
-        f2vt(0.5), f2vt(-0.5), f2vt(0.5),  f2vt(0.5),  f2vt(-0.5), f2vt(-0.5), f2vt(-0.5),  f2vt(-0.5), f2vt(0.5)
+        0.5, 0.5,  -0.5, -0.5, 0.5,  0.5,  -0.5,  0.5,  -0.5,
+        -0.5,  0.5,  0.5,  0.5,  0.5,  -0.5, 0.5, 0.5,  0.5,
+        -0.5,  -0.5, -0.5, -0.5, -0.5, 0.5,  0.5, -0.5, -0.5,
+        0.5, -0.5, 0.5,  0.5,  -0.5, -0.5, -0.5,  -0.5, 0.5
     };
     glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3,q_vertexTypeEnum,0,afVertices);
+    glVertexPointer(3,GL_FLOAT,0,afVertices);
 
-    q_vertexType afTexCoord[] = {
-        f2vt(0.0f),f2vt(0.0f), f2vt(1.0f),f2vt(1.0f), f2vt(1.0f),f2vt(0.0f),
-        f2vt(1.0f),f2vt(1.0f), f2vt(0.0f),f2vt(0.0f), f2vt(0.0f),f2vt(1.0f),
-        f2vt(1.0f),f2vt(1.0f), f2vt(1.0f),f2vt(0.0f), f2vt(0.0f),f2vt(1.0f),
-        f2vt(0.0f),f2vt(0.0f), f2vt(0.0f),f2vt(1.0f), f2vt(1.0f),f2vt(0.0f),
+    GLfloat afTexCoord[] = {
+        0.0f,0.0f, 1.0f,1.0f, 1.0f,0.0f,
+        1.0f,1.0f, 0.0f,0.0f, 0.0f,1.0f,
+        1.0f,1.0f, 1.0f,0.0f, 0.0f,1.0f,
+        0.0f,0.0f, 0.0f,1.0f, 1.0f,0.0f,
 
-        f2vt(1.0f),f2vt(1.0f), f2vt(1.0f),f2vt(0.0f), f2vt(0.0f),f2vt(1.0f),
-        f2vt(0.0f),f2vt(0.0f), f2vt(0.0f),f2vt(1.0f), f2vt(1.0f),f2vt(0.0f),
-        f2vt(0.0f),f2vt(0.0f), f2vt(1.0f),f2vt(1.0f), f2vt(1.0f),f2vt(0.0f),
-        f2vt(1.0f),f2vt(1.0f), f2vt(0.0f),f2vt(0.0f), f2vt(0.0f),f2vt(1.0f),
+        1.0f,1.0f, 1.0f,0.0f, 0.0f,1.0f,
+        0.0f,0.0f, 0.0f,1.0f, 1.0f,0.0f,
+        0.0f,0.0f, 1.0f,1.0f, 1.0f,0.0f,
+        1.0f,1.0f, 0.0f,0.0f, 0.0f,1.0f,
 
-        f2vt(0.0f),f2vt(1.0f), f2vt(1.0f),f2vt(0.0f), f2vt(1.0f),f2vt(1.0f),
-        f2vt(1.0f),f2vt(0.0f), f2vt(0.0f),f2vt(1.0f), f2vt(0.0f),f2vt(0.0f),
-        f2vt(1.0f),f2vt(0.0f), f2vt(1.0f),f2vt(1.0f), f2vt(0.0f),f2vt(0.0f),
-        f2vt(0.0f),f2vt(1.0f), f2vt(0.0f),f2vt(0.0f), f2vt(1.0f),f2vt(1.0f)
+        0.0f,1.0f, 1.0f,0.0f, 1.0f,1.0f,
+        1.0f,0.0f, 0.0f,1.0f, 0.0f,0.0f,
+        1.0f,0.0f, 1.0f,1.0f, 0.0f,0.0f,
+        0.0f,1.0f, 0.0f,0.0f, 1.0f,1.0f
     };
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glTexCoordPointer(2,q_vertexTypeEnum,0,afTexCoord);
+    glTexCoordPointer(2,GL_FLOAT,0,afTexCoord);
 
-    q_vertexType afNormals[] = {
+    GLfloat afNormals[] = {
 
-        f2vt(0),f2vt(0),f2vt(-1), f2vt(0),f2vt(0),f2vt(-1), f2vt(0),f2vt(0),f2vt(-1),
-        f2vt(0),f2vt(0),f2vt(-1), f2vt(0),f2vt(0),f2vt(-1), f2vt(0),f2vt(0),f2vt(-1),
-        f2vt(0),f2vt(0),f2vt(1), f2vt(0),f2vt(0),f2vt(1), f2vt(0),f2vt(0),f2vt(1),
-        f2vt(0),f2vt(0),f2vt(1), f2vt(0),f2vt(0),f2vt(1), f2vt(0),f2vt(0),f2vt(1),
+        0,0,-1, 0,0,-1, 0,0,-1,
+        0,0,-1, 0,0,-1, 0,0,-1,
+        0,0,1, 0,0,1, 0,0,1,
+        0,0,1, 0,0,1, 0,0,1,
 
-        f2vt(-1),f2vt(0),f2vt(0), f2vt(-1),f2vt(0),f2vt(0), f2vt(-1),f2vt(0),f2vt(0),
-        f2vt(-1),f2vt(0),f2vt(0), f2vt(-1),f2vt(0),f2vt(0), f2vt(-1),f2vt(0),f2vt(0),
-        f2vt(1),f2vt(0),f2vt(0), f2vt(1),f2vt(0),f2vt(0), f2vt(1),f2vt(0),f2vt(0),
-        f2vt(1),f2vt(0),f2vt(0), f2vt(1),f2vt(0),f2vt(0), f2vt(1),f2vt(0),f2vt(0),
+        -1,0,0, -1,0,0, -1,0,0,
+        -1,0,0, -1,0,0, -1,0,0,
+        1,0,0, 1,0,0, 1,0,0,
+        1,0,0, 1,0,0, 1,0,0,
 
-        f2vt(0),f2vt(-1),f2vt(0), f2vt(0),f2vt(-1),f2vt(0), f2vt(0),f2vt(-1),f2vt(0),
-        f2vt(0),f2vt(-1),f2vt(0), f2vt(0),f2vt(-1),f2vt(0), f2vt(0),f2vt(-1),f2vt(0),
-        f2vt(0),f2vt(1),f2vt(0), f2vt(0),f2vt(1),f2vt(0), f2vt(0),f2vt(1),f2vt(0),
-        f2vt(0),f2vt(1),f2vt(0), f2vt(0),f2vt(1),f2vt(0), f2vt(0),f2vt(1),f2vt(0)
+        0,-1,0, 0,-1,0, 0,-1,0,
+        0,-1,0, 0,-1,0, 0,-1,0,
+        0,1,0, 0,1,0, 0,1,0,
+        0,1,0, 0,1,0, 0,1,0
     };
     glEnableClientState(GL_NORMAL_ARRAY);
-    glNormalPointer(q_vertexTypeEnum,0,afNormals);
+    glNormalPointer(GL_FLOAT,0,afNormals);
 
     glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
 void GLWidget::initializeGL ()
 {
-    q_glClearColor(f2vt(0.1f), f2vt(0.1f), f2vt(0.2f), f2vt(1.0f));
+    glClearColor(0.1f, 0.1f, 0.2f, 1.0f);
 
     glEnable(GL_TEXTURE_2D);
     glGenTextures(1, &m_uiTexture);
     m_uiTexture = bindTexture(QImage(":/qt.png"));
 
-    q_glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-    q_glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
 
-    q_vertexType aLightPosition[] = {f2vt(0.0f),f2vt(0.3f),f2vt(1.0f),f2vt(0.0f)};
+    GLfloat aLightPosition[] = {0.0f,0.3f,1.0f,0.0f};
 
-    q_glLightv(GL_LIGHT0, GL_SPOT_DIRECTION, aLightPosition);
+    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, aLightPosition);
     m_fAngle = 0;
     m_fScale = 1;
     createGeometry();
@@ -230,12 +228,12 @@ void GLWidget::paintGL()
     //Since OpenGL ES does not support glPush/PopAttrib(GL_ALL_ATTRIB_BITS) 
     //we have to take care of the states ourselves
 
-    q_glClearColor(f2vt(0.1f), f2vt(0.1f), f2vt(0.2f), f2vt(1.0f));
+    glClearColor(0.1f, 0.1f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_TEXTURE_2D);
 
-    q_glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-    q_glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
 
@@ -248,14 +246,14 @@ void GLWidget::paintGL()
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    q_glRotate(f2vt(m_fAngle), f2vt(0.0), f2vt(1.0), f2vt(0.0));
-    q_glRotate(f2vt(m_fAngle), f2vt(1.0), f2vt(0.0), f2vt(0.0));
-    q_glRotate(f2vt(m_fAngle), f2vt(0.0), f2vt(0.0), f2vt(1.0));
-    q_glScale(f2vt(m_fScale), f2vt(m_fScale),f2vt(m_fScale));
-    q_glTranslate(f2vt(0),f2vt(-0.2),f2vt(0));
+    glRotatef(m_fAngle, 0.0f, 1.0f, 0.0f);
+    glRotatef(m_fAngle, 1.0f, 0.0f, 0.0f);
+    glRotatef(m_fAngle, 0.0f, 0.0f, 1.0f);
+    glScalef(m_fScale, m_fScale,m_fScale);
+    glTranslatef(0.0f,-0.2f,0.0f);
 
-    q_vertexType matDiff[] = {f2vt(0.40), f2vt(1.0), f2vt(0.0), f2vt(1.0)};
-    q_glMaterialv(GL_FRONT_AND_BACK, GL_DIFFUSE, matDiff);
+    GLfloat matDiff[] = {0.40f, 1.0f, 0.0f, 1.0f};
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, matDiff);
 
     if (qtLogo)
         paintQtLogo();
@@ -376,11 +374,11 @@ void GLWidget::createGeometry()
 
 //! [1]
     m_vertexNumber = vertices.size();
-    createdVertices = new q_vertexType[m_vertexNumber];
-    createdNormals = new q_vertexType[m_vertexNumber];
+    createdVertices = new GLfloat[m_vertexNumber];
+    createdNormals = new GLfloat[m_vertexNumber];
     for (int i = 0;i < m_vertexNumber;i++) {
-      createdVertices[i] = f2vt(vertices.at(i) * 2);
-      createdNormals[i] = f2vt(normals.at(i));
+      createdVertices[i] = vertices.at(i) * 2;
+      createdNormals[i] = normals.at(i);
     }
     vertices.clear();
     normals.clear();

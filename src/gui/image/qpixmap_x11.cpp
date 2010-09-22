@@ -314,8 +314,8 @@ static int qt_pixmap_serial = 0;
 int Q_GUI_EXPORT qt_x11_preferred_pixmap_depth = 0;
 
 QX11PixmapData::QX11PixmapData(PixelType type)
-    : QPixmapData(type, X11Class), hd(0),
-      flags(Uninitialized), x11_mask(0), picture(0), mask_picture(0), hd2(0), gl_surface(0),
+    : QPixmapData(type, X11Class), gl_surface(0), hd(0),
+      flags(Uninitialized), x11_mask(0), picture(0), mask_picture(0), hd2(0),
       share_mode(QPixmap::ImplicitlyShared), pengine(0)
 {
 }
@@ -1142,7 +1142,7 @@ void QX11PixmapData::fromImage(const QImage &img,
     }
 }
 
-void QX11PixmapData::bitmapFromImage(const QImage &image)
+Qt::HANDLE QX11PixmapData::createBitmapFromImage(const QImage &image)
 {
     QImage img = image.convertToFormat(QImage::Format_MonoLSB);
     const QRgb c0 = QColor(Qt::black).rgb();
@@ -1155,10 +1155,8 @@ void QX11PixmapData::bitmapFromImage(const QImage &image)
 
     char  *bits;
     uchar *tmp_bits;
-    w = img.width();
-    h = img.height();
-    d = 1;
-    is_null = (w <= 0 || h <= 0);
+    int w = img.width();
+    int h = img.height();
     int bpl = (w + 7) / 8;
     int ibpl = img.bytesPerLine();
     if (bpl != ibpl) {
@@ -1177,18 +1175,26 @@ void QX11PixmapData::bitmapFromImage(const QImage &image)
         bits = (char *)img.bits();
         tmp_bits = 0;
     }
-    hd = (Qt::HANDLE)XCreateBitmapFromData(xinfo.display(),
-                                           RootWindow(xinfo.display(), xinfo.screen()),
+    Qt::HANDLE hd = (Qt::HANDLE)XCreateBitmapFromData(X11->display,
+                                           QX11Info::appRootWindow(),
                                            bits, w, h);
+    if (tmp_bits)                                // Avoid purify complaint
+        delete [] tmp_bits;
+    return hd;
+}
 
+void QX11PixmapData::bitmapFromImage(const QImage &image)
+{
+    w = image.width();
+    h = image.height();
+    d = 1;
+    is_null = (w <= 0 || h <= 0);
+    hd = createBitmapFromImage(image);
 #ifndef QT_NO_XRENDER
     if (X11->use_xrender)
         picture = XRenderCreatePicture(X11->display, hd,
                                        XRenderFindStandardFormat(X11->display, PictStandardA1), 0, 0);
 #endif // QT_NO_XRENDER
-
-    if (tmp_bits)                                // Avoid purify complaint
-        delete [] tmp_bits;
 }
 
 void QX11PixmapData::fill(const QColor &fillColor)
@@ -1244,10 +1250,8 @@ void QX11PixmapData::release()
     pengine = 0;
 
     if (!X11) {
-#ifndef QT_NO_DEBUG
-        qWarning("~QX11PixmapData(): QPixmap objects must be destroyed before the QApplication"
-                 " object, otherwise the native pixmap object will be leaked.");
-#endif
+        // At this point, the X server will already have freed our resources,
+        // so there is nothing to do.
         return;
     }
 
@@ -1454,6 +1458,105 @@ int QX11PixmapData::metric(QPaintDevice::PaintDeviceMetric metric) const
     }
 }
 
+struct QXImageWrapper
+{
+    XImage *xi;
+};
+
+bool QX11PixmapData::canTakeQImageFromXImage(const QXImageWrapper &xiWrapper) const
+{
+    XImage *xi = xiWrapper.xi;
+
+    // ARGB32_Premultiplied
+    if (picture && depth() == 32)
+        return true;
+
+    Visual *visual = (Visual *)xinfo.visual();
+
+    // RGB32
+    if (depth() == 24 && xi->bits_per_pixel == 32 && visual->red_mask == 0xff0000
+        && visual->green_mask == 0xff00 && visual->blue_mask == 0xff)
+        return true;
+
+    // RGB16
+    if (depth() == 16 && xi->bits_per_pixel == 16 && visual->red_mask == 0xf800
+        && visual->green_mask == 0x7e0 && visual->blue_mask == 0x1f)
+        return true;
+
+    return false;
+}
+
+QImage QX11PixmapData::takeQImageFromXImage(const QXImageWrapper &xiWrapper) const
+{
+    XImage *xi = xiWrapper.xi;
+
+    QImage::Format format = QImage::Format_ARGB32_Premultiplied;
+    if (depth() == 24)
+        format = QImage::Format_RGB32;
+    else if (depth() == 16)
+        format = QImage::Format_RGB16;
+
+    QImage image((uchar *)xi->data, xi->width, xi->height, xi->bytes_per_line, format);
+    // take ownership
+    image.data_ptr()->own_data = true;
+    xi->data = 0;
+
+    // we may have to swap the byte order
+    if ((QSysInfo::ByteOrder == QSysInfo::LittleEndian && xi->byte_order == MSBFirst)
+        || (QSysInfo::ByteOrder == QSysInfo::BigEndian && xi->byte_order == LSBFirst))
+    {
+        for (int i=0; i < image.height(); i++) {
+            if (depth() == 16) {
+                ushort *p = (ushort*)image.scanLine(i);
+                ushort *end = p + image.width();
+                while (p < end) {
+                    *p = ((*p << 8) & 0xff00) | ((*p >> 8) & 0x00ff);
+                    p++;
+                }
+            } else {
+                uint *p = (uint*)image.scanLine(i);
+                uint *end = p + image.width();
+                while (p < end) {
+                    *p = ((*p << 24) & 0xff000000) | ((*p << 8) & 0x00ff0000)
+                         | ((*p >> 8) & 0x0000ff00) | ((*p >> 24) & 0x000000ff);
+                    p++;
+                }
+            }
+        }
+    }
+
+    // fix-up alpha channel
+    if (format == QImage::Format_RGB32) {
+        QRgb *p = (QRgb *)image.bits();
+        for (int y = 0; y < xi->height; ++y) {
+            for (int x = 0; x < xi->width; ++x)
+                p[x] |= 0xff000000;
+            p += xi->bytes_per_line / 4;
+        }
+    }
+
+    XDestroyImage(xi);
+    return image;
+}
+
+QImage QX11PixmapData::toImage(const QRect &rect) const
+{
+    QXImageWrapper xiWrapper;
+    xiWrapper.xi = XGetImage(X11->display, hd, rect.x(), rect.y(), rect.width(), rect.height(),
+                             AllPlanes, (depth() == 1) ? XYPixmap : ZPixmap);
+
+    Q_CHECK_PTR(xiWrapper.xi);
+    if (!xiWrapper.xi)
+        return QImage();
+
+    if (canTakeQImageFromXImage(xiWrapper))
+        return takeQImageFromXImage(xiWrapper);
+
+    QImage image = toImage(xiWrapper, rect);
+    qSafeXDestroyImage(xiWrapper.xi);
+    return image;
+}
+
 /*!
     Converts the pixmap to a QImage. Returns a null image if the
     conversion fails.
@@ -1471,6 +1574,13 @@ int QX11PixmapData::metric(QPaintDevice::PaintDeviceMetric metric) const
 
 QImage QX11PixmapData::toImage() const
 {
+    return toImage(QRect(0, 0, w, h));
+}
+
+QImage QX11PixmapData::toImage(const QXImageWrapper &xiWrapper, const QRect &rect) const
+{
+    XImage *xi = xiWrapper.xi;
+
     int d = depth();
     Visual *visual = (Visual *)xinfo.visual();
     bool trucol = (visual->c_class >= TrueColor) && d > 1;
@@ -1488,59 +1598,21 @@ QImage QX11PixmapData::toImage() const
         format = QImage::Format_RGB32;
     }
 
-    XImage *xi = XGetImage(X11->display, hd, 0, 0, w, h, AllPlanes,
-                           (d == 1) ? XYPixmap : ZPixmap);
-
-    Q_CHECK_PTR(xi);
-    if (!xi)
-        return QImage();
-
-    if (picture && depth() == 32) {
-        QImage image(w, h, QImage::Format_ARGB32_Premultiplied);
-        memcpy(image.bits(), xi->data, xi->bytes_per_line * xi->height);
-
-        // we may have to swap the byte order
-        if ((QSysInfo::ByteOrder == QSysInfo::LittleEndian && xi->byte_order == MSBFirst)
-            || (QSysInfo::ByteOrder == QSysInfo::BigEndian && xi->byte_order == LSBFirst))
-        {
-            for (int i=0; i < image.height(); i++) {
-                uint *p = (uint*)image.scanLine(i);
-                uint *end = p + image.width();
-                if ((xi->byte_order == LSBFirst && QSysInfo::ByteOrder == QSysInfo::BigEndian)
-                    || (xi->byte_order == MSBFirst && QSysInfo::ByteOrder == QSysInfo::LittleEndian)) {
-                    while (p < end) {
-                        *p = ((*p << 24) & 0xff000000) | ((*p << 8) & 0x00ff0000)
-                             | ((*p >> 8) & 0x0000ff00) | ((*p >> 24) & 0x000000ff);
-                        p++;
-                    }
-                } else if (xi->byte_order == MSBFirst && QSysInfo::ByteOrder == QSysInfo::BigEndian) {
-                    while (p < end) {
-                        *p = ((*p << 16) & 0x00ff0000) | ((*p >> 16) & 0x000000ff)
-                             | ((*p ) & 0xff00ff00);
-                        p++;
-                    }
-                }
-            }
-        }
-
-        // throw away image data
-        qSafeXDestroyImage(xi);
-
-        return image;
-    }
-
     if (d == 1 && xi->bitmap_bit_order == LSBFirst)
         format = QImage::Format_MonoLSB;
     if (x11_mask && format == QImage::Format_RGB32)
         format = QImage::Format_ARGB32;
 
-    QImage image(w, h, format);
+    QImage image(xi->width, xi->height, format);
     if (image.isNull())                        // could not create image
         return image;
 
     QImage alpha;
     if (x11_mask) {
-        alpha = mask().toImage();
+        if (rect.contains(QRect(0, 0, w, h)))
+            alpha = mask().toImage();
+        else
+            alpha = mask().toImage().copy(rect);
     }
     bool ale = alpha.format() == QImage::Format_MonoLSB;
 
@@ -1583,11 +1655,11 @@ QImage QX11PixmapData::toImage() const
         if (bppc > 8 && xi->byte_order == LSBFirst)
             bppc++;
 
-        for (int y = 0; y < h; ++y) {
+        for (int y = 0; y < xi->height; ++y) {
             uchar* asrc = x11_mask ? alpha.scanLine(y) : 0;
             dst = (QRgb *)image.scanLine(y);
             src = (uchar *)xi->data + xi->bytes_per_line*y;
-            for (int x = 0; x < w; x++) {
+            for (int x = 0; x < xi->width; x++) {
                 switch (bppc) {
                 case 8:
                     pixel = *src++;
@@ -1617,8 +1689,8 @@ QImage QX11PixmapData::toImage() const
                     src += 4;
                     break;
                 default:                        // should not really happen
-                    x = w;                        // leave loop
-                    y = h;
+                    x = xi->width;                        // leave loop
+                    y = xi->height;
                     pixel = 0;                // eliminate compiler warning
                     qWarning("QPixmap::convertToImage: Invalid depth %d", bppc);
                 }
@@ -1656,7 +1728,7 @@ QImage QX11PixmapData::toImage() const
     } else if (xi->bits_per_pixel == d) {        // compatible depth
         char *xidata = xi->data;                // copy each scanline
         int bpl = qMin(image.bytesPerLine(),xi->bytes_per_line);
-        for (int y=0; y<h; y++) {
+        for (int y=0; y<xi->height; y++) {
             memcpy(image.scanLine(y), xidata, bpl);
             xidata += xi->bytes_per_line;
         }
@@ -1682,17 +1754,17 @@ QImage QX11PixmapData::toImage() const
         bpl = image.bytesPerLine();
 
         if (x11_mask) {                         // which pixels are used?
-            for (int i = 0; i < h; i++) {
+            for (int i = 0; i < xi->height; i++) {
                 uchar* asrc = alpha.scanLine(i);
                 p = image.scanLine(i);
                 if (ale) {
-                    for (int x = 0; x < w; x++) {
+                    for (int x = 0; x < xi->width; x++) {
                         if (asrc[x >> 3] & (1 << (x & 7)))
                             use[*p] = 1;
                         ++p;
                     }
                 } else {
-                    for (int x = 0; x < w; x++) {
+                    for (int x = 0; x < xi->width; x++) {
                         if (asrc[x >> 3] & (0x80 >> (x & 7)))
                             use[*p] = 1;
                         ++p;
@@ -1700,7 +1772,7 @@ QImage QX11PixmapData::toImage() const
                 }
             }
         } else {
-            for (int i = 0; i < h; i++) {
+            for (int i = 0; i < xi->height; i++) {
                 p = image.scanLine(i);
                 end = p + bpl;
                 while (p < end)
@@ -1712,7 +1784,7 @@ QImage QX11PixmapData::toImage() const
             if (use[i])
                 pix[i] = ncols++;
         }
-        for (int i = 0; i < h; i++) {                        // translate pixels
+        for (int i = 0; i < xi->height; i++) {                        // translate pixels
             p = image.scanLine(i);
             end = p + bpl;
             while (p < end) {
@@ -1732,17 +1804,17 @@ QImage QX11PixmapData::toImage() const
                 // use first pixel in image (as good as any).
                 trans = image.scanLine(0)[0];
             }
-            for (int i = 0; i < h; i++) {
+            for (int i = 0; i < xi->height; i++) {
                 uchar* asrc = alpha.scanLine(i);
                 p = image.scanLine(i);
                 if (ale) {
-                    for (int x = 0; x < w; x++) {
+                    for (int x = 0; x < xi->width; x++) {
                         if (!(asrc[x >> 3] & (1 << (x & 7))))
                             *p = trans;
                         ++p;
                     }
                 } else {
-                    for (int x = 0; x < w; x++) {
+                    for (int x = 0; x < xi->width; x++) {
                         if (!(asrc[x >> 3] & (1 << (7 -(x & 7)))))
                             *p = trans;
                         ++p;
@@ -1759,8 +1831,6 @@ QImage QX11PixmapData::toImage() const
                 image.setColor(j++, 0xff000000 | colors.at(i).rgb());
         }
     }
-
-    qSafeXDestroyImage(xi);
 
     return image;
 }

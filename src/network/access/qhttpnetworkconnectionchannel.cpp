@@ -173,7 +173,7 @@ bool QHttpNetworkConnectionChannel::sendRequest()
         pendingEncrypt = false;
         // if the url contains authentication parameters, use the new ones
         // both channels will use the new authentication parameters
-        if (!request.url().userInfo().isEmpty()) {
+        if (!request.url().userInfo().isEmpty() && request.withCredentials()) {
             QUrl url = request.url();
             QAuthenticator &auth = authenticator;
             if (url.userName() != auth.user()
@@ -187,7 +187,10 @@ bool QHttpNetworkConnectionChannel::sendRequest()
             url.setUserInfo(QString());
             request.setUrl(url);
         }
-        connection->d_func()->createAuthorization(socket, request);
+        // Will only be false if QtWebKit is performing a cross-origin XMLHttpRequest
+        // and withCredentials has not been set to true.
+        if (request.withCredentials())
+            connection->d_func()->createAuthorization(socket, request);
 #ifndef QT_NO_NETWORKPROXY
         QByteArray header = QHttpNetworkRequestPrivate::header(request,
             (connection->d_func()->networkProxy.type() != QNetworkProxy::NoProxy));
@@ -679,7 +682,8 @@ void QHttpNetworkConnectionChannel::allDone()
             close();
         QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
     } else if (alreadyPipelinedRequests.isEmpty()) {
-        QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
+        if (qobject_cast<QHttpNetworkConnection*>(connection))
+            QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
     }
 }
 
@@ -786,7 +790,8 @@ void QHttpNetworkConnectionChannel::handleStatus()
         }
         break;
     default:
-        QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
+        if (qobject_cast<QHttpNetworkConnection*>(connection))
+            QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
     }
 }
 
@@ -834,7 +839,8 @@ void QHttpNetworkConnectionChannel::closeAndResendCurrentRequest()
     requeueCurrentlyPipelinedRequests();
     close();
     resendCurrent = true;
-    QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
+    if (qobject_cast<QHttpNetworkConnection*>(connection))
+        QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
 }
 
 bool QHttpNetworkConnectionChannel::isSocketBusy() const

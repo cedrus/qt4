@@ -390,6 +390,9 @@ static const struct {
     int key;
     const char* name;
 } keyname[] = {
+    //: This and all following "incomprehensible" strings in QShortcut context
+    //: are key names. Please use the localized names appearing on actual
+    //: keyboards or whatever is commonly used.
     { Qt::Key_Space,        QT_TRANSLATE_NOOP("QShortcut", "Space") },
     { Qt::Key_Escape,       QT_TRANSLATE_NOOP("QShortcut", "Esc") },
     { Qt::Key_Tab,          QT_TRANSLATE_NOOP("QShortcut", "Tab") },
@@ -436,6 +439,10 @@ static const struct {
     { Qt::Key_MediaPrevious,              QT_TRANSLATE_NOOP("QShortcut", "Media Previous") },
     { Qt::Key_MediaNext,                  QT_TRANSLATE_NOOP("QShortcut", "Media Next") },
     { Qt::Key_MediaRecord,                QT_TRANSLATE_NOOP("QShortcut", "Media Record") },
+    //: Media player pause button
+    { Qt::Key_MediaPause,                 QT_TRANSLATE_NOOP("QShortcut", "Media Pause") },
+    //: Media player button to toggle between playing and paused
+    { Qt::Key_MediaTogglePlayPause,       QT_TRANSLATE_NOOP("QShortcut", "Toggle Media Play/Pause") },
     { Qt::Key_HomePage,                   QT_TRANSLATE_NOOP("QShortcut", "Home Page") },
     { Qt::Key_Favorites,                  QT_TRANSLATE_NOOP("QShortcut", "Favorites") },
     { Qt::Key_Search,                     QT_TRANSLATE_NOOP("QShortcut", "Search") },
@@ -572,14 +579,61 @@ static const struct {
 
     // --------------------------------------------------------------
     // Device keys
-    { Qt::Key_Context1,     QT_TRANSLATE_NOOP("QShortcut", "Context1") },
-    { Qt::Key_Context2,     QT_TRANSLATE_NOOP("QShortcut", "Context2") },
-    { Qt::Key_Context3,     QT_TRANSLATE_NOOP("QShortcut", "Context3") },
-    { Qt::Key_Context4,     QT_TRANSLATE_NOOP("QShortcut", "Context4") },
-    { Qt::Key_Call,         QT_TRANSLATE_NOOP("QShortcut", "Call") },
-    { Qt::Key_Hangup,       QT_TRANSLATE_NOOP("QShortcut", "Hangup") },
-    { Qt::Key_Flip,         QT_TRANSLATE_NOOP("QShortcut", "Flip") },
+    { Qt::Key_Context1,         QT_TRANSLATE_NOOP("QShortcut", "Context1") },
+    { Qt::Key_Context2,         QT_TRANSLATE_NOOP("QShortcut", "Context2") },
+    { Qt::Key_Context3,         QT_TRANSLATE_NOOP("QShortcut", "Context3") },
+    { Qt::Key_Context4,         QT_TRANSLATE_NOOP("QShortcut", "Context4") },
+    //: Button to start a call (note: a separate button is used to end the call)
+    { Qt::Key_Call,             QT_TRANSLATE_NOOP("QShortcut", "Call") },
+    //: Button to end a call (note: a separate button is used to start the call)
+    { Qt::Key_Hangup,           QT_TRANSLATE_NOOP("QShortcut", "Hangup") },
+    //: Button that will hang up if we're in call, or make a call if we're not.
+    { Qt::Key_ToggleCallHangup, QT_TRANSLATE_NOOP("QShortcut", "Toggle Call/Hangup") },
+    { Qt::Key_Flip,             QT_TRANSLATE_NOOP("QShortcut", "Flip") },
+    //: Button to trigger voice dialling
+    { Qt::Key_VoiceDial,        QT_TRANSLATE_NOOP("QShortcut", "Voice Dial") },
+    //: Button to redial the last number called
+    { Qt::Key_LastNumberRedial, QT_TRANSLATE_NOOP("QShortcut", "Last Number Redial") },
+    //: Button to trigger the camera shutter (take a picture)
+    { Qt::Key_Camera,           QT_TRANSLATE_NOOP("QShortcut", "Camera Shutter") },
+    //: Button to focus the camera
+    { Qt::Key_CameraFocus,      QT_TRANSLATE_NOOP("QShortcut", "Camera Focus") },
 
+    // --------------------------------------------------------------
+    // Japanese keyboard support
+    { Qt::Key_Kanji,            QT_TRANSLATE_NOOP("QShortcut", "Kanji") },
+    { Qt::Key_Muhenkan,         QT_TRANSLATE_NOOP("QShortcut", "Muhenkan") },
+    { Qt::Key_Henkan,           QT_TRANSLATE_NOOP("QShortcut", "Henkan") },
+    { Qt::Key_Romaji,           QT_TRANSLATE_NOOP("QShortcut", "Romaji") },
+    { Qt::Key_Hiragana,         QT_TRANSLATE_NOOP("QShortcut", "Hiragana") },
+    { Qt::Key_Katakana,         QT_TRANSLATE_NOOP("QShortcut", "Katakana") },
+    { Qt::Key_Hiragana_Katakana,QT_TRANSLATE_NOOP("QShortcut", "Hiragana Katakana") },
+    { Qt::Key_Zenkaku,          QT_TRANSLATE_NOOP("QShortcut", "Zenkaku") },
+    { Qt::Key_Hankaku,          QT_TRANSLATE_NOOP("QShortcut", "Hankaku") },
+    { Qt::Key_Zenkaku_Hankaku,  QT_TRANSLATE_NOOP("QShortcut", "Zenkaku Hankaku") },
+    { Qt::Key_Touroku,          QT_TRANSLATE_NOOP("QShortcut", "Touroku") },
+    { Qt::Key_Massyo,           QT_TRANSLATE_NOOP("QShortcut", "Massyo") },
+    { Qt::Key_Kana_Lock,        QT_TRANSLATE_NOOP("QShortcut", "Kana Lock") },
+    { Qt::Key_Kana_Shift,       QT_TRANSLATE_NOOP("QShortcut", "Kana Shift") },
+    { Qt::Key_Eisu_Shift,       QT_TRANSLATE_NOOP("QShortcut", "Eisu Shift") },
+    { Qt::Key_Eisu_toggle,      QT_TRANSLATE_NOOP("QShortcut", "Eisu toggle") },
+    { Qt::Key_Codeinput,        QT_TRANSLATE_NOOP("QShortcut", "Code input") },
+    { Qt::Key_MultipleCandidate,QT_TRANSLATE_NOOP("QShortcut", "Multiple Candidate") },
+    { Qt::Key_PreviousCandidate,QT_TRANSLATE_NOOP("QShortcut", "Previous Candidate") },
+
+    // --------------------------------------------------------------
+    // Korean keyboard support
+    { Qt::Key_Hangul,          QT_TRANSLATE_NOOP("QShortcut", "Hangul") },
+    { Qt::Key_Hangul_Start,    QT_TRANSLATE_NOOP("QShortcut", "Hangul Start") },
+    { Qt::Key_Hangul_End,      QT_TRANSLATE_NOOP("QShortcut", "Hangul End") },
+    { Qt::Key_Hangul_Hanja,    QT_TRANSLATE_NOOP("QShortcut", "Hangul Hanja") },
+    { Qt::Key_Hangul_Jamo,     QT_TRANSLATE_NOOP("QShortcut", "Hangul Jamo") },
+    { Qt::Key_Hangul_Romaja,   QT_TRANSLATE_NOOP("QShortcut", "Hangul Romaja") },
+    { Qt::Key_Hangul_Jeonja,   QT_TRANSLATE_NOOP("QShortcut", "Hangul Jeonja") },
+    { Qt::Key_Hangul_Banja,    QT_TRANSLATE_NOOP("QShortcut", "Hangul Banja") },
+    { Qt::Key_Hangul_PreHanja, QT_TRANSLATE_NOOP("QShortcut", "Hangul PreHanja") },
+    { Qt::Key_Hangul_PostHanja,QT_TRANSLATE_NOOP("QShortcut", "Hangul PostHanja") },
+    { Qt::Key_Hangul_Special,  QT_TRANSLATE_NOOP("QShortcut", "Hangul Special") },
 
     { 0, 0 }
 };
@@ -696,6 +750,7 @@ const QKeyBinding QKeySequencePrivate::keyBindings[] = {
     {QKeySequence::Redo,                    1,          Qt::CTRL | Qt::SHIFT | Qt::Key_Z,       QApplicationPrivate::KB_Mac}, //different priority from above
     {QKeySequence::PreviousChild,           1,          Qt::CTRL | Qt::SHIFT | Qt::Key_Backtab, QApplicationPrivate::KB_Win | QApplicationPrivate::KB_X11},
     {QKeySequence::PreviousChild,           0,          Qt::CTRL | Qt::SHIFT | Qt::Key_Backtab, QApplicationPrivate::KB_Mac },//different priority from above 
+    {QKeySequence::Paste,                   0,          Qt::CTRL | Qt::SHIFT | Qt::Key_Insert,  QApplicationPrivate::KB_X11},
     {QKeySequence::SelectStartOfDocument,   0,          Qt::CTRL | Qt::SHIFT | Qt::Key_Home,    QApplicationPrivate::KB_Win | QApplicationPrivate::KB_X11 | QApplicationPrivate::KB_S60},
     {QKeySequence::SelectEndOfDocument,     0,          Qt::CTRL | Qt::SHIFT | Qt::Key_End,     QApplicationPrivate::KB_Win | QApplicationPrivate::KB_X11 | QApplicationPrivate::KB_S60},
     {QKeySequence::SelectPreviousWord,      0,          Qt::CTRL | Qt::SHIFT | Qt::Key_Left,    QApplicationPrivate::KB_Win | QApplicationPrivate::KB_X11 | QApplicationPrivate::KB_S60},
@@ -861,6 +916,8 @@ QKeySequence::QKeySequence()
     Up to four key codes may be entered by separating them with
     commas, e.g. "Alt+X,Ctrl+S,Q".
 
+    \a key should be in NativeText format.
+
     This constructor is typically used with \link QObject::tr() tr
     \endlink(), so that shortcut keys can be replaced in
     translations:
@@ -874,6 +931,16 @@ QKeySequence::QKeySequence(const QString &key)
 {
     d = new QKeySequencePrivate();
     assign(key);
+}
+
+/*!
+    \since 4.x
+    Creates a key sequence from the \a key string based on \a format.
+*/
+QKeySequence::QKeySequence(const QString &key, QKeySequence::SequenceFormat format)
+{
+    d = new QKeySequencePrivate();
+    assign(key, format);
 }
 
 /*!
@@ -1055,8 +1122,23 @@ QKeySequence QKeySequence::mnemonic(const QString &text)
     contain up to four key codes, provided they are separated by a
     comma; for example, "Alt+X,Ctrl+S,Z". The return value is the
     number of key codes added.
+    \a keys should be in NativeText format.
 */
 int QKeySequence::assign(const QString &ks)
+{
+    return assign(ks, NativeText);
+}
+
+/*!
+    \fn int QKeySequence::assign(const QString &keys, QKeySequence::SequenceFormat format)
+    \since 4.x
+
+    Adds the given \a keys to the key sequence (based on \a format).
+    \a keys may contain up to four key codes, provided they are
+    separated by a comma; for example, "Alt+X,Ctrl+S,Z". The return
+    value is the number of key codes added.
+*/
+int QKeySequence::assign(const QString &ks, QKeySequence::SequenceFormat format)
 {
     QString keyseq = ks;
     QString part;
@@ -1086,7 +1168,7 @@ int QKeySequence::assign(const QString &ks)
         }
         part = keyseq.left(-1 == p ? keyseq.length() : p - diff);
         keyseq = keyseq.right(-1 == p ? 0 : keyseq.length() - (p + 1));
-        d->key[n] = decodeString(part);
+        d->key[n] = QKeySequencePrivate::decodeString(part, format);
         ++n;
     }
     return n;
@@ -1557,12 +1639,7 @@ QString QKeySequence::toString(SequenceFormat format) const
 */
 QKeySequence QKeySequence::fromString(const QString &str, SequenceFormat format)
 {
-    QStringList sl = str.split(QLatin1String(", "));
-    int keys[4] = {0, 0, 0, 0};
-    int total = qMin(sl.count(), 4);
-    for (int i = 0; i < total; ++i)
-        keys[i] = QKeySequencePrivate::decodeString(sl[i], format);
-    return QKeySequence(keys[0], keys[1], keys[2], keys[3]);
+    return QKeySequence(str, format);
 }
 
 /*****************************************************************************

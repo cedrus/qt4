@@ -1466,9 +1466,14 @@ void QRegExpMatchState::match(const QChar *str0, int len0, int pos0,
 #ifndef QT_NO_REGEXP_CAPTURE
         for (int i = 0; i < numCaptures; ++i) {
             int j = eng->captureForOfficialCapture.at(i);
-            int len = capEnd[j] - capBegin[j];
-            *c++ = (len > 0) ? pos + capBegin[j] : 0;
-            *c++ = len;
+            if (capBegin[j] != EmptyCapture) {
+                int len = capEnd[j] - capBegin[j];
+                *c++ = (len > 0) ? pos + capBegin[j] : 0;
+                *c++ = len;
+            } else {
+                *c++ = -1;
+                *c++ = -1;
+            }
         }
 #endif
     } else {
@@ -4454,7 +4459,7 @@ QString QRegExp::escape(const QString &str)
 
     Writes the regular expression \a regExp to stream \a out.
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 QDataStream &operator<<(QDataStream &out, const QRegExp &regExp)
 {
@@ -4468,7 +4473,7 @@ QDataStream &operator<<(QDataStream &out, const QRegExp &regExp)
 
     Reads a regular expression from stream \a in into \a regExp.
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 QDataStream &operator>>(QDataStream &in, QRegExp &regExp)
 {

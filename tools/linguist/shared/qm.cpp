@@ -564,7 +564,7 @@ bool loadQM(Translator &translator, QIODevice &dev, ConversionData &cd)
     Translator::languageAndCountry(translator.languageCode(), &l, &c);
     QStringList numerusForms;
     bool guessPlurals = true;
-    if (getNumerusInfo(l, c, 0, &numerusForms))
+    if (getNumerusInfo(l, c, 0, &numerusForms, 0))
         guessPlurals = (numerusForms.count() == 1);
 
     QString context, contextUtf8;
@@ -704,7 +704,7 @@ static bool saveQM(const Translator &translator, QIODevice &dev, ConversionData 
     QLocale::Country c;
     Translator::languageAndCountry(translator.languageCode(), &l, &c);
     QByteArray rules;
-    if (getNumerusInfo(l, c, &rules, 0))
+    if (getNumerusInfo(l, c, &rules, 0, 0))
         releaser.setNumerusRules(rules);
     releaser.setCodecName(translator.codecName());
 
@@ -773,11 +773,11 @@ static bool saveQM(const Translator &translator, QIODevice &dev, ConversionData 
     if (saved && cd.isVerbose()) {
         int generatedCount = finished + unfinished;
         cd.appendError(QCoreApplication::translate("LRelease",
-            "    Generated %n translation(s) (%1 finished and %2 unfinished)\n", 0,
+            "    Generated %n translation(s) (%1 finished and %2 unfinished)", 0,
             QCoreApplication::CodecForTr, generatedCount).arg(finished).arg(unfinished));
         if (untranslated)
             cd.appendError(QCoreApplication::translate("LRelease",
-                "    Ignored %n untranslated source text(s)\n", 0,
+                "    Ignored %n untranslated source text(s)", 0,
                 QCoreApplication::CodecForTr, untranslated));
     }
     return saved;

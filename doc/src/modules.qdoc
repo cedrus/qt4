@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -41,7 +27,7 @@
 
 /*!
     \group modules
-    \title All Qt Modules
+    \title All Modules
     \startpage index.html Qt Reference Documentation
     \nextpage QtCore
     
@@ -65,6 +51,7 @@
     \row \o \l{QtWebKit} \o Classes for displaying and editing Web content
     \row \o \l{QtXml} \o Classes for handling XML
     \row \o \l{QtXmlPatterns} \o An XQuery & XPath engine for XML and custom data models
+    \row \o \l{QtDeclarative} \o An engine for declaratively building fluid user interfaces.
     \row \o \l{Phonon Module}{Phonon} \o Multimedia framework classes
     \row \o \l{Qt3Support} \o Qt 3 compatibility classes
     \header \o {2,1} \bold{Modules for working with Qt's tools}
@@ -95,8 +82,8 @@
 /*!
     \module QtCore
     \title QtCore Module
-    \contentspage All Qt Modules
-    \previouspage All Qt Modules
+    \contentspage All Modules
+    \previouspage All Modules
     \nextpage QtGui
     \ingroup modules
 
@@ -108,15 +95,13 @@
     definitions of the module's classes, use the following directive:
 
     \snippet doc/src/snippets/code/doc_src_qtcore.qdoc 0
-
-    The QtCore module is part of all \l{Qt editions}.
 */
 
 
 /*!
     \module QtGui
     \title QtGui Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtCore
     \nextpage QtNetwork
     \ingroup modules
@@ -127,15 +112,12 @@
     following directive:
 
     \snippet doc/src/snippets/code/doc_src_qtgui.qdoc 0
-
-    The QtGui module is part of the \l{Qt GUI Framework Edition},
-    the \l{Qt Full Framework Edition}, and the \l{Open Source Versions of Qt}.
 */
 
 /*!
     \module QtMultimedia
     \title QtMultimedia Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtCore
     \nextpage QtNetwork
     \ingroup modules
@@ -159,7 +141,7 @@
 /*!
     \module QtNetwork
     \title QtNetwork Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtMultimedia
     \nextpage QtOpenGL
     \ingroup modules
@@ -176,15 +158,12 @@
     .pro file:
 
     \snippet doc/src/snippets/code/doc_src_qtnetwork.qdoc 0
-
-    The QtNetwork module is part of the \l{Qt Full Framework Edition} and the
-    \l{Open Source Versions of Qt}.
 */
 
 /*!
     \module QtOpenGL
     \title QtOpenGL Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtNetwork
     \nextpage QtOpenVG
     \ingroup modules
@@ -224,9 +203,9 @@
     OpenGL module can take advantage of the whole Qt API for
     non-OpenGL-specific GUI functionality.
 
-    The QtOpenGL module is part of the \l{Qt Full Framework Edition} and the
-    \l{Open Source Versions of Qt}. It is available on Windows, X11, and Mac OS X.
-    \l{Qt for Embedded Linux and OpenGL} supports OpenGL ES (OpenGL for Embedded Systems).
+    The QtOpenGL module is available on Windows, X11 and Mac OS X.
+    \l{Qt for Embedded Linux and OpenGL} supports OpenGL ES (OpenGL for
+    Embedded Systems).
     \note To be able to use the OpenGL API in \l{Qt for Embedded Linux}, it must be
     integrated with the Q Window System (QWS). See the
     \l{Qt for Embedded Linux and OpenGL} documentation for details.
@@ -237,7 +216,7 @@
     \module QtOpenVG
     \title QtOpenVG Module
     \since 4.6
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtOpenGL
     \nextpage QtScript
     \ingroup modules
@@ -292,7 +271,7 @@
 	\module QtScript
 	\title QtScript Module
 	\since 4.3
-	\contentspage All Qt Modules
+	\contentspage All Modules
 	\previouspage QtOpenVG
 	\nextpage QtScriptTools
 	\ingroup modules
@@ -302,8 +281,6 @@
 	The QtScript module only provides core scripting facilities; the
 	QtScriptTools module provides additional Qt Script-related
 	components that application developers may find useful.
-
-	\tableofcontents
 
 	To include the definitions of the module's classes, use the
 	following directive:
@@ -317,9 +294,6 @@
         For detailed information on how to make your application
         scriptable with QtScript, see \l{Making Applications
         Scriptable}.
-
-	The QtScript module is part of the \l{Qt Full Framework Edition} and the
-	\l{Open Source Versions of Qt}.
 
         \section1 License Information
 
@@ -357,14 +331,12 @@
   \module QtScriptTools
   \title QtScriptTools Module
   \since 4.5
-  \contentspage All Qt Modules
+  \contentspage All Modules
   \previouspage QtScript
   \nextpage QtSql
   \ingroup modules
 
   \brief The QtScriptTools module provides additional components for applications that use Qt Script.
-
-  \tableofcontents
 
   \section1 Configuring the Build Process
 
@@ -378,15 +350,12 @@
   To link against the module, add this line to your \l qmake \c .pro file:
 
   \snippet doc/src/snippets/code/doc.src.qtscripttools.qdoc 1
-
-  The QtScriptTools module is part of the \l{Qt Full Framework Edition} and
-  the \l{Open Source Versions of Qt}.
 */
 
 /*!
     \module QtSql
     \title QtSql Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtScript
     \nextpage QtSvg
     \ingroup modules
@@ -401,9 +370,6 @@
 
     \snippet doc/src/snippets/code/doc_src_qtsql.qdoc 1
 
-    The QtSql module is part of the \l{Qt Full Framework Edition} and the
-    \l{Open Source Versions of Qt}.
-
     See the \l{SQL Programming} guide for information about using this
     module in your applications.
 */
@@ -412,7 +378,7 @@
         \module QtSvg
         \title QtSvg Module
         \since 4.1
-        \contentspage All Qt Modules
+        \contentspage All Modules
         \previouspage QtSql
         \nextpage QtWebKit
         \ingroup modules
@@ -428,9 +394,6 @@
         .pro file:
 
         \snippet doc/src/snippets/code/doc_src_qtsvg.qdoc 1
-
-        The QtSvg module is part of the \l{Qt Full Framework Edition} and the
-        \l{Open Source Versions of Qt}.
 
         \section1 License Information
 
@@ -466,7 +429,7 @@
 /*!
     \module QtXml
     \title QtXml Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtSvg
     \nextpage QtXmlPatterns
     \ingroup modules
@@ -487,16 +450,13 @@
     Further XML support is provided by the \l{Qt Solutions} group who
     provide, for example, classes that support SOAP and MML with the
     Qt XML classes. 
-
-    This module is part of the \l{Qt Full Framework Edition} and the
-    \l{Open Source Versions of Qt}.
 */
 
 /*!
     \module QtXmlPatterns
     \title QtXmlPatterns Module
     \since 4.4
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtXml
     \nextpage Phonon Module
     \ingroup modules
@@ -514,15 +474,13 @@
 
     \snippet doc/src/snippets/code/doc_src_qtxmlpatterns.qdoc 1
 
-    This module is part of the \l{Qt Full Framework Edition} and the
-    \l{Open Source Versions of Qt}.
-
-    \section1 Further Links
+    \section1 Further Reading
 
     General overviews of XQuery and XSchema can be found in the
     \l{Using XML Technologies} document.
 
-    An introduction to the XQuery language can be found in \l{A Short Path to XQuery}.
+    An introduction to the XQuery language can be found in
+    \l{A Short Path to XQuery}.
 
     \section1 License Information
 
@@ -578,7 +536,7 @@
     \page phonon-module.html
     \module Phonon
     \title Phonon Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtXmlPatterns
     \nextpage Qt3Support
     \ingroup modules
@@ -599,9 +557,6 @@
     an application is compiled and linked appropriately:
 
     \snippet doc/src/snippets/code/doc_src_phonon.qdoc 1
-
-    The Phonon module is part of the \l{Qt Full Framework Edition} and the
-    \l{Open Source Versions of Qt}.
 
     \section1 Qt Backends
 
@@ -651,7 +606,7 @@
 /*!
     \module Qt3Support
     \title Qt3Support Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage Phonon Module
     \nextpage QtDesigner
     \ingroup modules
@@ -678,19 +633,13 @@
     diverse parts of the Qt 3 API, it has dependencies on the QtCore,
     QtGui, QtNetwork, QtSql, and QtXml modules.
 
-    This module is part of the \l{Qt Full Framework Edition} and the
-    \l{Open Source Versions of Qt}. Most classes offered by this module are
-    also part of the \l{Qt GUI Framework Edition}.
-    Classes that are not available for \l{Qt GUI Framework Edition}
-    users are marked as such in the class documentation.
-
     \sa {Porting to Qt 4}
 */
 
 /*!
     \module QtDesigner
     \title QtDesigner Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage Qt3Support
     \nextpage QtUiTools
     \ingroup modules
@@ -711,17 +660,13 @@
     file:
 
     \snippet doc/src/snippets/code/doc_src_qtdesigner.qdoc 1
-
-    \note These classes are part of the \l{Open Source Versions of Qt} and
-    \l{Qt Commercial Editions}{Qt Full Framework Edition} for commercial
-    users.
 */
 
 /*!
     \module QtUiTools
     \title QtUiTools Module
     \since 4.1
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtDesigner
     \nextpage QtHelp
     \ingroup modules
@@ -751,17 +696,13 @@
 
     \snippet doc/src/snippets/code/doc_src_qtuiloader.qdoc 1
 
-    \note These classes are part of the \l{Open Source Versions of Qt} and
-    \l{Qt Commercial Editions}{Qt Full Framework Edition} for commercial
-    users.
-
     \sa{Calculator Builder Example}, {World Time Clock Builder Example}
 */
 
 /*!
     \module QtHelp
     \title QtHelp Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtUiTools
     \nextpage QtTest
     \ingroup modules
@@ -778,10 +719,6 @@
     .pro file:
 
     \snippet doc/src/snippets/code/doc_src_qthelp.qdoc 1
-
-    These classes are part of the \l{Open Source Versions of Qt} and
-    \l{Qt Commercial Editions}{Qt Full Framework Edition} for commercial
-    users.
 
     \section1 License Information
 
@@ -824,7 +761,7 @@
 /*!
     \module QtTest
     \title QtTest Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtHelp
     \nextpage QAxContainer
     \ingroup modules
@@ -854,7 +791,7 @@
 /*!
     \module QAxContainer
     \title QAxContainer Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QtTest
     \nextpage QAxServer
     \ingroup modules
@@ -868,7 +805,7 @@
 
     The QAxContainer module is not covered by the \l{GNU General Public License (GPL)},
     the \l{GNU Lesser General Public License (LGPL)}, or the
-    \l{Qt Commercial Editions}{Qt Commercial License}. Instead, it is distributed under
+    \l{Qt Commercial Edition}{Qt Commercial License}. Instead, it is distributed under
     the following license.
 
     \legalese
@@ -906,7 +843,7 @@
 /*!
     \module QAxServer
     \title QAxServer Module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QAxContainer
     \nextpage QtDBus module
     \ingroup modules
@@ -920,7 +857,7 @@
 
     The QAxContainer module is not covered by the \l{GNU General Public License (GPL)},
     the \l{GNU Lesser General Public License (LGPL)}, or the
-    \l{Qt Commercial Editions}{Qt Commercial License}. Instead, it is distributed under
+    \l{Qt Commercial Edition}{Qt Commercial License}. Instead, it is distributed under
     the following license.
 
     \legalese
@@ -958,7 +895,7 @@
 /*!
     \module QtDBus
     \title QtDBus module
-    \contentspage All Qt Modules
+    \contentspage All Modules
     \previouspage QAxServer
     \ingroup modules
 
@@ -1015,7 +952,7 @@
 
     The QAxContainer module is not covered by the \l{GNU General Public License (GPL)},
     the \l{GNU Lesser General Public License (LGPL)}, or the
-    \l{Qt Commercial Editions}{Qt Commercial License}. Instead, it is distributed under
+    \l{Qt Commercial Edition}{Qt Commercial License}. Instead, it is distributed under
     the following license.
     
     \legalese
@@ -1053,7 +990,7 @@
     located in the \c{src/s60main} directory are not covered by the
     \l{GNU General Public License (GPL)}, the
     \l{GNU Lesser General Public License (LGPL)}, or the
-    \l{Qt Commercial Editions}{Qt Commercial License}. Instead, they are
+    \l{Qt Commercial Edition}{Qt Commercial License}. Instead, they are
     distributed under the following license.
     
     \legalese
@@ -1090,14 +1027,4 @@
     NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
     \endlegalese
-*/
-
-/*!
-    \page qtassistant.html
-    \title QtAssistant
-
-    This module is no longer needed. Use the QtHelp module to integrate documentation
-    into your application.
-
-    \sa {QtHelp}
 */

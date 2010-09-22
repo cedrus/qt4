@@ -71,10 +71,12 @@ extern uint qGlobalPostedEventsCount();
 #ifndef WM_TOUCH
 #  define WM_TOUCH 0x0240
 #endif
+#ifndef QT_NO_GESTURES
 #ifndef WM_GESTURE
 #  define WM_GESTURE 0x0119
 #  define WM_GESTURENOTIFY 0x011A
 #endif
+#endif // QT_NO_GESTURES
 
 enum {
     WM_QT_SOCKETNOTIFIER = WM_USER,
@@ -308,7 +310,7 @@ typedef MMRESULT(WINAPI *ptimeKillEvent)(UINT);
 static ptimeSetEvent qtimeSetEvent = 0;
 static ptimeKillEvent qtimeKillEvent = 0;
 
-LRESULT CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
+LRESULT QT_WIN_CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
 
 static void resolveTimerAPI()
 {
@@ -349,6 +351,9 @@ public:
     // for controlling when to send posted events
     QAtomicInt serialNumber;
     int lastSerialNumber;
+#ifndef Q_OS_WINCE
+    int lastMessageTime;
+#endif
     QAtomicInt wakeUps;
 
     // timers
@@ -372,7 +377,12 @@ public:
 };
 
 QEventDispatcherWin32Private::QEventDispatcherWin32Private()
-    : threadId(GetCurrentThreadId()), interrupt(false), internalHwnd(0), getMessageHook(0), serialNumber(0), lastSerialNumber(0), wakeUps(0)
+    : threadId(GetCurrentThreadId()), interrupt(false), internalHwnd(0), getMessageHook(0),
+      serialNumber(0), lastSerialNumber(0),
+#ifndef Q_OS_WINCE
+      lastMessageTime(0),
+#endif
+      wakeUps(0)
 {
     resolveTimerAPI();
 }
@@ -412,7 +422,7 @@ Q_CORE_EXPORT bool winGetMessage(MSG* msg, HWND hWnd, UINT wMsgFilterMin,
 }
 
 // This function is called by a workerthread
-void WINAPI CALLBACK qt_fast_timer_proc(uint timerId, uint /*reserved*/, DWORD_PTR user, DWORD_PTR /*reserved*/, DWORD_PTR /*reserved*/)
+void WINAPI QT_WIN_CALLBACK qt_fast_timer_proc(uint timerId, uint /*reserved*/, DWORD_PTR user, DWORD_PTR /*reserved*/, DWORD_PTR /*reserved*/)
 {
     if (!timerId) // sanity check
         return;
@@ -421,7 +431,7 @@ void WINAPI CALLBACK qt_fast_timer_proc(uint timerId, uint /*reserved*/, DWORD_P
     QCoreApplication::postEvent(t->dispatcher, new QTimerEvent(t->timerId));
 }
 
-LRESULT CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
+LRESULT QT_WIN_CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
 {
     if (message == WM_NCCREATE)
         return true;
@@ -487,6 +497,9 @@ LRESULT CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
         int localSerialNumber = d->serialNumber;
         if (localSerialNumber != d->lastSerialNumber) {
             d->lastSerialNumber = localSerialNumber;
+#ifndef Q_OS_WINCE
+            d->lastMessageTime = GetMessageTime();
+#endif
             QCoreApplicationPrivate::sendPostedEvents(0, 0, d->threadData);
         }
         return 0;
@@ -495,7 +508,7 @@ LRESULT CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
     return DefWindowProc(hwnd, message, wp, lp);
 }
 
-LRESULT CALLBACK qt_GetMessageHook(int code, WPARAM wp, LPARAM lp)
+LRESULT QT_WIN_CALLBACK qt_GetMessageHook(int code, WPARAM wp, LPARAM lp)
 {
     if (wp == PM_REMOVE) {
         QEventDispatcherWin32 *q = qobject_cast<QEventDispatcherWin32 *>(QAbstractEventDispatcher::instance());
@@ -503,9 +516,17 @@ LRESULT CALLBACK qt_GetMessageHook(int code, WPARAM wp, LPARAM lp)
         if (q) {
             QEventDispatcherWin32Private *d = q->d_func();
             int localSerialNumber = d->serialNumber;
-            if (HIWORD(GetQueueStatus(QS_INPUT | QS_RAWINPUT | QS_TIMER)) == 0) {
-                // no more input or timer events in the message queue, we can allow posted events to be
-                // sent now
+#ifdef Q_OS_WINCE
+            MSG dummyMsg;
+            if (HIWORD(GetQueueStatus(QS_INPUT)) == 0
+                && PeekMessage(&dummyMsg, 0, WM_TIMER, WM_TIMER, PM_NOREMOVE) == 0
+#else
+            if (HIWORD(GetQueueStatus(QS_INPUT | QS_RAWINPUT | QS_TIMER)) == 0
+                || GetMessageTime() - d->lastMessageTime >= 10
+#endif
+                ) {
+                // no more input or timer events in the message queue or more than 10ms has elapsed since
+                // we send posted events, we can allow posted events to be sent now
                 (void) d->wakeUps.fetchAndStoreRelease(0);
                 MSG *msg = (MSG *) lp;
                 if (localSerialNumber != d->lastSerialNumber
@@ -580,7 +601,7 @@ void QEventDispatcherWin32Private::registerTimer(WinTimerInfo *t)
     } else {
         ok = t->fastTimerId = qtimeSetEvent(t->interval, 1, qt_fast_timer_proc, (DWORD_PTR)t,
                                             TIME_CALLBACK_FUNCTION | TIME_PERIODIC | TIME_KILL_SYNCHRONOUS);
-        if (ok == 0) { // fall back to normal timer if no more multimedia timers avaiable
+        if (ok == 0) { // fall back to normal timer if no more multimedia timers available
             ok = SetTimer(internalHwnd, t->timerId, (uint) t->interval, 0);
         }
     }
@@ -723,8 +744,10 @@ bool QEventDispatcherWin32::processEvents(QEventLoop::ProcessEventsFlags flags)
                         || msg.message == WM_MOUSEWHEEL
                         || msg.message == WM_MOUSEHWHEEL
                         || msg.message == WM_TOUCH
+#ifndef QT_NO_GESTURES
                         || msg.message == WM_GESTURE
                         || msg.message == WM_GESTURENOTIFY
+#endif
                         || msg.message == WM_CLOSE)) {
                     // queue user input events for later processing
                     haveMessage = false;
@@ -755,6 +778,8 @@ bool QEventDispatcherWin32::processEvents(QEventLoop::ProcessEventsFlags flags)
 
                 if (d->internalHwnd == msg.hwnd && msg.message == WM_QT_SENDPOSTEDEVENTS) {
                     if (seenWM_QT_SENDPOSTEDEVENTS) {
+                        // when calling processEvents() "manually", we only want to send posted
+                        // events once
                         needWM_QT_SENDPOSTEDEVENTS = true;
                         continue;
                     }

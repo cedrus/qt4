@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -48,7 +34,7 @@
 
     \image completer-example.png
 
-    This example uses a custom item model, \c DirModel, and a QCompleter object.
+    This example uses a custom item model, \c FileSystemModel, and a QCompleter object.
     QCompleter is a class that provides completions based on an item model. The
     type of model, the completion mode, and the case sensitivity can be
     selected using combo boxes.
@@ -61,32 +47,32 @@
 
     \quotefile examples/tools/completer/completer.qrc
 
-    \section1 DirModel Class Definition
+    \section1 FileSystemModel Class Definition
 
-    The \c DirModel class is a subclass of QDirModel, which provides a data
+    The \c FileSystemModel class is a subclass of QFileSystemModel, which provides a data
     model for the local filesystem.
 
-    \snippet examples/tools/completer/dirmodel.h 0
+    \snippet examples/tools/completer/fsmodel.h 0
 
     This class only has a constructor and a \c data() function as it is only
     created to enable \c data() to return the entire file path for the
-    display role, unlike \l{QDirModel}'s \c data() function that only returns
+    display role, unlike \l{QFileSystemModel}'s \c data() function that only returns
     the folder and not the drive label. This is further explained in
-    \c DirModel's implementation.
+    \c FileSystemModel's implementation.
 
-    \section1 DirModel Class Implementation
+    \section1 FileSystemModel Class Implementation
 
-    The constructor for the \c DirModel class is used to pass \a parent to
-    QDirModel.
+    The constructor for the \c FileSystemModel class is used to pass \a parent to
+    QFileSystemModel.
 
-    \snippet examples/tools/completer/dirmodel.cpp 0
+    \snippet examples/tools/completer/fsmodel.cpp 0
 
     As mentioned earlier, the \c data() function is reimplemented in order to
     get it to return the entire file parth for the display role. For example,
-    with a QDirModel, you will see "Program Files" in the view. However, with
-    \c DirModel, you will see "C:\\Program Files".
+    with a QFileSystemModel, you will see "Program Files" in the view. However, with
+    \c FileSystemModel, you will see "C:\\Program Files".
 
-    \snippet examples/tools/completer/dirmodel.cpp 1
+    \snippet examples/tools/completer/fsmodel.cpp 1
 
     The screenshots below illustrate this difference:
 
@@ -120,7 +106,7 @@
     is then invoked.
 
     We set up three QComboBox objects, \c modelComb, \c modeCombo and
-    \c caseCombo. By default, the \c modelCombo is set to QDirModel,
+    \c caseCombo. By default, the \c modelCombo is set to QFileSystemModel,
     the \c modeCombo is set to "Filtered Popup" and the \c caseCombo is set
     to "Case Insensitive".
 
@@ -202,7 +188,7 @@
     model selected by the user.
 
     A \c switch statement is used to change the item model based on the index
-    of \c modelCombo. If \c case is 0, we use an unsorted QDirModel, providing
+    of \c modelCombo. If \c case is 0, we use an unsorted QFileSystemModel, providing
     us with a file path excluding the drive label.
 
     \snippet examples/tools/completer/mainwindow.cpp 11

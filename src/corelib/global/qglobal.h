@@ -44,11 +44,11 @@
 
 #include <stddef.h>
 
-#define QT_VERSION_STR   "4.6.3"
+#define QT_VERSION_STR   "4.7.0"
 /*
    QT_VERSION is (major << 16) + (minor << 8) + patch.
 */
-#define QT_VERSION 0x040603
+#define QT_VERSION 0x040700
 /*
    can be used like #if (QT_VERSION >= QT_VERSION_CHECK(4, 4, 0))
 */
@@ -275,7 +275,7 @@ namespace QT_NAMESPACE {}
 #  endif
 #endif
 
-#ifdef AUTODETECT_COCOA
+#ifdef QT_AUTODETECT_COCOA
 #  ifdef Q_OS_MAC64
 #    define QT_MAC_USE_COCOA 1
 #    define QT_BUILD_KEY QT_BUILD_KEY_COCOA
@@ -412,14 +412,12 @@ namespace QT_NAMESPACE {}
 #  if defined(__INTEL_COMPILER)
 #    define Q_CC_INTEL
 #  endif
-/* x64 does not support mmx intrinsics on windows */
-#  if (defined(Q_OS_WIN64) && defined(_M_X64))
+/* MSVC does not support SSE/MMX on x64 */
+#  if (defined(Q_CC_MSVC) && defined(_M_X64))
 #    undef QT_HAVE_SSE
-#    undef QT_HAVE_SSE2
 #    undef QT_HAVE_MMX
 #    undef QT_HAVE_3DNOW
 #  endif
-
 
 #elif defined(__BORLANDC__) || defined(__TURBOC__)
 #  define Q_CC_BOR
@@ -672,8 +670,9 @@ namespace QT_NAMESPACE {}
 #      define Q_ALIGNOF(type)   __alignof__(type)
 #      define Q_TYPEOF(expr)    __typeof__(expr)
 #      define Q_DECL_ALIGN(n)   __attribute__((__aligned__(n)))
-// using CC 5.9: Warning: attribute visibility is unsupported and will be skipped..
-//#      define Q_DECL_EXPORT     __attribute__((__visibility__("default")))
+#    endif
+#    if __SUNPRO_CC >= 0x550
+#      define Q_DECL_EXPORT     __global
 #    endif
 #    if __SUNPRO_CC < 0x5a0
 #      define Q_NO_TEMPLATE_FRIENDS
@@ -862,6 +861,9 @@ typedef quint64 qulonglong;
 #   define QT_POINTER_SIZE 4
 #  endif
 #endif
+
+#define Q_INIT_RESOURCE_EXTERN(name) \
+    extern int QT_MANGLE_NAMESPACE(qInitResources_ ## name) ();
 
 #define Q_INIT_RESOURCE(name) \
     do { extern int QT_MANGLE_NAMESPACE(qInitResources_ ## name) ();       \
@@ -1058,6 +1060,17 @@ redefine to built-in booleans to make autotests work properly */
 #  endif
 #else
 #  define QT_FASTCALL
+#endif
+
+//defines the type for the WNDPROC on windows
+//the alignment needs to be forced for sse2 to not crash with mingw
+#if defined(Q_WS_WIN)
+#  if defined(Q_CC_MINGW)
+#    define QT_ENSURE_STACK_ALIGNED_FOR_SSE __attribute__ ((force_align_arg_pointer))
+#  else
+#    define QT_ENSURE_STACK_ALIGNED_FOR_SSE
+#  endif
+#  define QT_WIN_CALLBACK CALLBACK QT_ENSURE_STACK_ALIGNED_FOR_SSE 
 #endif
 
 typedef int QNoImplicitBoolCast;
@@ -1540,6 +1553,7 @@ inline QT3_SUPPORT bool qt_winUnicode() { return true; }
 inline QT3_SUPPORT int qWinVersion() { return QSysInfo::WindowsVersion; }
 #endif
 
+// ### Qt 5: remove Win9x support macros QT_WA and QT_WA_INLINE.
 #define QT_WA(unicode, ansi) unicode
 #define QT_WA_INLINE(unicode, ansi) (unicode)
 
@@ -2410,6 +2424,9 @@ QT3_SUPPORT Q_CORE_EXPORT const char *qInstallPathSysconf();
 #if defined(Q_OS_SYMBIAN)
 
 #ifdef SYMBIAN_BUILD_GCE
+#define Q_SYMBIAN_SUPPORTS_SURFACES
+//RWsPointerCursor is fixed, so don't use low performance sprites
+#define Q_SYMBIAN_FIXED_POINTER_CURSORS
 #define Q_SYMBIAN_HAS_EXTENDED_BITMAP_TYPE
 #define Q_SYMBIAN_WINDOW_SIZE_CACHE
 #define QT_SYMBIAN_SUPPORTS_ADVANCED_POINTER

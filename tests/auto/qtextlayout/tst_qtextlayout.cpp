@@ -110,6 +110,9 @@ private slots:
     void longText();
     void widthOfTabs();
     void columnWrapWithTabs();
+    void boundingRectForUnsetLineWidth();
+    void boundingRectForSetLineWidth();
+    void glyphLessItems();
 
     // QTextLine stuff
     void setNumColumnsWrapAtWordBoundaryOrAnywhere();
@@ -119,6 +122,7 @@ private slots:
     void smallTextLengthWrapAtWordBoundaryOrAnywhere();
     void testLineBreakingAllSpaces();
     void lineWidthFromBOM();
+    void textWidthVsWIdth();
 
 
 private:
@@ -978,9 +982,7 @@ void tst_QTextLayout::testCenteredTab()
     // test if centering the tab works.  We expect the center of 'Bar.' to be at the tab point.
     QTextOption option = layout.textOption();
     QList<QTextOption::Tab> tabs;
-    QTextOption::Tab tab;
-    tab.type = QTextOption::CenterTab;
-    tab.position = 150;
+    QTextOption::Tab tab(150, QTextOption::CenterTab);
     tabs.append(tab);
     option.setTabs(tabs);
     layout.setTextOption(option);
@@ -1000,10 +1002,7 @@ void tst_QTextLayout::testDelimiterTab()
     // try the different delimiter characters to see if the alignment works there.
     QTextOption option = layout.textOption();
     QList<QTextOption::Tab> tabs;
-    QTextOption::Tab tab;
-    tab.type = QTextOption::DelimiterTab;
-    tab.delimiter = QChar('.');
-    tab.position = 100;
+    QTextOption::Tab tab(100, QTextOption::DelimiterTab, QChar('.'));
     tabs.append(tab);
     option.setTabs(tabs);
     layout.setTextOption(option);
@@ -1307,6 +1306,29 @@ void tst_QTextLayout::columnWrapWithTabs()
 
 }
 
+void tst_QTextLayout::boundingRectForUnsetLineWidth()
+{
+    QTextLayout layout("FOOBAR");
+
+    layout.beginLayout();
+    QTextLine line = layout.createLine();
+    layout.endLayout();
+
+    QCOMPARE(layout.boundingRect().width(), line.naturalTextWidth());
+}
+
+void tst_QTextLayout::boundingRectForSetLineWidth()
+{
+    QTextLayout layout("FOOBAR");
+
+    layout.beginLayout();
+    QTextLine line = layout.createLine();
+    line.setLineWidth(QFIXED_MAX - 1);
+    layout.endLayout();
+
+    QCOMPARE(layout.boundingRect().width(), qreal(QFIXED_MAX - 1));
+}
+
 void tst_QTextLayout::lineWidthFromBOM()
 {
     const QString string(QChar(0xfeff)); // BYTE ORDER MARK
@@ -1318,6 +1340,53 @@ void tst_QTextLayout::lineWidthFromBOM()
 
     // Don't spin into an infinite loop
  }
+
+void tst_QTextLayout::glyphLessItems()
+{
+    {
+        QTextLayout layout;
+        layout.setText("\t\t");
+        layout.beginLayout();
+        layout.createLine();
+        layout.endLayout();
+    }
+
+    {
+        QTextLayout layout;
+        layout.setText(QString::fromLatin1("AA") + QChar(QChar::LineSeparator));
+        layout.beginLayout();
+        layout.createLine();
+        layout.endLayout();
+    }
+}
+
+void tst_QTextLayout::textWidthVsWIdth()
+{
+    QTextLayout layout;
+    QTextOption opt;
+    opt.setWrapMode(QTextOption::WrapAnywhere);
+    layout.setTextOption(opt);
+    layout.setText(QString::fromLatin1(
+                       "g++ -c -m64 -pipe -g -fvisibility=hidden -fvisibility-inlines-hidden -Wall -W -D_REENTRANT -fPIC -DCORE_LIBRARY -DIDE_LIBRARY_BASENAME=\"lib\" -DWITH_TESTS "
+                       "-DQT_NO_CAST_TO_ASCII -DQT_USE_FAST_OPERATOR_PLUS -DQT_USE_FAST_CONCATENATION -DQT_PLUGIN -DQT_TESTLIB_LIB -DQT_SCRIPT_LIB -DQT_SVG_LIB -DQT_SQL_LIB -DQT_XM"
+                       "L_LIB -DQT_GUI_LIB -DQT_NETWORK_LIB -DQT_CORE_LIB -DQT_SHARED -I../../../../qt-qml/mkspecs/linux-g++-64 -I. -I../../../../qt-qml/include/QtCore -I../../../."
+                       "./qt-qml/include/QtNetwork -I../../../../qt-qml/include/QtGui -I../../../../qt-qml/include/QtXml -I../../../../qt-qml/include/QtSql -I../../../../qt-qml/inc"
+                       "lude/QtSvg -I../../../../qt-qml/include/QtScript -I../../../../qt-qml/include/QtTest -I../../../../qt-qml/include -I../../../../qt-qml/include/QtHelp -I../."
+                       "./libs -I/home/ettrich/dev/creator/tools -I../../plugins -I../../shared/scriptwrapper -I../../libs/3rdparty/botan/build -Idialogs -Iactionmanager -Ieditorma"
+                       "nager -Iprogressmanager -Iscriptmanager -I.moc/debug-shared -I.uic -o .obj/debug-shared/sidebar.o sidebar.cpp"));
+
+    // textWidth includes right bearing, but it should never be LARGER than width if there is space for at least one character
+    for (int width = 100; width < 1000; ++width) {
+        layout.beginLayout();
+        QTextLine line = layout.createLine();
+        line.setLineWidth(width);
+        layout.endLayout();
+
+        qreal textWidthIsLargerBy = qMax(qreal(0), line.naturalTextWidth() - line.width());
+        qreal thisMustBeZero = 0;
+        QCOMPARE(textWidthIsLargerBy, thisMustBeZero);
+    }
+}
 
 
 QTEST_MAIN(tst_QTextLayout)

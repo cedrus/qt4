@@ -2,6 +2,7 @@ TEMPLATE = app
 TARGET =
 DEPENDPATH += .
 INCLUDEPATH += .
+VERSION = $$QT_VERSION
 
 # Input
 HEADERS += \
@@ -57,116 +58,133 @@ wince*{
 
 symbian {
     load(data_caging_paths)
+    include($$QT_SOURCE_TREE/demos/symbianpkgrules.pri)
+    RSS_RULES = # Clear RSS_RULES, otherwise fluidlauncher will get put into QtDemos folder
 
     TARGET.UID3 = 0xA000A641
-    ICON = $$QT_SOURCE_TREE/src/s60installs/qt.svg
+
+    defineReplace(regResourceDir) {
+        symbian-abld|symbian-sbsv2 {
+            return($${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/$$basename(1))
+        } else {
+            return($${QT_BUILD_TREE}/$$1)
+        }
+    }
+
+    defineReplace(appResourceDir) {
+        symbian-abld|symbian-sbsv2 {
+            return($${EPOCROOT}$${HW_ZDIR}$${APP_RESOURCE_DIR}/$$basename(1))
+        } else {
+            return($${QT_BUILD_TREE}/$$1)
+        }
+    }
 
     executables.sources = \
-        styledemo.exe \
-        deform.exe \
-        pathstroke.exe \
-        wiggly.exe \
-        qftp.exe \
-        saxbookmarks.exe \
-        desktopservices.exe \
-        fridgemagnets.exe \
-        softkeys.exe \
-        raycasting.exe \
-        flickable.exe \
-        digiflip.exe \
-        lightmaps.exe \
-        flightinfo.exe
+        $$QT_BUILD_TREE/demos/embedded/styledemo/styledemo.exe \
+        $$QT_BUILD_TREE/demos/deform/deform.exe \
+        $$QT_BUILD_TREE/demos/pathstroke/pathstroke.exe \
+        $$QT_BUILD_TREE/examples/widgets/wiggly/wiggly.exe \
+        $$QT_BUILD_TREE/examples/network/qftp/qftp.exe \
+        $$QT_BUILD_TREE/examples/xml/saxbookmarks/saxbookmarks.exe \
+        $$QT_BUILD_TREE/demos/embedded/desktopservices/desktopservices.exe \
+        $$QT_BUILD_TREE/examples/draganddrop/fridgemagnets/fridgemagnets.exe \
+        $$QT_BUILD_TREE/examples/widgets/softkeys/softkeys.exe \
+        $$QT_BUILD_TREE/demos/embedded/raycasting/raycasting.exe \
+        $$QT_BUILD_TREE/demos/embedded/flickable/flickable.exe \
+        $$QT_BUILD_TREE/demos/embedded/digiflip/digiflip.exe \
+        $$QT_BUILD_TREE/demos/embedded/lightmaps/lightmaps.exe \
+        $$QT_BUILD_TREE/demos/embedded/flightinfo/flightinfo.exe
 
     executables.path = /sys/bin
 
     reg_resource.sources = \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/styledemo_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/deform_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/pathstroke_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/wiggly_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/qftp_reg.rsc\
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/saxbookmarks_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/desktopservices_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/fridgemagnets_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/softkeys_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/raycasting_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/flickable_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/digiflip_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/lightmaps_reg.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/flightinfo_reg.rsc
+        $$regResourceDir(demos/embedded/styledemo/styledemo_reg.rsc) \
+        $$regResourceDir(demos/deform/deform_reg.rsc) \
+        $$regResourceDir(demos/pathstroke/pathstroke_reg.rsc) \
+        $$regResourceDir(examples/widgets/wiggly/wiggly_reg.rsc) \
+        $$regResourceDir(examples/network/qftp/qftp_reg.rsc)\
+        $$regResourceDir(examples/xml/saxbookmarks/saxbookmarks_reg.rsc) \
+        $$regResourceDir(demos/embedded/desktopservices/desktopservices_reg.rsc) \
+        $$regResourceDir(examples/draganddrop/fridgemagnets/fridgemagnets_reg.rsc) \
+        $$regResourceDir(examples/widgets/softkeys/softkeys_reg.rsc) \
+        $$regResourceDir(demos/embedded/raycasting/raycasting_reg.rsc) \
+        $$regResourceDir(demos/embedded/flickable/flickable_reg.rsc) \
+        $$regResourceDir(demos/embedded/digiflip/digiflip_reg.rsc) \
+        $$regResourceDir(demos/embedded/lightmaps/lightmaps_reg.rsc) \
+        $$regResourceDir(demos/embedded/flightinfo/flightinfo_reg.rsc)
 
     contains(QT_CONFIG, phonon) {
-        reg_resource.sources += $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/qmediaplayer_reg.rsc
+        reg_resource.sources += $$regResourceDir(demos/qmediaplayer/qmediaplayer_reg.rsc)
     }
 
     contains(QT_CONFIG, multimedia) {
-        reg_resource.sources += $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/spectrum_reg.rsc
+        reg_resource.sources += $$regResourceDir(demos/spectrum/app/spectrum_reg.rsc)
     }
 
 
     reg_resource.path = $$REG_RESOURCE_IMPORT_DIR
 
     resource.sources = \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/styledemo.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/deform.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/pathstroke.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/wiggly.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/qftp.rsc\
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/saxbookmarks.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/desktopservices.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/fridgemagnets.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/softkeys.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/raycasting.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/flickable.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/digiflip.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/lightmaps.rsc \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/flightinfo.rsc
+        $$appResourceDir(demos/embedded/styledemo/styledemo.rsc) \
+        $$appResourceDir(demos/deform/deform.rsc) \
+        $$appResourceDir(demos/pathstroke/pathstroke.rsc) \
+        $$appResourceDir(examples/widgets/wiggly/wiggly.rsc) \
+        $$appResourceDir(examples/network/qftp/qftp.rsc)\
+        $$appResourceDir(examples/xml/saxbookmarks/saxbookmarks.rsc) \
+        $$appResourceDir(demos/embedded/desktopservices/desktopservices.rsc) \
+        $$appResourceDir(examples/draganddrop/fridgemagnets/fridgemagnets.rsc) \
+        $$appResourceDir(examples/widgets/softkeys/softkeys.rsc) \
+        $$appResourceDir(demos/embedded/raycasting/raycasting.rsc) \
+        $$appResourceDir(demos/embedded/flickable/flickable.rsc) \
+        $$appResourceDir(demos/embedded/digiflip/digiflip.rsc) \
+        $$appResourceDir(demos/embedded/lightmaps/lightmaps.rsc) \
+        $$appResourceDir(demos/embedded/flightinfo/flightinfo.rsc)
 
 
     resource.path = $$APP_RESOURCE_DIR
 
     mifs.sources = \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/fluidlauncher.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/styledemo.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/deform.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/pathstroke.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/wiggly.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/qftp.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/saxbookmarks.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/desktopservices.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/fridgemagnets.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/softkeys.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/raycasting.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/flickable.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/digiflip.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/lightmaps.mif \
-        $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/flightinfo.mif
+        $$appResourceDir(demos/embedded/fluidlauncher/fluidlauncher.mif) \
+        $$appResourceDir(demos/embedded/styledemo/styledemo.mif) \
+        $$appResourceDir(demos/deform/deform.mif) \
+        $$appResourceDir(demos/pathstroke/pathstroke.mif) \
+        $$appResourceDir(examples/widgets/wiggly/wiggly.mif) \
+        $$appResourceDir(examples/network/qftp/qftp.mif) \
+        $$appResourceDir(examples/xml/saxbookmarks/saxbookmarks.mif) \
+        $$appResourceDir(demos/embedded/desktopservices/desktopservices.mif) \
+        $$appResourceDir(examples/draganddrop/fridgemagnets/fridgemagnets.mif) \
+        $$appResourceDir(examples/widgets/softkeys/softkeys.mif) \
+        $$appResourceDir(demos/embedded/raycasting/raycasting.mif) \
+        $$appResourceDir(demos/embedded/flickable/flickable.mif) \
+        $$appResourceDir(demos/embedded/digiflip/digiflip.mif) \
+        $$appResourceDir(demos/embedded/lightmaps/lightmaps.mif) \
+        $$appResourceDir(demos/embedded/flightinfo/flightinfo.mif)
     mifs.path = $$APP_RESOURCE_DIR
 
     contains(QT_CONFIG, svg) {
         executables.sources += \
-            embeddedsvgviewer.exe \
-            weatherinfo.exe
+            $$QT_BUILD_TREE/demos/embedded/embeddedsvgviewer/embeddedsvgviewer.exe \
+            $$QT_BUILD_TREE/demos/embedded/weatherinfo/weatherinfo.exe
 
         reg_resource.sources += \
-            $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/embeddedsvgviewer_reg.rsc \
-            $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/weatherinfo_reg.rsc
+            $$regResourceDir(demos/embedded/embeddedsvgviewer/embeddedsvgviewer_reg.rsc) \
+            $$regResourceDir(demos/embedded/weatherinfo/weatherinfo_reg.rsc)
 
         resource.sources += \
-            $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/embeddedsvgviewer.rsc \
-            $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/weatherinfo.rsc
+            $$appResourceDir(demos/embedded/embeddedsvgviewer/embeddedsvgviewer.rsc) \
+            $$appResourceDir(demos/embedded/weatherinfo/weatherinfo.rsc)
 
         mifs.sources += \
-            $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/embeddedsvgviewer.mif \
-            $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/weatherinfo.mif
+            $$appResourceDir(demos/embedded/embeddedsvgviewer/embeddedsvgviewer.mif) \
+            $$appResourceDir(demos/embedded/weatherinfo/weatherinfo.mif)
 
     }
     contains(QT_CONFIG, webkit) {
-        executables.sources += anomaly.exe
-        reg_resource.sources += $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/anomaly_reg.rsc
-        resource.sources += $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/anomaly.rsc
+        executables.sources += $$QT_BUILD_TREE/demos/embedded/anomaly/anomaly.exe
+        reg_resource.sources += $$regResourceDir(demos/embedded/anomaly/anomaly_reg.rsc)
+        resource.sources += $$appResourceDir(demos/embedded/anomaly/anomaly.rsc)
         mifs.sources += \
-            $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/anomaly.mif
+            $$appResourceDir(demos/embedded/anomaly/anomaly.mif)
 
         isEmpty(QT_LIBINFIX) {
             # Since Fluidlauncher itself doesn't link webkit, we won't get dependency automatically
@@ -177,25 +195,36 @@ symbian {
     }
 
     contains(QT_CONFIG, phonon) {
-        executables.sources += qmediaplayer.exe
-        resource.sources += $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/qmediaplayer.rsc
+        executables.sources += $$QT_BUILD_TREE/demos/qmediaplayer/qmediaplayer.exe
+        resource.sources += $$appResourceDir(demos/qmediaplayer/qmediaplayer.rsc)
         mifs.sources += \
-            $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/qmediaplayer.mif
+            $$appResourceDir(demos/qmediaplayer/qmediaplayer.mif)
     }
 
     contains(QT_CONFIG, multimedia) {
-        executables.sources += spectrum.exe fftreal.dll
-        resource.sources += $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/spectrum.rsc
+        executables.sources += $$QT_BUILD_TREE/demos/spectrum/app/spectrum.exe
+        executables.sources += $$QT_BUILD_TREE/demos/spectrum/3rdparty/fftreal/fftreal.dll
+        resource.sources += $$appResourceDir(demos/spectrum/app/spectrum.rsc)
         mifs.sources += \
-            $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/spectrum.mif
+            $$appResourceDir(demos/spectrum/app/spectrum.mif)
     }
 
     contains(QT_CONFIG, script) {
-        executables.sources += context2d.exe
-        reg_resource.sources += $${EPOCROOT}$$HW_ZDIR$$REG_RESOURCE_IMPORT_DIR/context2d_reg.rsc
-        resource.sources += $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/context2d.rsc
+        executables.sources += $$QT_BUILD_TREE/examples/script/context2d/context2d.exe
+        reg_resource.sources += $$regResourceDir(examples/script/context2d/context2d_reg.rsc)
+        resource.sources += $$appResourceDir(examples/script/context2d/context2d.rsc)
         mifs.sources += \
-            $${EPOCROOT}$$HW_ZDIR$$APP_RESOURCE_DIR/context2d.mif
+            $$appResourceDir(examples/script/context2d/context2d.mif)
+    }
+
+    qmldemos = qmlcalculator qmlclocks qmldialcontrol qmleasing qmlflickr qmlphotoviewer qmltwitter
+    contains(QT_CONFIG, declarative) {
+        for(qmldemo, qmldemos) {
+            executables.sources += $$QT_BUILD_TREE/demos/embedded/$${qmldemo}/$${qmldemo}.exe
+            reg_resource.sources += $$regResourceDir(demos/embedded/$${qmldemo}/$${qmldemo}_reg.rsc)
+            resource.sources += $$appResourceDir(demos/embedded/$${qmldemo}/$${qmldemo}.rsc)
+            mifs.sources += $$appResourceDir(demos/embedded/$${qmldemo}/$${qmldemo}.mif)
+        }
     }
 
     files.sources = $$PWD/screenshots $$PWD/slides
@@ -225,6 +254,8 @@ symbian {
 
     DEPLOYMENT += config files executables viewerimages saxbookmarks reg_resource resource \
         mifs desktopservices_music desktopservices_images fluidbackup
+
+    contains(QT_CONFIG, declarative):for(qmldemo, qmldemos):include($$QT_BUILD_TREE/demos/embedded/$${qmldemo}/deployment.pri)
 
     DEPLOYMENT.installer_header = 0xA000D7CD
 

@@ -61,6 +61,9 @@ public:
     {
         NoHandle,
         GLTextureHandle,
+        XvShmImageHandle,
+        CoreImageHandle,
+        QPixmapHandle,
         UserHandle = 1000
     };
 

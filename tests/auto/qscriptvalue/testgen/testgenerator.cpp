@@ -50,10 +50,17 @@
 #include <QtCore/qvariant.h>
 #include <QtScript/qscriptvalue.h>
 
-void TestGenerator::save(const QString& data)
+void TestGenerator::save(const QHash<QString, QString>& data)
 {
-    QTextStream out(&m_ofile);
-    out << data;
+    foreach(const QString& name, data.keys()) {
+        QFile ofile(m_opath + "tst_qscriptvalue_generated_" + name + ".cpp");
+        if (!ofile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            qWarning() << "Can't open output file: " << ofile.fileName();
+            exit(2);
+        }
+        QTextStream out(&ofile);
+        out << data[name];
+    }
 }
 
 static QString escape(QString txt)
@@ -98,303 +105,17 @@ QString typeName<bool>() {return "bool";}
 template<>
 QString typeName<QString>() {return "QString";}
 
-static QString generateIsXXXDef(const QString& name, const QList<QString>& list)
+static QString generateLicence()
 {
-    static const QString templ("void tst_QScriptValue::%1_initData()\n"\
-                               "{\n"\
-                               "    QTest::addColumn<bool>(\"expected\");\n"\
-                               "    initScriptValues();\n"\
-                               "}\n"\
-                               "\n"\
-                               "void tst_QScriptValue::%1_makeData(const char* expr)\n"\
-                               "{\n"\
-                               "    static QSet<QString> %1;\n"\
-                               "    if (%1.isEmpty()) {\n"\
-                               "        %1%2\n"\
-                               "    }\n"\
-                               "    newRow(expr) << %1.contains(expr);\n"\
-                               "}\n"\
-                               "\n"\
-                               "void tst_QScriptValue::%1_test(const char*, const QScriptValue& value)\n"\
-                               "{\n"\
-                               "    QFETCH(bool, expected);\n"\
-                               "    QCOMPARE(value.%1(), expected);\n"\
-                               "}\n"\
-                               "\n"\
-                               "DEFINE_TEST_FUNCTION(%1)\n"\
-                               "\n");
-
-    if (!list.size()) {
-        qWarning() << name << ": nothing to add!" ;
-        return QString();
-    }
-
-    QString result = templ;
-    QStringList set;
-    foreach(QString t, list) {
-        t = escape(t);
-        t.append('\"');
-        t.prepend('\"');
-        set.append(QString(" << "));
-        set.append(t);
-        set.append("\n               ");
-    }
-    set.append(";");
-    return result.arg(name, set.join(QString()));
-}
-
-template<typename T>
-static QString generateToXXXDef(const QString& name, const QList<QPair<QString, T> >& list)
-{
-    static const QString templ = "\n"\
-                                 "void tst_QScriptValue::%1_initData()\n"\
-                                 "{\n"\
-                                 "    QTest::addColumn<%2>(\"expected\");\n"\
-                                 "    initScriptValues();\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::%1_makeData(const char* expr)\n"\
-                                 "{\n"\
-                                 "    static QHash<QString, %2> %1;\n"\
-                                 "    if (%1.isEmpty()) {\n"\
-                                 "%3"\
-                                 "    }\n"\
-                                 "    newRow(expr) << %1.value(expr);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::%1_test(const char*, const QScriptValue& value)\n"\
-                                 "{\n"\
-                                 "    QFETCH(%2, expected);\n"\
-                                 "    QCOMPARE(value.%1(), expected);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "DEFINE_TEST_FUNCTION(%1)\n";
-    QString result = templ;
-
-    typename QList<QPair<QString, T> >::const_iterator i = list.constBegin();
-    QStringList set;
-    for(; i != list.constEnd(); ++i) {
-        QPair<QString, T> t = *i;
-        t.first = escape(t.first);
-        set.append(QString("        "));
-        set.append(name);
-        set.append(".insert(\"");
-        set.append(t.first);
-        set.append(QString::fromAscii("\", "));
-        set.append(prepareToInsert<T>(t.second));
-        set.append(QString::fromAscii(");\n"));
-    }
-    return result.arg(name, typeName<T>(), set.join(QString()));
-}
-
-
-template<>
-QString generateToXXXDef<qsreal>(const QString& name, const QList<QPair<QString, qsreal> >& list)
-{
-    static const QString templ = "\n"\
-                                 "void tst_QScriptValue::%1_initData()\n"\
-                                 "{\n"\
-                                 "    QTest::addColumn<%2>(\"expected\");\n"\
-                                 "    initScriptValues();\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::%1_makeData(const char* expr)\n"\
-                                 "{\n"\
-                                 "    static QHash<QString, %2> %1;\n"\
-                                 "    if (%1.isEmpty()) {\n"\
-                                 "%3"\
-                                 "    }\n"\
-                                 "    newRow(expr) << %1.value(expr);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::%1_test(const char*, const QScriptValue& value)\n"\
-                                 "{\n"\
-                                 "    QFETCH(%2, expected);\n"\
-                                 "%666"
-                                 "    if (qIsInf(expected)) {\n"\
-                                 "        QVERIFY(qIsInf(value.%1()));\n"\
-                                 "        return;\n"\
-                                 "    }\n"\
-                                 "    QCOMPARE(value.%1(), expected);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "DEFINE_TEST_FUNCTION(%1)\n";
-    QString result = templ;
-
-    QList<QPair<QString, qsreal> >::const_iterator i = list.constBegin();
-    QStringList set;
-    for(; i != list.constEnd(); ++i) {
-        QPair<QString, qsreal> t = *i;
-        t.first = escape(t.first);
-        set.append(QString("        "));
-        set.append(name);
-        set.append(".insert(\"");
-        set.append(t.first);
-        set.append(QString::fromAscii("\", "));
-        set.append(prepareToInsert<qsreal>(t.second));
-        set.append(QString::fromAscii(");\n"));
-    }
-    // toInteger shouldn't return NaN, so it would be nice to catch the case.
-    QString hook;
-    if (name == "toNumber") {
-        hook =
-        "    if (qIsNaN(expected)) {\n"\
-        "        QVERIFY(qIsNaN(value.toNumber()));\n"\
-        "        return;\n"\
-        "    }\n";
-    }
-    return result.arg(name, typeName<qsreal>(), set.join(QString()), hook);
-}
-
-template<typename T>
-static QString generateCastDef(const QList<QPair<QString, T> >& list)
-{
-    static const QString templ = "\n"\
-                                 "void tst_QScriptValue::qscriptvalue_cast%2_initData()\n"\
-                                 "{\n"\
-                                 "    QTest::addColumn<%2>(\"expected\");\n"\
-                                 "    initScriptValues();\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::qscriptvalue_cast%2_makeData(const char* expr)\n"\
-                                 "{\n"\
-                                 "    static QHash<QString, %2> value;\n"\
-                                 "    if (value.isEmpty()) {\n"\
-                                 "%3"\
-                                 "    }\n"\
-                                 "    newRow(expr) << value.value(expr);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::qscriptvalue_cast%2_test(const char*, const QScriptValue& value)\n"\
-                                 "{\n"\
-                                 "    QFETCH(%2, expected);\n"\
-                                 "    QCOMPARE(qscriptvalue_cast<%2>(value), expected);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "DEFINE_TEST_FUNCTION(qscriptvalue_cast%2)\n";
-    QString result = templ;
-
-    typename QList<QPair<QString, T> >::const_iterator i = list.constBegin();
-    QStringList set;
-    for(; i != list.constEnd(); ++i) {
-        QPair<QString, T> t = *i;
-        t.first = escape(t.first);
-        set.append(QString("        "));
-        set.append("value.insert(\"");
-        set.append(t.first);
-        set.append(QString::fromAscii("\", "));
-        set.append(prepareToInsert<T>(t.second));
-        set.append(QString::fromAscii(");\n"));
-    }
-    return result.arg(typeName<T>(), set.join(QString()));
-}
-
-template<>
-QString generateCastDef<qsreal>(const QList<QPair<QString, qsreal> >& list)
-{
-    static const QString templ = "\n"\
-                                 "void tst_QScriptValue::qscriptvalue_cast%2_initData()\n"\
-                                 "{\n"\
-                                 "    QTest::addColumn<%2>(\"expected\");\n"\
-                                 "    initScriptValues();\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::qscriptvalue_cast%2_makeData(const char* expr)\n"\
-                                 "{\n"\
-                                 "    static QHash<QString, %2> value;\n"\
-                                 "    if (value.isEmpty()) {\n"\
-                                 "%3"\
-                                 "    }\n"\
-                                 "    newRow(expr) << value.value(expr);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::qscriptvalue_cast%2_test(const char*, const QScriptValue& value)\n"\
-                                 "{\n"\
-                                 "    QFETCH(%2, expected);\n"\
-                                 "    if (qIsNaN(expected)) {\n"
-                                 "        QVERIFY(qIsNaN(qscriptvalue_cast<%2>(value)));\n"
-                                 "        return;\n"
-                                 "    }\n"\
-                                 "    if (qIsInf(expected)) {\n"
-                                 "        QVERIFY(qIsInf(qscriptvalue_cast<%2>(value)));\n"
-                                 "        return;\n"
-                                 "    }\n"
-                                 "    QCOMPARE(qscriptvalue_cast<%2>(value), expected);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "DEFINE_TEST_FUNCTION(qscriptvalue_cast%2)\n";
-    QString result = templ;
-
-    QList<QPair<QString, qsreal> >::const_iterator i = list.constBegin();
-    QStringList set;
-    for(; i != list.constEnd(); ++i) {
-        QPair<QString, qsreal> t = *i;
-        t.first = escape(t.first);
-        set.append(QString("        "));
-        set.append("value.insert(\"");
-        set.append(t.first);
-        set.append(QString::fromAscii("\", "));
-        set.append(prepareToInsert<qsreal>(t.second));
-        set.append(QString::fromAscii(");\n"));
-    }
-    return result.arg(typeName<qsreal>(), set.join(QString()));
-}
-
-static QString generateCompareDef(const QString& comparisionType, const QList<QString> tags)
-{
-    static const QString templ = "\n"\
-                                 "void tst_QScriptValue::%1_initData()\n"\
-                                 "{\n"\
-                                 "    QTest::addColumn<QScriptValue>(\"other\");\n"\
-                                 "    QTest::addColumn<bool>(\"expected\");\n"\
-                                 "    initScriptValues();\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::%1_makeData(const char *expr)\n"\
-                                 "{\n"\
-                                 "    static QSet<QString> equals;\n"\
-                                 "    if (equals.isEmpty()) {\n"\
-                                 "%2\n"\
-                                 "    }\n"\
-                                 "    QHash<QString, QScriptValue>::const_iterator it;\n"\
-                                 "    for (it = m_values.constBegin(); it != m_values.constEnd(); ++it) {\n"\
-                                 "        QString tag = QString::fromLatin1(\"%20 <=> %21\").arg(expr).arg(it.key());\n"\
-                                 "        newRow(tag.toLatin1()) << it.value() << equals.contains(tag);\n"\
-                                 "    }\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "void tst_QScriptValue::%1_test(const char *, const QScriptValue& value)\n"\
-                                 "{\n"\
-                                 "    QFETCH(QScriptValue, other);\n"\
-                                 "    QFETCH(bool, expected);\n"\
-                                 "    QCOMPARE(value.%1(other), expected);\n"\
-                                 "}\n"\
-                                 "\n"\
-                                 "DEFINE_TEST_FUNCTION(%1)\n";
-    Q_ASSERT(comparisionType == "strictlyEquals"
-             || comparisionType == "equals"
-             || comparisionType == "lessThan"
-             || comparisionType == "instanceOf");
-    QString result = templ;
-
-    QStringList set;
-    foreach(const QString& tmp, tags) {
-        set.append("        equals.insert(\"" + escape(tmp) + "\");");
-    }
-    return result.arg(comparisionType, set.join("\n"));
-}
-
-static QString generateInitDef(const QVector<QString>& allDataTags)
-{
-    static const QString templ = "/****************************************************************************\n"
-                                 "**\n"
-                                 "** Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).\n"
-                                 "** All rights reserved.\n"
-                                 "** Contact: Nokia Corporation (qt-info@nokia.com)\n"
-                                 "**\n"
-                                 "** This file is part of the test suite of the Qt Toolkit.\n"
-                                 "**\n"
-                                 "** $QT_BEGIN_LICENSE:LGPL$\n"
+    return  "/****************************************************************************\n"
+            "**\n"
+            "** Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).\n"
+            "** All rights reserved.\n"
+            "** Contact: Nokia Corporation (qt-info@nokia.com)\n"
+            "**\n"
+            "** This file is part of the test suite of the Qt Toolkit.\n"
+            "**\n"
+            "** $QT_BEGIN_LICENSE:LGPL$\n"
             "** Commercial Usage\n"
             "** Licensees holding valid Qt Commercial licenses may use this file in\n"
             "** accordance with the Qt Commercial License Agreement provided with the\n"
@@ -424,13 +145,359 @@ static QString generateInitDef(const QVector<QString>& allDataTags)
             "** If you have questions regarding the use of this file, please contact\n"
             "** Nokia at qt-info@nokia.com.\n"
             "** $QT_END_LICENSE$\n"
-                                 "**\n"
-                                 "****************************************************************************/\n"
+            "**\n"
+            "****************************************************************************/\n"
+            "\n"\
+            "/****************************************************************************\n"\
+            "*************** This file has been generated. DO NOT MODIFY! ****************\n"
+            "****************************************************************************/\n\n"\
+            "#include \"tst_qscriptvalue.h\"\n\n";
+}
+
+static QString generateIsXXXDef(const QString& name, const QList<QString>& list)
+{
+    static const QString templ("void tst_QScriptValue::%1_initData()\n"\
+                               "{\n"\
+                               "    QTest::addColumn<bool>(\"expected\");\n"\
+                               "    initScriptValues();\n"\
+                               "}\n"\
+                               "\n"\
+                               "static QString %1_array [] = {%2};\n\n"\
+                               "void tst_QScriptValue::%1_makeData(const char* expr)\n"\
+                               "{\n"\
+                               "    static QSet<QString> %1;\n"\
+                               "    if (%1.isEmpty()) {\n"\
+                               "        %1.reserve(%3);\n"\
+                               "        for (unsigned i = 0; i < %3; ++i)\n"\
+                               "            %1.insert(%1_array[i]);\n"\
+                               "    }\n"\
+                               "    newRow(expr) << %1.contains(expr);\n"\
+                               "}\n"\
+                               "\n"\
+                               "void tst_QScriptValue::%1_test(const char*, const QScriptValue& value)\n"\
+                               "{\n"\
+                               "    QFETCH(bool, expected);\n"\
+                               "    QCOMPARE(value.%1(), expected);\n"\
+                               "    QCOMPARE(value.%1(), expected);\n"\
+                               "}\n"\
+                               "\n"\
+                               "DEFINE_TEST_FUNCTION(%1)\n"\
+                               "\n");
+
+    if (!list.size()) {
+        qWarning() << name << ": nothing to add!" ;
+        return QString();
+    }
+
+    QString result = templ;
+    QStringList set;
+    set.reserve(3 * list.count());
+    foreach(const QString& t, list) {
+        set.append("\n    \"");
+        set.append(escape(t));
+        set.append("\",");
+    }
+
+    return result.arg(name, set.join(QString()), QString::number(list.count()));
+}
+
+template<typename T>
+static QString generateToXXXDef(const QString& name, const QList<QPair<QString, T> >& list)
+{
+    static const QString templ = "\n"\
+                                 "void tst_QScriptValue::%1_initData()\n"\
+                                 "{\n"\
+                                 "    QTest::addColumn<%2>(\"expected\");\n"\
+                                 "    initScriptValues();\n"\
+                                 "}\n"\
                                  "\n"\
-                                 "#include \"tst_qscriptvalue.h\"\n\n"\
-                                 "#define DEFINE_TEST_VALUE(expr) m_values.insert(QString::fromLatin1(#expr), expr)\n"\
+                                 "static QString %1_tagArray [] = {%4};\n\n"\
+                                 "static %2 %1_valueArray [] = {%5};\n\n"\
+                                 "void tst_QScriptValue::%1_makeData(const char* expr)\n"\
+                                 "{\n"\
+                                 "    static QHash<QString, %2> %1;\n"\
+                                 "    if (%1.isEmpty()) {\n"\
+                                 "        %1.reserve(%3);\n"\
+                                 "        for (unsigned i = 0; i < %3; ++i)\n"\
+                                 "            %1.insert(%1_tagArray[i], %1_valueArray[i]);\n"\
+                                 "    }\n"\
+                                 "    newRow(expr) << %1.value(expr);\n"\
+                                 "}\n"\
                                  "\n"\
-                                 "void tst_QScriptValue::initScriptValues()\n"\
+                                 "void tst_QScriptValue::%1_test(const char*, const QScriptValue& value)\n"\
+                                 "{\n"\
+                                 "    QFETCH(%2, expected);\n"\
+                                 "    QCOMPARE(value.%1(), expected);\n"\
+                                 "    QCOMPARE(value.%1(), expected);\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "DEFINE_TEST_FUNCTION(%1)\n";
+    QString result = templ;
+
+    typename QList<QPair<QString, T> >::const_iterator i = list.constBegin();
+    QStringList tagSet, valueSet;
+    tagSet.reserve(list.count());
+    valueSet.reserve(list.count());
+    int tmp = -1;
+    for(; i != list.constEnd(); ++i) {
+        QPair<QString, T> t = *i;
+        t.first = escape(t.first);
+        tagSet.append(QString("\n    \""));
+        tagSet.append(t.first);
+        tagSet.append(QString::fromAscii("\","));
+        if (!((++tmp)%2))
+            valueSet.append(QString("\n    "));
+        valueSet.append(prepareToInsert<T>(t.second));
+        valueSet.append(QString::fromAscii(", "));
+    }
+    return result.arg(name,
+                      typeName<T>(),
+                      QString::number(list.count()),
+                      tagSet.join(QString()),
+                      valueSet.join(QString()));
+}
+
+
+template<>
+QString generateToXXXDef<qsreal>(const QString& name, const QList<QPair<QString, qsreal> >& list)
+{
+    static const QString templ = "\n"\
+                                 "void tst_QScriptValue::%1_initData()\n"\
+                                 "{\n"\
+                                 "    QTest::addColumn<%2>(\"expected\");\n"\
+                                 "    initScriptValues();\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "static QString %1_tagArray [] = {%3};\n"\
+                                 "static %2 %1_valueArray [] = {%4};\n"\
+                                 "void tst_QScriptValue::%1_makeData(const char* expr)\n"\
+                                 "{\n"\
+                                 "    static QHash<QString, %2> %1;\n"\
+                                 "    if (%1.isEmpty()) {\n"\
+                                 "        %1.reserve(%5);\n"\
+                                 "        for (unsigned i = 0; i < %5; ++i)\n"\
+                                 "            %1.insert(%1_tagArray[i], %1_valueArray[i]);\n"\
+                                 "    }\n"\
+                                 "    newRow(expr) << %1.value(expr);\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "void tst_QScriptValue::%1_test(const char*, const QScriptValue& value)\n"\
+                                 "{\n"\
+                                 "    QFETCH(%2, expected);\n"\
+                                 "%666"
+                                 "    if (qIsInf(expected)) {\n"\
+                                 "        QVERIFY(qIsInf(value.%1()));\n"\
+                                 "        QVERIFY(qIsInf(value.%1()));\n"\
+                                 "        return;\n"\
+                                 "    }\n"\
+                                 "    QCOMPARE(value.%1(), expected);\n"\
+                                 "    QCOMPARE(value.%1(), expected);\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "DEFINE_TEST_FUNCTION(%1)\n";
+    QString result = templ;
+
+    QList<QPair<QString, qsreal> >::const_iterator i = list.constBegin();
+    QStringList tagSet, valueSet;
+    tagSet.reserve(list.count());
+    valueSet.reserve(list.count());
+    int tmp = -1;
+    for(; i != list.constEnd(); ++i) {
+        QPair<QString, qsreal> t = *i;
+        t.first = escape(t.first);
+        tagSet.append(QString("\n    \""));
+        tagSet.append(t.first);
+        tagSet.append(QString::fromAscii("\","));
+        if (!((++tmp)%10))
+            valueSet.append(QString("\n    "));
+        valueSet.append(prepareToInsert<qsreal>(t.second));
+        valueSet.append(QString::fromAscii(", "));
+    }
+    // toInteger shouldn't return NaN, so it would be nice to catch the case.
+    QString hook;
+    if (name == "toNumber") {
+        hook =
+        "    if (qIsNaN(expected)) {\n"\
+        "        QVERIFY(qIsNaN(value.toNumber()));\n"\
+        "        return;\n"\
+        "    }\n";
+    }
+    return result.arg(name,
+          typeName<qsreal>(),
+          tagSet.join(QString()),
+          valueSet.join(QString()),
+          QString::number(list.count()),
+          hook);
+}
+
+template<typename T>
+static QString generateCastDef(const QList<QPair<QString, T> >& list)
+{
+    static const QString templ = "\n"\
+                                 "void tst_QScriptValue::qscriptvalue_cast%1_initData()\n"\
+                                 "{\n"\
+                                 "    QTest::addColumn<%1>(\"expected\");\n"\
+                                 "    initScriptValues();\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "static QString qscriptvalue_cast%1_tagArray [] = {%2};\n"\
+                                 "static %1 qscriptvalue_cast%1_valueArray [] = {%3};\n"\
+                                 "void tst_QScriptValue::qscriptvalue_cast%1_makeData(const char* expr)\n"\
+                                 "{\n"\
+                                 "    static QHash<QString, %1> value;\n"\
+                                 "    if (value.isEmpty()) {\n"\
+                                 "        value.reserve(%4);\n"\
+                                 "        for (unsigned i = 0; i < %4; ++i)\n"\
+                                 "            value.insert(qscriptvalue_cast%1_tagArray[i], qscriptvalue_cast%1_valueArray[i]);\n"\
+                                 "    }\n"\
+                                 "    newRow(expr) << value.value(expr);\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "void tst_QScriptValue::qscriptvalue_cast%1_test(const char*, const QScriptValue& value)\n"\
+                                 "{\n"\
+                                 "    QFETCH(%1, expected);\n"\
+                                 "    QCOMPARE(qscriptvalue_cast<%1>(value), expected);\n"\
+                                 "    QCOMPARE(qscriptvalue_cast<%1>(value), expected);\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "DEFINE_TEST_FUNCTION(qscriptvalue_cast%1)\n";
+    QString result = templ;
+
+    typename QList<QPair<QString, T> >::const_iterator i = list.constBegin();
+    QStringList tagSet, valueSet;
+    tagSet.reserve(list.count());
+    valueSet.reserve(list.count());
+    int tmp = -1;
+    for(; i != list.constEnd(); ++i) {
+        QPair<QString, T> t = *i;
+        t.first = escape(t.first);
+        tagSet.append(QString("\n    \""));
+        tagSet.append(t.first);
+        tagSet.append(QString::fromAscii("\","));
+        if (!((++tmp)%2))
+            valueSet.append(QString("\n    "));
+        valueSet.append(prepareToInsert<T>(t.second));
+        valueSet.append(QString::fromAscii(", "));
+    }
+    return result.arg(typeName<T>(), tagSet.join(QString()), valueSet.join(QString()), QString::number(list.count()));
+}
+
+template<>
+QString generateCastDef<qsreal>(const QList<QPair<QString, qsreal> >& list)
+{
+    static const QString templ = "\n"\
+                                 "void tst_QScriptValue::qscriptvalue_cast%1_initData()\n"\
+                                 "{\n"\
+                                 "    QTest::addColumn<%1>(\"expected\");\n"\
+                                 "    initScriptValues();\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "static QString qscriptvalue_cast%1_tagArray [] = {%2};\n"\
+                                 "static %1 qscriptvalue_cast%1_valueArray [] = {%3};\n"\
+                                 "void tst_QScriptValue::qscriptvalue_cast%1_makeData(const char* expr)\n"\
+                                 "{\n"\
+                                 "    static QHash<QString, %1> value;\n"\
+                                 "    if (value.isEmpty()) {\n"\
+                                 "        value.reserve(%4);\n"\
+                                 "        for (unsigned i = 0; i < %4; ++i)\n"\
+                                 "            value.insert(qscriptvalue_cast%1_tagArray[i], qscriptvalue_cast%1_valueArray[i]);\n"\
+                                 "    }\n"\
+                                 "    newRow(expr) << value.value(expr);\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "void tst_QScriptValue::qscriptvalue_cast%1_test(const char*, const QScriptValue& value)\n"\
+                                 "{\n"\
+                                 "    QFETCH(%1, expected);\n"\
+                                 "    if (qIsNaN(expected)) {\n"
+                                 "        QVERIFY(qIsNaN(qscriptvalue_cast<%1>(value)));\n"
+                                 "        QVERIFY(qIsNaN(qscriptvalue_cast<%1>(value)));\n"
+                                 "        return;\n"
+                                 "    }\n"\
+                                 "    if (qIsInf(expected)) {\n"
+                                 "        QVERIFY(qIsInf(qscriptvalue_cast<%1>(value)));\n"
+                                 "        QVERIFY(qIsInf(qscriptvalue_cast<%1>(value)));\n"
+                                 "        return;\n"
+                                 "    }\n"
+                                 "    QCOMPARE(qscriptvalue_cast<%1>(value), expected);\n"\
+                                 "    QCOMPARE(qscriptvalue_cast<%1>(value), expected);\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "DEFINE_TEST_FUNCTION(qscriptvalue_cast%1)\n";
+    QString result = templ;
+
+    QList<QPair<QString, qsreal> >::const_iterator i = list.constBegin();
+    QStringList tagSet, valueSet;
+    tagSet.reserve(list.count());
+    valueSet.reserve(list.count());
+    int tmp = -1;
+    for(; i != list.constEnd(); ++i) {
+        QPair<QString, qsreal> t = *i;
+        t.first = escape(t.first);
+        tagSet.append(QString("\n    \""));
+        tagSet.append(t.first);
+        tagSet.append(QString::fromAscii("\","));
+        if (!((++tmp)%10))
+            valueSet.append(QString("\n    "));
+        valueSet.append(prepareToInsert<qsreal>(t.second));
+        valueSet.append(QString::fromAscii(", "));
+    }
+    return result.arg(typeName<qsreal>(),
+                      tagSet.join(QString()),
+                      valueSet.join(QString()),
+                      QString::number(list.count()));
+}
+
+static QString generateCompareDef(const QString& comparisionType, const QList<QString> tags)
+{
+    static const QString templ = "\n"\
+                                 "void tst_QScriptValue::%1_initData()\n"\
+                                 "{\n"\
+                                 "    QTest::addColumn<QScriptValue>(\"other\");\n"\
+                                 "    QTest::addColumn<bool>(\"expected\");\n"\
+                                 "    initScriptValues();\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "static QString %1_array [] = {%2};\n\n"\
+                                 "void tst_QScriptValue::%1_makeData(const char *expr)\n"\
+                                 "{\n"\
+                                 "    static QSet<QString> equals;\n"\
+                                 "    if (equals.isEmpty()) {\n"\
+                                 "        equals.reserve(%3);\n"\
+                                 "        for (unsigned i = 0; i < %3; ++i)\n"\
+                                 "            equals.insert(%1_array[i]);\n"\
+                                 "    }\n"\
+                                 "    QHash<QString, QScriptValue>::const_iterator it;\n"\
+                                 "    for (it = m_values.constBegin(); it != m_values.constEnd(); ++it) {\n"\
+                                 "        QString tag = QString::fromLatin1(\"%20 <=> %21\").arg(expr).arg(it.key());\n"\
+                                 "        newRow(tag.toLatin1()) << it.value() << equals.contains(tag);\n"\
+                                 "    }\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "void tst_QScriptValue::%1_test(const char *, const QScriptValue& value)\n"\
+                                 "{\n"\
+                                 "    QFETCH(QScriptValue, other);\n"\
+                                 "    QFETCH(bool, expected);\n"\
+                                 "    QCOMPARE(value.%1(other), expected);\n"\
+                                 "}\n"\
+                                 "\n"\
+                                 "DEFINE_TEST_FUNCTION(%1)\n";
+    Q_ASSERT(comparisionType == "strictlyEquals"
+             || comparisionType == "equals"
+             || comparisionType == "lessThan"
+             || comparisionType == "instanceOf");
+    QString result = templ;
+
+    QStringList set;
+    set.reserve(tags.count());
+    foreach(const QString& tmp, tags) {
+        set.append("\n    \"" + escape(tmp) + "\",");
+    }
+    return result.arg(comparisionType, set.join(""), QString::number(tags.count()));
+}
+
+static QString generateInitDef(const QVector<QString>& allDataTags)
+{
+    static const QString templ = "void tst_QScriptValue::initScriptValues()\n"\
                                  "{\n"\
                                  "    m_values.clear();\n"\
                                  "    if (engine) \n"\
@@ -455,7 +522,7 @@ static void squashTags(QString dataTag, const QVector<bool>& results, QList<QStr
 }
 
 
-QString TestGenerator::generateTest()
+QHash<QString, QString> TestGenerator::generateTest()
 {
     // All data tags keept in one place.
     QVector<QString> dataTags;
@@ -635,47 +702,63 @@ QString TestGenerator::generateTest()
     Q_ASSERT(in.atEnd());
 
     // Generate.
-    QStringList result;
-    result.append(generateInitDef(dataTags));
-    result.append(generateIsXXXDef("isValid", isValidList));
-    result.append(generateIsXXXDef("isBool", isBoolList));
-    result.append(generateIsXXXDef("isBoolean", isBooleanList));
-    result.append(generateIsXXXDef("isNumber", isNumberList));
-    result.append(generateIsXXXDef("isFunction", isFunctionList));
-    result.append(generateIsXXXDef("isNull", isNullList));
-    result.append(generateIsXXXDef("isString", isStringList));
-    result.append(generateIsXXXDef("isUndefined", isUndefinedList));
-    result.append(generateIsXXXDef("isVariant", isVariantList));
-    result.append(generateIsXXXDef("isQObject", isQObjectList));
-    result.append(generateIsXXXDef("isQMetaObject", isQMetaObjectList));
-    result.append(generateIsXXXDef("isObject", isObjectList));
-    result.append(generateIsXXXDef("isDate", isDateList));
-    result.append(generateIsXXXDef("isRegExp", isRegExpList));
-    result.append(generateIsXXXDef("isArray", isArrayList));
-    result.append(generateIsXXXDef("isError", isErrorList));
+    QHash<QString, QString> result;
+    QStringList tmp;
+    tmp.append(generateLicence());
+    tmp.append(generateInitDef(dataTags));
+    result.insert("init", tmp.join("\n"));
+    tmp.clear();
 
-    result.append(generateToXXXDef<QString>("toString", toStringList));
-    result.append(generateToXXXDef<qsreal>("toNumber", toNumberList));
-    result.append(generateToXXXDef<bool>("toBool", toBoolList));
-    result.append(generateToXXXDef<bool>("toBoolean", toBooleanList));
-    result.append(generateToXXXDef<qsreal>("toInteger", toIntegerList));
-    result.append(generateToXXXDef<qint32>("toInt32", toInt32List));
-    result.append(generateToXXXDef<quint32>("toUInt32", toUInt32List));
-    result.append(generateToXXXDef<quint16>("toUInt16", toUInt16List));
+    tmp.append(generateLicence());
+    tmp.append(generateIsXXXDef("isValid", isValidList));
+    tmp.append(generateIsXXXDef("isBool", isBoolList));
+    tmp.append(generateIsXXXDef("isBoolean", isBooleanList));
+    tmp.append(generateIsXXXDef("isNumber", isNumberList));
+    tmp.append(generateIsXXXDef("isFunction", isFunctionList));
+    tmp.append(generateIsXXXDef("isNull", isNullList));
+    tmp.append(generateIsXXXDef("isString", isStringList));
+    tmp.append(generateIsXXXDef("isUndefined", isUndefinedList));
+    tmp.append(generateIsXXXDef("isVariant", isVariantList));
+    tmp.append(generateIsXXXDef("isQObject", isQObjectList));
+    tmp.append(generateIsXXXDef("isQMetaObject", isQMetaObjectList));
+    tmp.append(generateIsXXXDef("isObject", isObjectList));
+    tmp.append(generateIsXXXDef("isDate", isDateList));
+    tmp.append(generateIsXXXDef("isRegExp", isRegExpList));
+    tmp.append(generateIsXXXDef("isArray", isArrayList));
+    tmp.append(generateIsXXXDef("isError", isErrorList));
+    result.insert("isXXX", tmp.join("\n"));
+    tmp.clear();
 
-    result.append(generateCompareDef("equals", equalsList));
-    result.append(generateCompareDef("strictlyEquals", strictlyEqualsList));
-    result.append(generateCompareDef("lessThan", lessThanList));
-    result.append(generateCompareDef("instanceOf", instanceOfList));
+    tmp.append(generateLicence());
+    tmp.append(generateToXXXDef<QString>("toString", toStringList));
+    tmp.append(generateToXXXDef<qsreal>("toNumber", toNumberList));
+    tmp.append(generateToXXXDef<bool>("toBool", toBoolList));
+    tmp.append(generateToXXXDef<bool>("toBoolean", toBooleanList));
+    tmp.append(generateToXXXDef<qsreal>("toInteger", toIntegerList));
+    tmp.append(generateToXXXDef<qint32>("toInt32", toInt32List));
+    tmp.append(generateToXXXDef<quint32>("toUInt32", toUInt32List));
+    tmp.append(generateToXXXDef<quint16>("toUInt16", toUInt16List));
+    result.insert("toXXX", tmp.join("\n"));
+    tmp.clear();
 
-    result.append(generateCastDef(castStringList));
-    result.append(generateCastDef(castSRealList));
-    result.append(generateCastDef(castBoolList));
-    result.append(generateCastDef(castInt32List));
-    result.append(generateCastDef(castUInt32List));
-    result.append(generateCastDef(castUInt16List));
+    tmp.append(generateLicence());
+    tmp.append(generateCompareDef("equals", equalsList));
+    tmp.append(generateCompareDef("strictlyEquals", strictlyEqualsList));
+    tmp.append(generateCompareDef("lessThan", lessThanList));
+    tmp.append(generateCompareDef("instanceOf", instanceOfList));
+    result.insert("comparison", tmp.join("\n"));
+    tmp.clear();
 
-    return result.join("\n");
+    tmp.append(generateLicence());
+    tmp.append(generateCastDef(castStringList));
+    tmp.append(generateCastDef(castSRealList));
+    tmp.append(generateCastDef(castBoolList));
+    tmp.append(generateCastDef(castInt32List));
+    tmp.append(generateCastDef(castUInt32List));
+    tmp.append(generateCastDef(castUInt16List));
+    result.insert("cast", tmp.join("\n"));
+
+    return result;
 }
 
 

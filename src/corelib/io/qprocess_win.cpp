@@ -366,6 +366,11 @@ void QProcessPrivate::startProcess()
     if (environment.d.constData())
         envlist = qt_create_environment(environment.d.constData()->hash);
 #endif
+    if (!nativeArguments.isEmpty()) {
+        if (!args.isEmpty())
+             args += QLatin1Char(' ');
+        args += nativeArguments;
+    }
 
 #if defined QPROCESS_DEBUG
     qDebug("Creating process");
@@ -525,7 +530,7 @@ qint64 QProcessPrivate::readFromStderr(char *data, qint64 maxlen)
 }
 
 
-static BOOL CALLBACK qt_terminateApp(HWND hwnd, LPARAM procId)
+static BOOL QT_WIN_CALLBACK qt_terminateApp(HWND hwnd, LPARAM procId)
 {
     DWORD currentProcId = 0;
     GetWindowThreadProcessId(hwnd, &currentProcId);

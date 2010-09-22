@@ -38,40 +38,6 @@
 #endif
 #include "../util.h"
 
-#if defined(Q_OS_SYMBIAN)
-# define SRCDIR ""
-#endif
-
-//TESTED_CLASS=
-//TESTED_FILES=
-
-// Task 160192
-/**
- * Starts an event loop that runs until the given signal is received.
- Optionally the event loop
- * can return earlier on a timeout.
- *
- * \return \p true if the requested signal was received
- *         \p false on timeout
- */
-static bool waitForSignal(QObject* obj, const char* signal, int timeout = 0)
-{
-    QEventLoop loop;
-    QObject::connect(obj, signal, &loop, SLOT(quit()));
-    QTimer timer;
-    QSignalSpy timeoutSpy(&timer, SIGNAL(timeout()));
-    if (timeout > 0) {
-        QObject::connect(&timer, SIGNAL(timeout()), &loop, SLOT(quit()));
-        timer.setSingleShot(true);
-        timer.start(timeout);
-    }
-    loop.exec();
-    return timeoutSpy.isEmpty();
-}
-
-/* Mostly a test for the JavaScript related parts of QWebFrame */
-
-
 struct CustomType {
     QString string;
 };
@@ -91,6 +57,7 @@ class MyQObject : public QObject
     Q_PROPERTY(int intProperty READ intProperty WRITE setIntProperty)
     Q_PROPERTY(QVariant variantProperty READ variantProperty WRITE setVariantProperty)
     Q_PROPERTY(QVariantList variantListProperty READ variantListProperty WRITE setVariantListProperty)
+    Q_PROPERTY(QVariantMap variantMapProperty READ variantMapProperty WRITE setVariantMapProperty)
     Q_PROPERTY(QString stringProperty READ stringProperty WRITE setStringProperty)
     Q_PROPERTY(QStringList stringListProperty READ stringListProperty WRITE setStringListProperty)
     Q_PROPERTY(QByteArray byteArrayProperty READ byteArrayProperty WRITE setByteArrayProperty)
@@ -100,6 +67,8 @@ class MyQObject : public QObject
     Q_PROPERTY(int readOnlyProperty READ readOnlyProperty)
     Q_PROPERTY(QKeySequence shortcut READ shortcut WRITE setShortcut)
     Q_PROPERTY(CustomType propWithCustomType READ propWithCustomType WRITE setPropWithCustomType)
+    Q_PROPERTY(QWebElement webElementProperty READ webElementProperty WRITE setWebElementProperty)
+    Q_PROPERTY(QObject* objectStarProperty READ objectStarProperty WRITE setObjectStarProperty)
     Q_ENUMS(Policy Strategy)
     Q_FLAGS(Ability)
 
@@ -137,7 +106,13 @@ public:
             m_hiddenValue(456.0),
             m_writeOnlyValue(789),
             m_readOnlyValue(987),
-            m_qtFunctionInvoked(-1) { }
+            m_objectStar(0),
+            m_qtFunctionInvoked(-1)
+    {
+        m_variantMapValue.insert("a", QVariant(123));
+        m_variantMapValue.insert("b", QVariant(QLatin1String("foo")));
+        m_variantMapValue.insert("c", QVariant::fromValue<QObject*>(this));
+    }
 
     ~MyQObject() { }
 
@@ -160,6 +135,13 @@ public:
     }
     void setVariantListProperty(const QVariantList &value) {
         m_variantListValue = value;
+    }
+
+    QVariantMap variantMapProperty() const {
+        return m_variantMapValue;
+    }
+    void setVariantMapProperty(const QVariantMap &value) {
+        m_variantMapValue = value;
     }
 
     QString stringProperty() const {
@@ -215,12 +197,29 @@ public:
         m_shortcut = seq;
     }
 
+    QWebElement webElementProperty() const {
+        return m_webElement;
+    }
+
+    void setWebElementProperty(const QWebElement& element) {
+        m_webElement = element;
+    }
+
     CustomType propWithCustomType() const {
         return m_customType;
     }
     void setPropWithCustomType(const CustomType &c) {
         m_customType = c;
     }
+
+    QObject* objectStarProperty() const {
+        return m_objectStar;
+    }
+
+    void setObjectStarProperty(QObject* object) {
+        m_objectStar = object;
+    }
+
 
     int qtFunctionInvoked() const {
         return m_qtFunctionInvoked;
@@ -467,6 +466,10 @@ public Q_SLOTS:
         m_qtFunctionInvoked = 35;
         m_actuals << arg;
     }
+    void myOverloadedSlot(const QWebElement &arg) {
+        m_qtFunctionInvoked = 36;
+        m_actuals << QVariant::fromValue<QWebElement>(arg);
+    }
 
     void qscript_call(int arg) {
         m_qtFunctionInvoked = 40;
@@ -493,6 +496,7 @@ private:
     int m_intValue;
     QVariant m_variantValue;
     QVariantList m_variantListValue;
+    QVariantMap m_variantMapValue;
     QString m_stringValue;
     QStringList m_stringListValue;
     QByteArray m_byteArrayValue;
@@ -501,7 +505,9 @@ private:
     int m_writeOnlyValue;
     int m_readOnlyValue;
     QKeySequence m_shortcut;
+    QWebElement m_webElement;
     CustomType m_customType;
+    QObject* m_objectStar;
     int m_qtFunctionInvoked;
     QVariantList m_actuals;
 };
@@ -580,6 +586,7 @@ private slots:
     void enumerate();
     void objectDeleted();
     void typeConversion();
+    void arrayObjectEnumerable();
     void symmetricUrl();
     void progressSignal();
     void urlChange();
@@ -594,7 +601,12 @@ private slots:
     void setHtmlWithJSAlert();
     void ipv6HostEncoding();
     void metaData();
+#if !defined(Q_WS_MAEMO_5)
+    // as maemo 5 does not use QComboBoxes to implement the popups
+    // this test does not make sense for it.
     void popupFocus();
+#endif
+    void inputFieldFocus();
     void hitTestContent();
     void jsByteArray();
     void ownership();
@@ -604,8 +616,12 @@ private slots:
     void hasSetFocus();
     void render();
     void scrollPosition();
+    void scrollToAnchor();
+    void scrollbarsOff();
     void evaluateWillCauseRepaint();
     void qObjectWrapperWithSameIdentity();
+    void introspectQtMethods_data();
+    void introspectQtMethods();
 
 private:
     QString  evalJS(const QString&s) {
@@ -676,13 +692,13 @@ private:
     QWebView* m_view;
     QWebPage* m_page;
     MyQObject* m_myObject;
-    QWebView* m_popupTestView;
-    int m_popupTestPaintCount;
+    QWebView* m_inputFieldsTestView;
+    int m_inputFieldTestPaintCount;
 };
 
 tst_QWebFrame::tst_QWebFrame()
     : sTrue("true"), sFalse("false"), sUndefined("undefined"), sArray("array"), sFunction("function"), sError("error"),
-        sString("string"), sObject("object"), sNumber("number"), m_popupTestView(0), m_popupTestPaintCount(0)
+        sString("string"), sObject("object"), sNumber("number"), m_inputFieldsTestView(0), m_inputFieldTestPaintCount(0)
 {
 }
 
@@ -692,10 +708,10 @@ tst_QWebFrame::~tst_QWebFrame()
 
 bool tst_QWebFrame::eventFilter(QObject* watched, QEvent* event)
 {
-    // used on the popupFocus test
-    if (watched == m_popupTestView) {
+    // used on the inputFieldFocus test
+    if (watched == m_inputFieldsTestView) {
         if (event->type() == QEvent::Paint)
-            m_popupTestPaintCount++;
+            m_inputFieldTestPaintCount++;
     }
     return QObject::eventFilter(watched, event);
 }
@@ -706,7 +722,6 @@ void tst_QWebFrame::init()
     m_page = m_view->page();
     m_myObject = new MyQObject();
     m_page->mainFrame()->addToJavaScriptWindowObject("myObject", m_myObject);
-    QDir::setCurrent(SRCDIR);
 }
 
 void tst_QWebFrame::cleanup()
@@ -717,6 +732,7 @@ void tst_QWebFrame::cleanup()
 
 void tst_QWebFrame::getSetStaticProperty()
 {
+    m_page->mainFrame()->setHtml("<html><head><body></body></html>");
     QCOMPARE(evalJS("typeof myObject.noSuchProperty"), sUndefined);
 
     // initial value (set in MyQObject constructor)
@@ -760,6 +776,21 @@ void tst_QWebFrame::getSetStaticProperty()
     QCOMPARE(evalJS("myObject.variantListProperty.length === 2"), sTrue);
     QCOMPARE(evalJS("myObject.variantListProperty[0] === 123"), sTrue);
     QCOMPARE(evalJS("myObject.variantListProperty[1] === 'foo'"), sTrue);
+
+    {
+        QString type;
+        QVariant ret = evalJSV("myObject.variantMapProperty", type);
+        QCOMPARE(type, sObject);
+        QCOMPARE(ret.type(), QVariant::Map);
+        QVariantMap vm = ret.value<QVariantMap>();
+        QCOMPARE(vm.size(), 3);
+        QCOMPARE(vm.value("a").toInt(), 123);
+        QCOMPARE(vm.value("b").toString(), QLatin1String("foo"));
+        QCOMPARE(vm.value("c").value<QObject*>(), static_cast<QObject*>(m_myObject));
+    }
+    QCOMPARE(evalJS("myObject.variantMapProperty.a === 123"), sTrue);
+    QCOMPARE(evalJS("myObject.variantMapProperty.b === 'foo'"), sTrue);
+    QCOMPARE(evalJS("myObject.variantMapProperty.c.variantMapProperty.b === 'foo'"), sTrue);
 
     {
         QString type;
@@ -856,6 +887,8 @@ void tst_QWebFrame::getSetStaticProperty()
     QCOMPARE(evalJS("myObject.stringListProperty[1]"), QLatin1String("two"));
     QCOMPARE(evalJS("typeof myObject.stringListProperty[2]"), sString);
     QCOMPARE(evalJS("myObject.stringListProperty[2]"), QLatin1String("true"));
+    evalJS("myObject.webElementProperty=document.body;");
+    QCOMPARE(evalJS("myObject.webElementProperty.tagName"), QLatin1String("BODY"));
 
     // try to delete
     QCOMPARE(evalJS("delete myObject.intProperty"), sFalse);
@@ -892,6 +925,21 @@ void tst_QWebFrame::getSetStaticProperty()
     QCOMPARE(evalJS("myObject.readOnlyProperty = 654;"
                     "myObject.readOnlyProperty == 987"), sTrue);
     QCOMPARE(m_myObject->readOnlyProperty(), 987);
+
+    // QObject* property
+    m_myObject->setObjectStarProperty(0);
+    QCOMPARE(m_myObject->objectStarProperty(), (QObject*)0);
+    QCOMPARE(evalJS("myObject.objectStarProperty == null"), sTrue);
+    QCOMPARE(evalJS("typeof myObject.objectStarProperty"), sObject);
+    QCOMPARE(evalJS("Boolean(myObject.objectStarProperty)"), sFalse);
+    QCOMPARE(evalJS("String(myObject.objectStarProperty) == 'null'"), sTrue);
+    QCOMPARE(evalJS("myObject.objectStarProperty.objectStarProperty"),
+        sUndefined);
+    m_myObject->setObjectStarProperty(this);
+    QCOMPARE(evalJS("myObject.objectStarProperty != null"), sTrue);
+    QCOMPARE(evalJS("typeof myObject.objectStarProperty"), sObject);
+    QCOMPARE(evalJS("Boolean(myObject.objectStarProperty)"), sTrue);
+    QCOMPARE(evalJS("String(myObject.objectStarProperty) != 'null'"), sTrue);
 }
 
 void tst_QWebFrame::getSetDynamicProperty()
@@ -1918,6 +1966,13 @@ void tst_QWebFrame::overloadedSlots()
     f.call(QString(), QStringList() << m_engine->newVariant(QVariant("ciao")));
     QCOMPARE(m_myObject->qtFunctionInvoked(), 35);
     */
+
+    // should pick myOverloadedSlot(QRegExp)
+    m_myObject->resetQtFunctionInvoked();
+    evalJS("myObject.myOverloadedSlot(document.body)");
+    QEXPECT_FAIL("", "https://bugs.webkit.org/show_bug.cgi?id=37319", Continue);
+    QCOMPARE(m_myObject->qtFunctionInvoked(), 36);
+
     // should pick myOverloadedSlot(QObject*)
     m_myObject->resetQtFunctionInvoked();
     evalJS("myObject.myOverloadedSlot(myObject)");
@@ -2101,6 +2156,31 @@ void tst_QWebFrame::typeConversion()
     // ### RegExps
 }
 
+class StringListTestObject : public QObject {
+    Q_OBJECT
+public Q_SLOTS:
+    QVariant stringList()
+    {
+        return QStringList() << "Q" << "t";
+    };
+};
+
+void tst_QWebFrame::arrayObjectEnumerable()
+{
+    QWebPage page;
+    QWebFrame* frame = page.mainFrame();
+    QObject* qobject = new StringListTestObject();
+    frame->addToJavaScriptWindowObject("test", qobject, QScriptEngine::ScriptOwnership);
+
+    const QString script("var stringArray = test.stringList();"
+                         "var result = '';"
+                         "for (var i in stringArray) {"
+                         "    result += stringArray[i];"
+                         "}"
+                         "result;");
+    QCOMPARE(frame->evaluateJavaScript(script).toString(), QString::fromLatin1("Qt"));
+}
+
 void tst_QWebFrame::symmetricUrl()
 {
     QVERIFY(m_view->url().isEmpty());
@@ -2244,7 +2324,7 @@ protected:
     virtual QNetworkReply* createRequest(Operation op, const QNetworkRequest& request, QIODevice* outgoingData)
     {
         QString url = request.url().toString();
-        if (op == QNetworkAccessManager::GetOperation)
+        if (op == QNetworkAccessManager::GetOperation) {
             if (url == "qrc:/test1.html" ||  url == "http://abcdef.abcdef/")
                 return new FakeReply(request, this);
 #ifndef QT_NO_OPENSSL
@@ -2255,6 +2335,7 @@ protected:
                 return reply;
             }
 #endif
+       }
 
         return QNetworkAccessManager::createRequest(op, request, outgoingData);
     }
@@ -2271,19 +2352,19 @@ void tst_QWebFrame::requestedUrl()
     page.setNetworkAccessManager(networkManager);
 
     frame->setUrl(QUrl("qrc:/test1.html"));
-    QTest::qWait(200);
+    waitForSignal(frame, SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(spy.count(), 1);
     QCOMPARE(frame->requestedUrl(), QUrl("qrc:/test1.html"));
     QCOMPARE(frame->url(), QUrl("qrc:/test2.html"));
 
     frame->setUrl(QUrl("qrc:/non-existent.html"));
-    QTest::qWait(200);
+    waitForSignal(frame, SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(spy.count(), 2);
     QCOMPARE(frame->requestedUrl(), QUrl("qrc:/non-existent.html"));
     QCOMPARE(frame->url(), QUrl("qrc:/non-existent.html"));
 
     frame->setUrl(QUrl("http://abcdef.abcdef"));
-    QTest::qWait(200);
+    waitForSignal(frame, SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(spy.count(), 3);
     QCOMPARE(frame->requestedUrl(), QUrl("http://abcdef.abcdef/"));
     QCOMPARE(frame->url(), QUrl("http://abcdef.abcdef/"));
@@ -2294,7 +2375,7 @@ void tst_QWebFrame::requestedUrl()
 
     QSignalSpy spy2(page.networkAccessManager(), SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)));
     frame->setUrl(QUrl("qrc:/fake-ssl-error.html"));
-    QTest::qWait(200);
+    waitForSignal(frame, SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(spy2.count(), 1);
     QCOMPARE(frame->requestedUrl(), QUrl("qrc:/fake-ssl-error.html"));
     QCOMPARE(frame->url(), QUrl("qrc:/fake-ssl-error.html"));
@@ -2352,7 +2433,7 @@ void tst_QWebFrame::setHtmlWithResource()
     // in few seconds, the image should be completey loaded
     QSignalSpy spy(&page, SIGNAL(loadFinished(bool)));
     frame->setHtml(html);
-    QTest::qWait(200);
+    waitForSignal(frame, SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(spy.count(), 1);
 
     QCOMPARE(frame->evaluateJavaScript("document.images.length").toInt(), 1);
@@ -2371,7 +2452,7 @@ void tst_QWebFrame::setHtmlWithResource()
 
     // in few seconds, the CSS should be completey loaded
     frame->setHtml(html2);
-    QTest::qWait(200);
+    waitForSignal(frame, SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(spy.size(), 2);
 
     QWebElement p = frame->documentElement().findAll("p").at(0);
@@ -2380,6 +2461,11 @@ void tst_QWebFrame::setHtmlWithResource()
 
 void tst_QWebFrame::setHtmlWithBaseURL()
 {
+    if (!QDir(TESTS_SOURCE_DIR).exists())
+        QSKIP(QString("This test requires access to resources found in '%1'").arg(TESTS_SOURCE_DIR).toLatin1().constData(), SkipAll);
+
+    QDir::setCurrent(TESTS_SOURCE_DIR);
+
     QString html("<html><body><p>hello world</p><img src='resources/image2.png'/></body></html>");
 
     QWebPage page;
@@ -2388,8 +2474,8 @@ void tst_QWebFrame::setHtmlWithBaseURL()
     // in few seconds, the image should be completey loaded
     QSignalSpy spy(&page, SIGNAL(loadFinished(bool)));
 
-    frame->setHtml(html, QUrl::fromLocalFile(QDir::currentPath()));
-    QTest::qWait(200);
+    frame->setHtml(html, QUrl::fromLocalFile(TESTS_SOURCE_DIR));
+    waitForSignal(frame, SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(spy.count(), 1);
 
     QCOMPARE(frame->evaluateJavaScript("document.images.length").toInt(), 1);
@@ -2496,6 +2582,7 @@ void tst_QWebFrame::metaData()
     QCOMPARE(metaData.value("nonexistant"), QString());
 }
 
+#if !defined(Q_WS_MAEMO_5)
 void tst_QWebFrame::popupFocus()
 {
     QWebView view;
@@ -2519,23 +2606,35 @@ void tst_QWebFrame::popupFocus()
 
     // open the popup by clicking. check if focus is on the popup
     QTest::mouseClick(&view, Qt::LeftButton, 0, QPoint(25, 25));
-    QObject* webpopup = firstChildByClassName(&view, "WebCore::QWebPopup");
+    QObject* webpopup = firstChildByClassName(&view, "QComboBox");
     QComboBox* combo = qobject_cast<QComboBox*>(webpopup);
+    QVERIFY(combo != 0);
     QTRY_VERIFY(!view.hasFocus() && combo->view()->hasFocus()); // Focus should be on the popup
 
     // hide the popup and check if focus is on the page
     combo->hidePopup();
     QTRY_VERIFY(view.hasFocus() && !combo->view()->hasFocus()); // Focus should be back on the WebView
+}
+#endif
 
-    // triple the flashing time, should at least blink twice already
-    int delay = qApp->cursorFlashTime() * 3;
+void tst_QWebFrame::inputFieldFocus()
+{
+    QWebView view;
+    view.setHtml("<html><body><input type=\"text\"></input></body></html>");
+    view.resize(400, 100);
+    view.show();
+    view.setFocus();
+    QTRY_VERIFY(view.hasFocus());
+
+    // double the flashing time, should at least blink once already
+    int delay = qApp->cursorFlashTime() * 2;
 
     // focus the lineedit and check if it blinks
-    QTest::mouseClick(&view, Qt::LeftButton, 0, QPoint(200, 25));
-    m_popupTestView = &view;
+    QTest::mouseClick(&view, Qt::LeftButton, 0, QPoint(25, 25));
+    m_inputFieldsTestView = &view;
     view.installEventFilter( this );
     QTest::qWait(delay);
-    QVERIFY2(m_popupTestPaintCount >= 4,
+    QVERIFY2(m_inputFieldTestPaintCount >= 3,
              "The input field should have a blinking caret");
 }
 
@@ -2679,7 +2778,7 @@ void tst_QWebFrame::hasSetFocus()
     QSignalSpy loadSpy(m_page, SIGNAL(loadFinished(bool)));
     m_page->mainFrame()->setHtml(html);
 
-    QTest::qWait(200);
+    waitForSignal(m_page->mainFrame(), SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(loadSpy.size(), 1);
 
     QList<QWebFrame*> children = m_page->mainFrame()->childFrames();
@@ -2689,7 +2788,7 @@ void tst_QWebFrame::hasSetFocus()
                       "</body></html>");
     frame->setHtml(innerHtml);
 
-    QTest::qWait(200);
+    waitForSignal(frame, SIGNAL(loadFinished(bool)), 200);
     QCOMPARE(loadSpy.size(), 2);
 
     m_page->mainFrame()->setFocus();
@@ -2768,6 +2867,70 @@ void tst_QWebFrame::scrollPosition()
     QCOMPARE(y, 29);
 }
 
+void tst_QWebFrame::scrollToAnchor()
+{
+    QWebPage page;
+    page.setViewportSize(QSize(480, 800));
+    QWebFrame* frame = page.mainFrame();
+
+    QString html("<html><body><p style=\"margin-bottom: 1500px;\">Hello.</p>"
+                 "<p><a id=\"foo\">This</a> is an anchor</p>"
+                 "<p style=\"margin-bottom: 1500px;\"><a id=\"bar\">This</a> is another anchor</p>"
+                 "</body></html>");
+    frame->setHtml(html);
+    frame->setScrollPosition(QPoint(0, 0));
+    QCOMPARE(frame->scrollPosition().x(), 0);
+    QCOMPARE(frame->scrollPosition().y(), 0);
+
+    QWebElement fooAnchor = frame->findFirstElement("a[id=foo]");
+
+    frame->scrollToAnchor("foo");
+    QCOMPARE(frame->scrollPosition().y(), fooAnchor.geometry().top());
+
+    frame->scrollToAnchor("bar");
+    frame->scrollToAnchor("foo");
+    QCOMPARE(frame->scrollPosition().y(), fooAnchor.geometry().top());
+
+    frame->scrollToAnchor("top");
+    QCOMPARE(frame->scrollPosition().y(), 0);
+
+    frame->scrollToAnchor("bar");
+    frame->scrollToAnchor("notexist");
+    QVERIFY(frame->scrollPosition().y() != 0);
+}
+
+
+void tst_QWebFrame::scrollbarsOff()
+{
+    QWebView view;
+    QWebFrame* mainFrame = view.page()->mainFrame();
+
+    mainFrame->setScrollBarPolicy(Qt::Vertical, Qt::ScrollBarAlwaysOff);
+    mainFrame->setScrollBarPolicy(Qt::Horizontal, Qt::ScrollBarAlwaysOff);
+
+    QString html("<script>" \
+                 "   function checkScrollbar() {" \
+                 "       if (innerWidth === document.documentElement.offsetWidth)" \
+                 "           document.getElementById('span1').innerText = 'SUCCESS';" \
+                 "       else" \
+                 "           document.getElementById('span1').innerText = 'FAIL';" \
+                 "   }" \
+                 "</script>" \
+                 "<body>" \
+                 "   <div style='margin-top:1000px ; margin-left:1000px'>" \
+                 "       <a id='offscreen' href='a'>End</a>" \
+                 "   </div>" \
+                 "<span id='span1'></span>" \
+                 "</body>");
+
+
+    view.setHtml(html);
+    ::waitForSignal(&view, SIGNAL(loadFinished(bool)));
+
+    mainFrame->evaluateJavaScript("checkScrollbar();");
+    QCOMPARE(mainFrame->documentElement().findAll("span").at(0).toPlainText(), QString("SUCCESS"));
+}
+
 void tst_QWebFrame::evaluateWillCauseRepaint()
 {
     QWebView view;
@@ -2776,14 +2939,16 @@ void tst_QWebFrame::evaluateWillCauseRepaint()
     view.setHtml(html);
     view.show();
 
-    QTest::qWait(200);
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+    QTest::qWaitForWindowShown(&view);
+#else
+    QTest::qWait(2000);
+#endif
 
     view.page()->mainFrame()->evaluateJavaScript(
         "document.getElementById('junk').style.display = 'none';");
 
     ::waitForSignal(view.page(), SIGNAL(repaintRequested(QRect)));
-
-    QTest::qWait(2000);
 }
 
 class TestFactory : public QObject
@@ -2822,6 +2987,48 @@ void tst_QWebFrame::qObjectWrapperWithSameIdentity()
 
     mainFrame->evaluateJavaScript("triggerBug();");
     QCOMPARE(mainFrame->toPlainText(), QString("test2"));
+}
+
+void tst_QWebFrame::introspectQtMethods_data()
+{
+    QTest::addColumn<QString>("objectExpression");
+    QTest::addColumn<QString>("methodName");
+    QTest::addColumn<QStringList>("expectedPropertyNames");
+
+    QTest::newRow("myObject.mySignal")
+        << "myObject" << "mySignal" << (QStringList() << "connect" << "disconnect" << "length" << "name");
+    QTest::newRow("myObject.mySlot")
+        << "myObject" << "mySlot" << (QStringList() << "connect" << "disconnect" << "length" << "name");
+    QTest::newRow("myObject.myInvokable")
+        << "myObject" << "myInvokable" << (QStringList() << "connect" << "disconnect" << "length" << "name");
+    QTest::newRow("myObject.mySignal.connect")
+        << "myObject.mySignal" << "connect" << (QStringList() << "length" << "name");
+    QTest::newRow("myObject.mySignal.disconnect")
+        << "myObject.mySignal" << "disconnect" << (QStringList() << "length" << "name");
+}
+
+void tst_QWebFrame::introspectQtMethods()
+{
+    QFETCH(QString, objectExpression);
+    QFETCH(QString, methodName);
+    QFETCH(QStringList, expectedPropertyNames);
+
+    QString methodLookup = QString::fromLatin1("%0['%1']").arg(objectExpression).arg(methodName);
+    QCOMPARE(evalJSV(QString::fromLatin1("Object.getOwnPropertyNames(%0).sort()").arg(methodLookup)).toStringList(), expectedPropertyNames);
+
+    for (int i = 0; i < expectedPropertyNames.size(); ++i) {
+        QString name = expectedPropertyNames.at(i);
+        QCOMPARE(evalJS(QString::fromLatin1("%0.hasOwnProperty('%1')").arg(methodLookup).arg(name)), sTrue);
+        evalJS(QString::fromLatin1("var descriptor = Object.getOwnPropertyDescriptor(%0, '%1')").arg(methodLookup).arg(name));
+        QCOMPARE(evalJS("typeof descriptor"), QString::fromLatin1("object"));
+        QCOMPARE(evalJS("descriptor.get"), sUndefined);
+        QCOMPARE(evalJS("descriptor.set"), sUndefined);
+        QCOMPARE(evalJS(QString::fromLatin1("descriptor.value === %0['%1']").arg(methodLookup).arg(name)), sTrue);
+        QCOMPARE(evalJS(QString::fromLatin1("descriptor.enumerable")), sFalse);
+        QCOMPARE(evalJS(QString::fromLatin1("descriptor.configurable")), sFalse);
+    }
+
+    QVERIFY(evalJSV("var props=[]; for (var p in myObject.deleteLater) {props.push(p);}; props.sort()").toStringList().isEmpty());
 }
 
 QTEST_MAIN(tst_QWebFrame)

@@ -56,7 +56,7 @@
 #include "qhash.h"
 #include "qtranslator_p.h"
 
-#if defined(Q_OS_UNIX)
+#if defined(Q_OS_UNIX) && !defined(Q_OS_SYMBIAN)
 #define QT_USE_MMAP
 #include "private/qcore_unix_p.h"
 #endif
@@ -412,12 +412,12 @@ bool QTranslator::load(const QString & filename, const QString & directory,
 
         realname = prefix + fname + (suffix.isNull() ? QString::fromLatin1(".qm") : suffix);
         fi.setFile(realname);
-        if (fi.isReadable())
+        if (fi.isReadable() && fi.isFile())
             break;
 
         realname = prefix + fname;
         fi.setFile(realname);
-        if (fi.isReadable())
+        if (fi.isReadable() && fi.isFile())
             break;
 
         int rightmost = 0;

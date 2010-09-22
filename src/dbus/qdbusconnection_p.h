@@ -71,6 +71,8 @@
 
 #include <qdbusmessage.h>
 
+#ifndef QT_NO_DBUS
+
 QT_BEGIN_NAMESPACE
 
 class QDBusMessage;
@@ -307,7 +309,6 @@ public:
     static QDBusConnection q(QDBusConnectionPrivate *connection) { return QDBusConnection(connection); }
 
     static void setSender(const QDBusConnectionPrivate *s);
-    static void setConnection(const QString &name, QDBusConnectionPrivate *c);
 
     friend class QDBusActivateObjectEvent;
     friend class QDBusCallDeliveryEvent;
@@ -331,4 +332,5 @@ extern QDBusMessage qDBusPropertyGetAll(const QDBusConnectionPrivate::ObjectTree
 
 QT_END_NAMESPACE
 
+#endif // QT_NO_DBUS
 #endif

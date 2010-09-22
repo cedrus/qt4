@@ -196,6 +196,7 @@ public:
             return 0;
         }
     } *mac_menubar;
+    static bool macUpdateMenuBarImmediatly();
     bool macWidgetHasNativeMenubar(QWidget *widget);
     void macCreateMenuBar(QWidget *);
     void macDestroyMenuBar();
@@ -268,9 +269,9 @@ public:
 
     } *symbian_menubar;
     static int symbianCommands(int command);
+#endif
 #ifdef QT_SOFTKEYS_ENABLED
     QAction *menuBarAction;
-#endif
 #endif
 };
 #endif

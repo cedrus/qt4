@@ -68,6 +68,8 @@
 
 #ifndef QT_NO_GSTREAMER
 #include <gst/gst.h>
+#endif
+#ifdef HAVE_PHONON
 #include <phonon/phononnamespace.h>
 #endif
 
@@ -387,8 +389,10 @@ MainWindow::MainWindow()
     audiosinkCombo->addItem(tr("aRts"), QLatin1String("artssink"));
     audiosinkCombo->setItemData(audiosinkCombo->findText(tr("aRts")),
                                 tr("Experimental aRts support for GStreamer."), Qt::ToolTipRole);
-#ifndef QT_NO_GSTREAMER
+#ifdef HAVE_PHONON
     phononVersionLabel->setText(QLatin1String(Phonon::phononVersion()));
+#endif
+#ifndef QT_NO_GSTREAMER
     if (gst_init_check(0, 0, 0)) {
         gchar *versionString = gst_version_string();
         gstversionLabel->setText(QLatin1String(versionString));
@@ -428,7 +432,7 @@ MainWindow::MainWindow()
 #endif
 #ifndef QT_NO_OPENGL
     videomodeCombo->addItem(tr("OpenGL"), QLatin1String("OpenGL"));
-    videomodeCombo->setItemData(videomodeCombo->findText(tr("OpenGL")), tr("Use OpenGL if avaiable"), Qt::ToolTipRole);
+    videomodeCombo->setItemData(videomodeCombo->findText(tr("OpenGL")), tr("Use OpenGL if available"), Qt::ToolTipRole);
 #endif
     videomodeCombo->addItem(tr("Software"), QLatin1String("Software"));
     videomodeCombo->setItemData(videomodeCombo->findText(tr("Software")), tr("Use simple software rendering"), Qt::ToolTipRole);

@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -53,12 +39,12 @@
 
 /*!
     \page activeqt.html
-    \title ActiveQt Framework
+    \title Qt's ActiveX Framework (ActiveQt)
     \brief An overview of Qt's ActiveX and COM integration on Windows.
 
-    \ingroup platform-specific
-    \ingroup frameworks-technologies
+    \ingroup qt-activex
     \keyword ActiveQt
+    \target ActiveQt Framework
 
     Qt's ActiveX and COM support allows Qt for Windows developers to:
 
@@ -71,16 +57,16 @@
     \endlist
 
     For more information about using ActiveX with Qt, see
-    \l{Building ActiveX servers and controls with Qt}.
+    \l{Building ActiveX servers in Qt}.
 
     The ActiveQt framework consists of two modules:
 
     \list
-    \o The \l{Using ActiveX controls and COM objects in Qt}{QAxContainer}
+    \o The \l{Using ActiveX controls and COM in Qt}{QAxContainer}
        module is a static library implementing QObject and QWidget subclasses,
        QAxObject and QAxWidget, that act as containers for COM objects and
        ActiveX controls.
-    \o The \l{Building ActiveX servers and controls with Qt}{QAxServer}
+    \o The \l{Building ActiveX servers in Qt}{QAxServer}
        module is a static library that implements
        functionality for in-process and executable COM servers. This
        module provides the QAxAggregated, QAxBindable and QAxFactory
@@ -101,7 +87,7 @@
     plugin that integrates the QAxContainer module into \l{Qt
     Designer}.
 
-    The ActiveQt modules are part of the \l{Qt Full Framework Edition} and
+    The ActiveQt modules are part of the \l{Qt Commercial Edition} and
     the \l{Open Source Versions of Qt}.
 
     \sa {QAxContainer Module}, {QAxServer Module}

@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -87,30 +73,28 @@
     \header
         \o {4,1} Qt's Libraries
     \row
-        \o \l {QtAssistant}
         \o \l {QAxContainer}
         \o \l {QAxServer}
         \o \l {QtCore}
-    \row
         \o \l {QtDBus}
+    \row
         \o \l {QtDesigner}
         \o \l {QtGui}
         \o \l {QtHelp}
-    \row
         \o \l {QtNetwork}
+    \row
         \o \l {QtOpenGL}
         \o \l {QtScript}
         \o \l {QtScriptTools}
-    \row
         \o \l {QtSql}
+    \row
         \o \l {QtSvg}
         \o \l {QtWebKit}
         \o \l {QtXml}
-    \row
         \o \l {QtXmlPatterns}
+    \row
         \o \l {Phonon Module}{Phonon}
         \o \l {Qt3Support}
-        \o
     \endtable
 
     Since Qt is not a system library, it has to be redistributed along
@@ -777,24 +761,8 @@
     assemblies at the
     \l {http://msdn.microsoft.com/en-us/library/aa376307.aspx}{MSDN website}.
 
-    There are two ways to include the run time libraries: by bundling them
-    directly with your application or by installing them on the end-user's
-    system.
-
-    To bundle the run time libraries with your application, copy the directory
-
-    \snippet doc/src/snippets/code/doc_src_deployment.qdoc 22
-
-    into the folder where your executable is, so that you are including a
-    \c Microsoft.VC80.CRT directory alongside your application's executable. If
-    you are bundling the runtimes and need to deploy plugins as well, you have
-    to remove the manifest from the plugins (embedded as a resource) by adding
-    the following line to the \c{.pro} file of the plugins you are compiling:
-
-    \snippet doc/src/snippets/code/doc_src_deployment.qdoc 23
-
-    \warning If you skip the step above, the plugins will not load on some
-    systems.
+    The correct way to include the runtime libraries with your application
+    is to ensure that they are installed on the end-user's system.
 
     To install the runtime libraries on the end-user's system, you need to
     include the appropriate Visual C++ Redistributable Package (VCRedist)
@@ -825,11 +793,11 @@
     In brief the steps are
 
     \list 1
-    
+
         \o create a folder structure on the development computer that will match the target USB stick directory structure, for example '\\app' and for your dlls, '\\app\\lib'.
-        
+
         \o on the development computer, from the appropriate 'redist' folder copy over Microsoft.VC80.CRT and Microsoft.VC80.MFC to the directories '\\app' and '\\app\\lib' on the development PC.
-        
+
         \o xcopy the \\app folder to the target USB stick.
     \endlist
 

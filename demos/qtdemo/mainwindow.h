@@ -62,6 +62,8 @@ public:
     void start();
 
     QGraphicsScene *scene;
+    QGraphicsWidget* mainSceneRoot;
+
     bool loop;
 
     // FPS stuff:

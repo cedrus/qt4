@@ -40,6 +40,7 @@
 #include "HTMLElement.h"
 #include "Frame.h"
 #include "FrameLoader.h"
+#include "FrameLoaderClient.h"
 #include "loader.h"
 #include "SecurityOrigin.h"
 #include "Settings.h"
@@ -111,8 +112,8 @@ void DocLoader::checkForReload(const KURL& fullURL)
     case CachePolicyRevalidate:
         cache()->revalidateResource(existing, this);
         break;
-    default:
-        ASSERT_NOT_REACHED();
+    case CachePolicyAllowStale:
+        return;
     }
 
     m_reloadedURLs.add(fullURL.string());
@@ -120,6 +121,11 @@ void DocLoader::checkForReload(const KURL& fullURL)
 
 CachedImage* DocLoader::requestImage(const String& url)
 {
+    if (Frame* f = frame()) {
+        Settings* settings = f->settings();
+        if (!f->loader()->client()->allowImages(!settings || settings->areImagesEnabled()))
+            return 0;
+    }
     CachedImage* resource = static_cast<CachedImage*>(requestResource(CachedResource::ImageResource, url, String()));
     if (autoLoadImages() && resource && resource->stillNeedsLoad()) {
         resource->setLoading(true);
@@ -401,10 +407,14 @@ void DocLoader::requestPreload(CachedResource::Type type, const String& url, con
         encoding = charset.isEmpty() ? m_doc->frame()->loader()->encoding() : charset;
 
     CachedResource* resource = requestResource(type, url, encoding, true);
-    if (!resource || m_preloads.contains(resource))
+    if (!resource || (m_preloads && m_preloads->contains(resource)))
         return;
     resource->increasePreloadCount();
-    m_preloads.add(resource);
+
+    if (!m_preloads)
+        m_preloads.set(new ListHashSet<CachedResource*>);
+    m_preloads->add(resource);
+
 #if PRELOAD_DEBUG
     printf("PRELOADING %s\n",  resource->url().latin1().data());
 #endif
@@ -415,8 +425,11 @@ void DocLoader::clearPreloads()
 #if PRELOAD_DEBUG
     printPreloadStats();
 #endif
-    ListHashSet<CachedResource*>::iterator end = m_preloads.end();
-    for (ListHashSet<CachedResource*>::iterator it = m_preloads.begin(); it != end; ++it) {
+    if (!m_preloads)
+        return;
+
+    ListHashSet<CachedResource*>::iterator end = m_preloads->end();
+    for (ListHashSet<CachedResource*>::iterator it = m_preloads->begin(); it != end; ++it) {
         CachedResource* res = *it;
         res->decreasePreloadCount();
         if (res->canDelete() && !res->inCache())

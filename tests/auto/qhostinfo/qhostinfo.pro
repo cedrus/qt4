@@ -10,8 +10,7 @@ wince*: {
   win32:LIBS += -lws2_32
 }
 
+symbian: TARGET.CAPABILITY = NetworkServices
 symbian: {
   INCLUDEPATH *= $$MW_LAYER_SYSTEMINCLUDE
 }
-
-

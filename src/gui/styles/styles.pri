@@ -46,7 +46,8 @@ x11{
 contains( styles, mac ) {
 	HEADERS += \
 		styles/qmacstyle_mac.h \
-		styles/qmacstylepixmaps_mac_p.h
+		styles/qmacstylepixmaps_mac_p.h \
+		styles/qmacstyle_mac_p.h
         OBJECTIVE_SOURCES += styles/qmacstyle_mac.mm
 
 	!contains( styles, windows ) {
@@ -170,11 +171,20 @@ contains( styles, s60 ):contains(QT_CONFIG, s60) {
     SOURCES += styles/qs60style.cpp
     symbian {
         SOURCES += styles/qs60style_s60.cpp
-        LIBS += -lAknIcon -lAKNSKINS -lAKNSKINSRV -lFontUtils -legul -lbmpanim
+        LIBS += -legul -lbmpanim
+        contains(CONFIG, is_using_gnupoc) {
+            LIBS += -laknicon -laknskins -laknskinsrv -lfontutils
+        } else {
+            LIBS += -lAknIcon -lAKNSKINS -lAKNSKINSRV -lFontUtils
+        }
     } else {
         SOURCES += styles/qs60style_simulated.cpp
         RESOURCES += styles/qstyle_s60_simulated.qrc
     }
 } else {
+    symbian {
+        HEADERS += styles/qs60style.h
+        SOURCES += styles/qs60style_stub.cpp
+    }
     DEFINES += QT_NO_STYLE_S60
 }

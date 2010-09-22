@@ -46,6 +46,7 @@
 #include <private/qdrawhelper_armv6_p.h>
 #include <private/qdrawhelper_neon_p.h>
 #include <private/qmath_p.h>
+#include <private/qsimd_p.h>
 #include <qmath.h>
 
 QT_BEGIN_NAMESPACE
@@ -69,8 +70,10 @@ static uint gccBug(uint value)
   constants and structures
 */
 
-static const int fixed_scale = 1 << 16;
-static const int half_point = 1 << 15;
+enum {
+    fixed_scale = 1 << 16,
+    half_point = 1 << 15
+};
 static const int buffer_size = 2048;
 
 struct LinearGradientValues
@@ -174,7 +177,7 @@ Q_STATIC_TEMPLATE_FUNCTION uint * QT_FASTCALL destFetch(uint *buffer, QRasterBuf
 
 # define SPANFUNC_POINTER_DESTFETCH(Arg) destFetch<Arg>
 
-static const DestFetchProc destFetchProc[QImage::NImageFormats] =
+static DestFetchProc destFetchProc[QImage::NImageFormats] =
 {
     0, // Format_Invalid
     destFetchMono, // Format_Mono,
@@ -322,7 +325,7 @@ Q_STATIC_TEMPLATE_FUNCTION void QT_FASTCALL destStore(QRasterBuffer *rasterBuffe
 
 # define SPANFUNC_POINTER_DESTSTORE(DEST) destStore<DEST>
 
-static const DestStoreProc destStoreProc[QImage::NImageFormats] =
+static DestStoreProc destStoreProc[QImage::NImageFormats] =
 {
     0, // Format_Invalid
     destStoreMono, // Format_Mono,
@@ -671,6 +674,11 @@ const uint * QT_FASTCALL fetchTransformedBilinear(uint *buffer, const Operator *
     int image_width = data->texture.width;
     int image_height = data->texture.height;
 
+    int image_x1 = data->texture.x1;
+    int image_y1 = data->texture.y1;
+    int image_x2 = data->texture.x2;
+    int image_y2 = data->texture.y2;
+
     const qreal cx = x + 0.5;
     const qreal cy = y + 0.5;
 
@@ -690,36 +698,41 @@ const uint * QT_FASTCALL fetchTransformedBilinear(uint *buffer, const Operator *
         fy -= half_point;
         while (b < end) {
             int x1 = (fx >> 16);
-            int x2 = x1 + 1;
+            int x2;
             int y1 = (fy >> 16);
-            int y2 = y1 + 1;
-
-            int distx = ((fx - (x1 << 16)) >> 8);
-            int disty = ((fy - (y1 << 16)) >> 8);
-            int idistx = 256 - distx;
-            int idisty = 256 - disty;
+            int y2;
 
             if (blendType == BlendTransformedBilinearTiled) {
                 x1 %= image_width;
-                x2 %= image_width;
-                y1 %= image_height;
-                y2 %= image_height;
-
                 if (x1 < 0) x1 += image_width;
-                if (x2 < 0) x2 += image_width;
-                if (y1 < 0) y1 += image_height;
-                if (y2 < 0) y2 += image_height;
+                x2 = x1 + 1;
+                x2 %= image_width;
 
-                Q_ASSERT(x1 >= 0 && x1 < image_width);
-                Q_ASSERT(x2 >= 0 && x2 < image_width);
-                Q_ASSERT(y1 >= 0 && y1 < image_height);
-                Q_ASSERT(y2 >= 0 && y2 < image_height);
+                y1 %= image_height;
+                if (y1 < 0) y1 += image_height;
+                y2 = y1 + 1;
+                y2 %= image_height;
             } else {
-                x1 = qBound(0, x1, image_width - 1);
-                x2 = qBound(0, x2, image_width - 1);
-                y1 = qBound(0, y1, image_height - 1);
-                y2 = qBound(0, y2, image_height - 1);
+                if (x1 < image_x1) {
+                    x2 = x1 = image_x1;
+                } else if (x1 >= image_x2 - 1) {
+                    x2 = x1 = image_x2 - 1;
+                } else {
+                    x2 = x1 + 1;
+                }
+                if (y1 < image_y1) {
+                    y2 = y1 = image_y1;
+                } else if (y1 >= image_y2 - 1) {
+                    y2 = y1 = image_y2 - 1;
+                } else {
+                    y2 = y1 + 1;
+                }
             }
+
+            Q_ASSERT(x1 >= 0 && x1 < image_width);
+            Q_ASSERT(x2 >= 0 && x2 < image_width);
+            Q_ASSERT(y1 >= 0 && y1 < image_height);
+            Q_ASSERT(y2 >= 0 && y2 < image_height);
 
             const uchar *s1 = data->texture.scanLine(y1);
             const uchar *s2 = data->texture.scanLine(y2);
@@ -728,6 +741,11 @@ const uint * QT_FASTCALL fetchTransformedBilinear(uint *buffer, const Operator *
             uint tr = fetch(s1, x2, data->texture.colorTable);
             uint bl = fetch(s2, x1, data->texture.colorTable);
             uint br = fetch(s2, x2, data->texture.colorTable);
+
+            int distx = (fx & 0x0000ffff) >> 8;
+            int disty = (fy & 0x0000ffff) >> 8;
+            int idistx = 256 - distx;
+            int idisty = 256 - disty;
 
             uint xtop = INTERPOLATE_PIXEL_256(tl, idistx, tr, distx);
             uint xbot = INTERPOLATE_PIXEL_256(bl, idistx, br, distx);
@@ -752,9 +770,9 @@ const uint * QT_FASTCALL fetchTransformedBilinear(uint *buffer, const Operator *
             const qreal py = fy * iw - 0.5;
 
             int x1 = int(px) - (px < 0);
-            int x2 = x1 + 1;
+            int x2;
             int y1 = int(py) - (py < 0);
-            int y2 = y1 + 1;
+            int y2;
 
             int distx = int((px - x1) * 256);
             int disty = int((py - y1) * 256);
@@ -763,25 +781,35 @@ const uint * QT_FASTCALL fetchTransformedBilinear(uint *buffer, const Operator *
 
             if (blendType == BlendTransformedBilinearTiled) {
                 x1 %= image_width;
-                x2 %= image_width;
-                y1 %= image_height;
-                y2 %= image_height;
-
                 if (x1 < 0) x1 += image_width;
-                if (x2 < 0) x2 += image_width;
-                if (y1 < 0) y1 += image_height;
-                if (y2 < 0) y2 += image_height;
+                x2 = x1 + 1;
+                x2 %= image_width;
 
-                Q_ASSERT(x1 >= 0 && x1 < image_width);
-                Q_ASSERT(x2 >= 0 && x2 < image_width);
-                Q_ASSERT(y1 >= 0 && y1 < image_height);
-                Q_ASSERT(y2 >= 0 && y2 < image_height);
+                y1 %= image_height;
+                if (y1 < 0) y1 += image_height;
+                y2 = y1 + 1;
+                y2 %= image_height;
             } else {
-                x1 = qBound(0, x1, image_width - 1);
-                x2 = qBound(0, x2, image_width - 1);
-                y1 = qBound(0, y1, image_height - 1);
-                y2 = qBound(0, y2, image_height - 1);
+                if (x1 < 0) {
+                    x2 = x1 = 0;
+                } else if (x1 >= image_width - 1) {
+                    x2 = x1 = image_width - 1;
+                } else {
+                    x2 = x1 + 1;
+                }
+                if (y1 < 0) {
+                    y2 = y1 = 0;
+                } else if (y1 >= image_height - 1) {
+                    y2 = y1 = image_height - 1;
+                } else {
+                    y2 = y1 + 1;
+                }
             }
+
+            Q_ASSERT(x1 >= 0 && x1 < image_width);
+            Q_ASSERT(x2 >= 0 && x2 < image_width);
+            Q_ASSERT(y1 >= 0 && y1 < image_height);
+            Q_ASSERT(y2 >= 0 && y2 < image_height);
 
             const uchar *s1 = data->texture.scanLine(y1);
             const uchar *s2 = data->texture.scanLine(y2);
@@ -2826,7 +2854,7 @@ static void QT_FASTCALL rasterop_SourceAndNotDestination(uint *dest,
     }
 }
 
-static const CompositionFunctionSolid functionForModeSolid_C[] = {
+static CompositionFunctionSolid functionForModeSolid_C[] = {
         comp_func_solid_SourceOver,
         comp_func_solid_DestinationOver,
         comp_func_solid_Clear,
@@ -2864,7 +2892,7 @@ static const CompositionFunctionSolid functionForModeSolid_C[] = {
 
 static const CompositionFunctionSolid *functionForModeSolid = functionForModeSolid_C;
 
-static const CompositionFunction functionForMode_C[] = {
+static CompositionFunction functionForMode_C[] = {
         comp_func_SourceOver,
         comp_func_DestinationOver,
         comp_func_Clear,
@@ -3700,7 +3728,7 @@ template <>
 Q_STATIC_TEMPLATE_SPECIALIZATION
 inline quint32 alpha_4(const qargb8555 *src)
 {
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
     const quint8 *src8 = reinterpret_cast<const quint8*>(src);
     return src8[0] << 24 | src8[3] << 16 | src8[6] << 8 | src8[9];
 }
@@ -3883,8 +3911,8 @@ inline void interpolate_pixel_unaligned_2(DST *dest, const SRC *src,
 template <class DST, class SRC>
 inline void interpolate_pixel_2(DST *dest, const SRC *src, quint16 alpha)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     const quint16 a = eff_alpha_2(alpha, dest);
     const quint16 ia = eff_ialpha_2(alpha, dest);
@@ -3957,8 +3985,8 @@ template <class DST, class SRC>
 inline void interpolate_pixel_2(DST *dest, quint8 a,
                                 const SRC *src, quint8 b)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     Q_ASSERT(!SRC::hasAlpha());
 
@@ -4006,8 +4034,8 @@ inline void interpolate_pixel_2(qrgb444 *dest, quint8 a,
 template <class DST, class SRC>
 inline void interpolate_pixel_4(DST *dest, const SRC *src, quint32 alpha)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     const quint32 a = eff_alpha_4(alpha, dest);
     const quint32 ia = eff_ialpha_4(alpha, dest);
@@ -4026,8 +4054,8 @@ template <>
 inline void interpolate_pixel_4(qargb8565 *dest, const qargb8565 *src,
                                 quint32 alpha)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     const quint32 a = eff_alpha_4(alpha, dest);
     const quint32 ia = eff_ialpha_4(alpha, dest);
@@ -4122,8 +4150,8 @@ template <>
 inline void interpolate_pixel_4(qargb8555 *dest, const qargb8555 *src,
                                 quint32 alpha)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
 
     const quint32 a = eff_alpha_4(alpha, dest);
@@ -4218,8 +4246,8 @@ template <>
 inline void interpolate_pixel_4(qrgb888 *dest, const qrgb888 *src,
                                 quint32 alpha)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     const quint32 a = eff_alpha_4(alpha, dest);
     const quint32 ia = eff_ialpha_4(alpha, dest);
@@ -4291,8 +4319,8 @@ template <class DST, class SRC>
 inline void interpolate_pixel_4(DST *dest, quint8 a,
                                 const SRC *src, quint8 b)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     dest[0] = dest[0].byte_mul(a) + DST(src[0]).byte_mul(b);
     dest[1] = dest[1].byte_mul(a) + DST(src[1]).byte_mul(b);
@@ -4303,8 +4331,8 @@ inline void interpolate_pixel_4(DST *dest, quint8 a,
 template <class DST, class SRC>
 inline void blend_sourceOver_4(DST *dest, const SRC *src)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     const quint32 a = alpha_4(src);
     if (a == 0xffffffff) {
@@ -4319,8 +4347,8 @@ inline void blend_sourceOver_4(DST *dest, const SRC *src)
 template <>
 inline void blend_sourceOver_4(qargb8565 *dest, const qargb8565 *src)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     const quint32 a = alpha_4(src);
     if (a == 0xffffffff) {
@@ -4333,8 +4361,8 @@ inline void blend_sourceOver_4(qargb8565 *dest, const qargb8565 *src)
 template <>
 inline void blend_sourceOver_4(qargb8555 *dest, const qargb8555 *src)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     const quint32 a = alpha_4(src);
     if (a == 0xffffffff) {
@@ -4347,8 +4375,8 @@ inline void blend_sourceOver_4(qargb8555 *dest, const qargb8555 *src)
 template <>
 inline void blend_sourceOver_4(qargb6666 *dest, const qargb6666 *src)
 {
-    Q_ASSERT((long(dest) & 0x3) == 0);
-    Q_ASSERT((long(src) & 0x3) == 0);
+    Q_ASSERT((quintptr(dest) & 0x3) == 0);
+    Q_ASSERT((quintptr(src) & 0x3) == 0);
 
     const quint32 a = alpha_4(src);
     if (a == 0xffffffff) {
@@ -4410,7 +4438,7 @@ void QT_FASTCALL blendUntransformed_dest16(DST *dest, const SRC *src,
 {
     Q_ASSERT(sizeof(DST) == 2);
     Q_ASSERT(sizeof(SRC) == 2);
-    Q_ASSERT((long(dest) & 0x3) == (long(src) & 0x3));
+    Q_ASSERT((quintptr(dest) & 0x3) == (quintptr(src) & 0x3));
     Q_ASSERT(coverage > 0);
 
     const int align = quintptr(dest) & 0x3;
@@ -4478,8 +4506,8 @@ void QT_FASTCALL blendUntransformed_dest16(DST *dest, const SRC *src,
         }
 
         while (length >= 2) {
-            Q_ASSERT((long(dest) & 3) == 0);
-            Q_ASSERT((long(src) & 3) == 0);
+            Q_ASSERT((quintptr(dest) & 3) == 0);
+            Q_ASSERT((quintptr(src) & 3) == 0);
 
             const quint16 a = alpha_2(src);
             if (a == 0xffff) {
@@ -4510,7 +4538,7 @@ template <class DST, class SRC>
 void QT_FASTCALL blendUntransformed_dest24(DST *dest, const SRC *src,
                                            quint8 coverage, int length)
 {
-    Q_ASSERT((long(dest) & 0x3) == (long(src) & 0x3));
+    Q_ASSERT((quintptr(dest) & 0x3) == (quintptr(src) & 0x3));
     Q_ASSERT(sizeof(DST) == 3);
     Q_ASSERT(coverage > 0);
 
@@ -4733,7 +4761,7 @@ static void blend_untransformed_argb8565(int count, const QSpan *spans,
 static void blend_untransformed_rgb565(int count, const QSpan *spans,
                                        void *userData)
 {
-#if defined(QT_QWS_DEPTH_16)
+#if !defined(Q_WS_QWS) || defined(QT_QWS_DEPTH_16)
     QSpanData *data = reinterpret_cast<QSpanData *>(userData);
 
     if (data->texture.format == QImage::Format_ARGB8565_Premultiplied)
@@ -4986,7 +5014,8 @@ Q_STATIC_TEMPLATE_FUNCTION void blendTiled(int count, const QSpan *spans, void *
                 length -= copy_image_width;
                 copy_image_width *= 2;
             }
-            qt_memconvert(dest, src, length);
+            if (length > 0)
+                qt_memconvert(dest, src, length);
         } else {
             while (length) {
                 int l = qMin(image_width - sx, length);
@@ -5071,7 +5100,7 @@ static void blend_tiled_argb8565(int count, const QSpan *spans, void *userData)
 
 static void blend_tiled_rgb565(int count, const QSpan *spans, void *userData)
 {
-#if defined(QT_QWS_DEPTH_16)
+#if !defined(Q_WS_QWS) || defined(QT_QWS_DEPTH_16)
     QSpanData *data = reinterpret_cast<QSpanData *>(userData);
 
     if (data->texture.format == QImage::Format_ARGB8565_Premultiplied)
@@ -5140,7 +5169,7 @@ static void blend_tiled_rgb444(int count, const QSpan *spans, void *userData)
 }
 
 
-template <SpanMethod spanMethod>
+template <SpanMethod spanMethod, TextureBlendType blendType>  /* blendType must be either BlendTransformedBilinear or BlendTransformedBilinearTiled */
 Q_STATIC_TEMPLATE_FUNCTION void blend_transformed_bilinear_argb(int count, const QSpan *spans, void *userData)
 {
     QSpanData *data = reinterpret_cast<QSpanData *>(userData);
@@ -5153,10 +5182,12 @@ Q_STATIC_TEMPLATE_FUNCTION void blend_transformed_bilinear_argb(int count, const
     CompositionFunction func = functionForMode[data->rasterBuffer->compositionMode];
     uint buffer[buffer_size];
 
-    int image_x1 = data->texture.x1;
-    int image_y1 = data->texture.y1;
-    int image_x2 = data->texture.x2;
-    int image_y2 = data->texture.y2;
+    const int image_x1 = data->texture.x1;
+    const int image_y1 = data->texture.y1;
+    const int image_x2 = data->texture.x2;
+    const int image_y2 = data->texture.y2;
+    const int image_width = data->texture.width;
+    const int image_height = data->texture.height;
     const int scanline_offset = data->texture.bytesPerLine / 4;
 
     if (data->fast_matrix) {
@@ -5186,19 +5217,41 @@ Q_STATIC_TEMPLATE_FUNCTION void blend_transformed_bilinear_argb(int count, const
                 uint *b = buffer;
                 while (b < end) {
                     int x1 = (x >> 16);
-                    int x2 = x1 + 1;
+                    int x2;
                     int y1 = (y >> 16);
-                    int y2 = y1 + 1;
+                    int y2;
 
-                    int distx = ((x - (x1 << 16)) >> 8);
-                    int disty = ((y - (y1 << 16)) >> 8);
-                    int idistx = 256 - distx;
-                    int idisty = 256 - disty;
+                    if (blendType == BlendTransformedBilinearTiled) {
+                        x1 %= image_width;
+                        if (x1 < 0) x1 += image_width;
+                        x2 = x1 + 1;
+                        x2 %= image_width;
 
-                    x1 = qBound(image_x1, x1, image_x2 - 1);
-                    x2 = qBound(image_x1, x2, image_x2 - 1);
-                    y1 = qBound(image_y1, y1, image_y2 - 1);
-                    y2 = qBound(image_y1, y2, image_y2 - 1);
+                        y1 %= image_height;
+                        if (y1 < 0) y1 += image_height;
+                        y2 = y1 + 1;
+                        y2 %= image_height;
+
+                        Q_ASSERT(x1 >= 0 && x1 < image_width);
+                        Q_ASSERT(x2 >= 0 && x2 < image_width);
+                        Q_ASSERT(y1 >= 0 && y1 < image_height);
+                        Q_ASSERT(y2 >= 0 && y2 < image_height);
+                    } else {
+                        if (x1 < image_x1) {
+                            x2 = x1 = image_x1;
+                        } else if (x1 >= image_x2 - 1) {
+                            x2 = x1 = image_x2 - 1;
+                        } else {
+                            x2 = x1 + 1;
+                        }
+                        if (y1 < image_y1) {
+                            y2 = y1 = image_y1;
+                        } else if (y1 >= image_y2 - 1) {
+                            y2 = y1 = image_y2 - 1;
+                        } else {
+                            y2 = y1 + 1;
+                        }
+                    }
 
                     int y1_offset = y1 * scanline_offset;
                     int y2_offset = y2 * scanline_offset;
@@ -5214,6 +5267,11 @@ Q_STATIC_TEMPLATE_FUNCTION void blend_transformed_bilinear_argb(int count, const
                     uint bl = image_bits[y2_offset + x1];
                     uint br = image_bits[y2_offset + x2];
 #endif
+
+                    int distx = (x & 0x0000ffff) >> 8;
+                    int disty = (y & 0x0000ffff) >> 8;
+                    int idistx = 256 - distx;
+                    int idisty = 256 - disty;
 
                     uint xtop = INTERPOLATE_PIXEL_256(tl, idistx, tr, distx);
                     uint xbot = INTERPOLATE_PIXEL_256(bl, idistx, br, distx);
@@ -5264,19 +5322,46 @@ Q_STATIC_TEMPLATE_FUNCTION void blend_transformed_bilinear_argb(int count, const
                     const qreal py = y * iw - 0.5;
 
                     int x1 = int(px) - (px < 0);
-                    int x2 = x1 + 1;
+                    int x2;
                     int y1 = int(py) - (py < 0);
-                    int y2 = y1 + 1;
+                    int y2;
 
                     int distx = int((px - x1) * 256);
                     int disty = int((py - y1) * 256);
                     int idistx = 256 - distx;
                     int idisty = 256 - disty;
 
-                    x1 = qBound(image_x1, x1, image_x2 - 1);
-                    x2 = qBound(image_x1, x2, image_x2 - 1);
-                    y1 = qBound(image_y1, y1, image_y2 - 1);
-                    y2 = qBound(image_y1, y2, image_y2 - 1);
+                    if (blendType == BlendTransformedBilinearTiled) {
+                        x1 %= image_width;
+                        if (x1 < 0) x1 += image_width;
+                        x2 = x1 + 1;
+                        x2 %= image_width;
+
+                        y1 %= image_height;
+                        if (y1 < 0) y1 += image_height;
+                        y2 = y1 + 1;
+                        y2 %= image_height;
+
+                        Q_ASSERT(x1 >= 0 && x1 < image_width);
+                        Q_ASSERT(x2 >= 0 && x2 < image_width);
+                        Q_ASSERT(y1 >= 0 && y1 < image_height);
+                        Q_ASSERT(y2 >= 0 && y2 < image_height);
+                    } else {
+                        if (x1 < image_x1) {
+                            x2 = x1 = image_x1;
+                        } else if (x1 >= image_x2 - 1) {
+                            x2 = x1 = image_x2 - 1;
+                        } else {
+                            x2 = x1 + 1;
+                        }
+                        if (y1 < image_y1) {
+                            y2 = y1 = image_y1;
+                        } else if (y1 >= image_y2 - 1) {
+                            y2 = y1 = image_y2 - 1;
+                        } else {
+                            y2 = y1 + 1;
+                        }
+                    }
 
                     int y1_offset = y1 * scanline_offset;
                     int y2_offset = y2 * scanline_offset;
@@ -5365,17 +5450,27 @@ Q_STATIC_TEMPLATE_FUNCTION void blendTransformedBilinear(int count, const QSpan 
                 SRC *b = buffer;
                 while (b < end) {
                     int x1 = (x >> 16);
-                    int x2 = x1 + 1;
+                    int x2;
                     int y1 = (y >> 16);
-                    int y2 = y1 + 1;
+                    int y2;
 
-                    const int distx = ((x - (x1 << 16)) >> 8);
-                    const int disty = ((y - (y1 << 16)) >> 8);
-                    x1 = qBound(src_minx, x1, src_maxx);
-                    x2 = qBound(src_minx, x2, src_maxx);
-                    y1 = qBound(src_miny, y1, src_maxy);
-                    y2 = qBound(src_miny, y2, src_maxy);
+                    const int distx = (x & 0x0000ffff) >> 8;
+                    const int disty = (y & 0x0000ffff) >> 8;
 
+                    if (x1 < src_minx) {
+                        x2 = x1 = src_minx;
+                    } else if (x1 >= src_maxx) {
+                        x2 = x1 = src_maxx;
+                    } else {
+                        x2 = x1 + 1;
+                    }
+                    if (y1 < src_miny) {
+                        y2 = y1 = src_miny;
+                    } else if (y1 >= src_maxy) {
+                        y2 = y1 = src_maxy;
+                    } else {
+                        y2 = y1 + 1;
+                    }
 #if 0
                     if (x1 == x2) {
                         if (y1 == y2) {
@@ -5466,17 +5561,27 @@ Q_STATIC_TEMPLATE_FUNCTION void blendTransformedBilinear(int count, const QSpan 
                     const qreal py = y * iw - qreal(0.5);
 
                     int x1 = int(px) - (px < 0);
-                    int x2 = x1 + 1;
+                    int x2;
                     int y1 = int(py) - (py < 0);
-                    int y2 = y1 + 1;
+                    int y2;
 
                     const int distx = int((px - x1) * 256);
                     const int disty = int((py - y1) * 256);
 
-                    x1 = qBound(src_minx, x1, src_maxx);
-                    x2 = qBound(src_minx, x2, src_maxx);
-                    y1 = qBound(src_miny, y1, src_maxy);
-                    y2 = qBound(src_miny, y2, src_maxy);
+                    if (x1 < src_minx) {
+                        x2 = x1 = src_minx;
+                    } else if (x1 >= src_maxx) {
+                        x2 = x1 = src_maxx;
+                    } else {
+                        x2 = x1 + 1;
+                    }
+                    if (y1 < src_miny) {
+                        y2 = y1 = src_miny;
+                    } else if (y1 >= src_maxy) {
+                        y2 = y1 = src_maxy;
+                    } else {
+                        y2 = y1 + 1;
+                    }
 
                     const SRC *src1 = (SRC*)data->texture.scanLine(y1);
                     const SRC *src2 = (SRC*)data->texture.scanLine(y2);
@@ -5576,7 +5681,7 @@ static void blend_transformed_bilinear_argb8565(int count, const QSpan *spans, v
 static void blend_transformed_bilinear_rgb565(int count, const QSpan *spans,
                                               void *userData)
 {
-#if defined(QT_QWS_DEPTH_16)
+#if !defined(Q_WS_QWS) || defined(QT_QWS_DEPTH_16)
     QSpanData *data = reinterpret_cast<QSpanData *>(userData);
 
     if (data->texture.format == QImage::Format_RGB16)
@@ -5642,197 +5747,6 @@ static void blend_transformed_bilinear_rgb444(int count, const QSpan *spans, voi
     else
 #endif
         blend_src_generic<RegularSpans>(count, spans, userData);
-}
-
-template <SpanMethod spanMethod>
-Q_STATIC_TEMPLATE_FUNCTION void blend_transformed_bilinear_tiled_argb(int count, const QSpan *spans, void *userData)
-{
-    QSpanData *data = reinterpret_cast<QSpanData *>(userData);
-    if (data->texture.format != QImage::Format_ARGB32_Premultiplied
-        && data->texture.format != QImage::Format_RGB32) {
-        blend_src_generic<spanMethod>(count, spans, userData);
-        return;
-    }
-
-    CompositionFunction func = functionForMode[data->rasterBuffer->compositionMode];
-    uint buffer[buffer_size];
-
-    int image_width = data->texture.width;
-    int image_height = data->texture.height;
-    const int scanline_offset = data->texture.bytesPerLine / 4;
-
-    if (data->fast_matrix) {
-        // The increment pr x in the scanline
-        int fdx = (int)(data->m11 * fixed_scale);
-        int fdy = (int)(data->m12 * fixed_scale);
-
-        while (count--) {
-            void *t = data->rasterBuffer->scanLine(spans->y);
-
-            uint *target = ((uint *)t) + spans->x;
-            uint *image_bits = (uint *)data->texture.imageData;
-
-            const qreal cx = spans->x + 0.5;
-            const qreal cy = spans->y + 0.5;
-
-            int x = int((data->m21 * cy
-                         + data->m11 * cx + data->dx) * fixed_scale) - half_point;
-            int y = int((data->m22 * cy
-                         + data->m12 * cx + data->dy) * fixed_scale) - half_point;
-
-            int length = spans->len;
-            const int coverage = (spans->coverage * data->texture.const_alpha) >> 8;
-            while (length) {
-                int l = qMin(length, buffer_size);
-                const uint *end = buffer + l;
-                uint *b = buffer;
-                while (b < end) {
-                    int x1 = (x >> 16);
-                    int x2 = (x1 + 1);
-                    int y1 = (y >> 16);
-                    int y2 = (y1 + 1);
-
-                    int distx = ((x - (x1 << 16)) >> 8);
-                    int disty = ((y - (y1 << 16)) >> 8);
-                    int idistx = 256 - distx;
-                    int idisty = 256 - disty;
-
-                    x1 %= image_width;
-                    x2 %= image_width;
-                    y1 %= image_height;
-                    y2 %= image_height;
-
-                    if (x1 < 0) x1 += image_width;
-                    if (x2 < 0) x2 += image_width;
-                    if (y1 < 0) y1 += image_height;
-                    if (y2 < 0) y2 += image_height;
-
-                    Q_ASSERT(x1 >= 0 && x1 < image_width);
-                    Q_ASSERT(x2 >= 0 && x2 < image_width);
-                    Q_ASSERT(y1 >= 0 && y1 < image_height);
-                    Q_ASSERT(y2 >= 0 && y2 < image_height);
-
-                    int y1_offset = y1 * scanline_offset;
-                    int y2_offset = y2 * scanline_offset;
-
-#if defined(Q_IRIX_GCC3_3_WORKAROUND)
-                    uint tl = gccBug(image_bits[y1_offset + x1]);
-                    uint tr = gccBug(image_bits[y1_offset + x2]);
-                    uint bl = gccBug(image_bits[y2_offset + x1]);
-                    uint br = gccBug(image_bits[y2_offset + x2]);
-#else
-                    uint tl = image_bits[y1_offset + x1];
-                    uint tr = image_bits[y1_offset + x2];
-                    uint bl = image_bits[y2_offset + x1];
-                    uint br = image_bits[y2_offset + x2];
-#endif
-
-                    uint xtop = INTERPOLATE_PIXEL_256(tl, idistx, tr, distx);
-                    uint xbot = INTERPOLATE_PIXEL_256(bl, idistx, br, distx);
-                    *b = INTERPOLATE_PIXEL_256(xtop, idisty, xbot, disty);
-                    ++b;
-                    x += fdx;
-                    y += fdy;
-                }
-                if (spanMethod == RegularSpans)
-                    func(target, buffer, l, coverage);
-                else
-                    drawBufferSpan(data, buffer, buffer_size,
-                                   spans->x + spans->len - length,
-                                   spans->y, l, coverage);
-                target += l;
-                length -= l;
-            }
-            ++spans;
-        }
-    } else {
-        const qreal fdx = data->m11;
-        const qreal fdy = data->m12;
-        const qreal fdw = data->m13;
-        while (count--) {
-            void *t = data->rasterBuffer->scanLine(spans->y);
-
-            uint *target = ((uint *)t) + spans->x;
-            uint *image_bits = (uint *)data->texture.imageData;
-
-            const qreal cx = spans->x + 0.5;
-            const qreal cy = spans->y + 0.5;
-
-            qreal x = data->m21 * cy + data->m11 * cx + data->dx;
-            qreal y = data->m22 * cy + data->m12 * cx + data->dy;
-            qreal w = data->m23 * cy + data->m13 * cx + data->m33;
-
-            int length = spans->len;
-            const int coverage = (spans->coverage * data->texture.const_alpha) >> 8;
-            while (length) {
-                int l = qMin(length, buffer_size);
-                const uint *end = buffer + l;
-                uint *b = buffer;
-                while (b < end) {
-                    const qreal iw = w == 0 ? 1 : 1 / w;
-                    const qreal px = x * iw - 0.5;
-                    const qreal py = y * iw - 0.5;
-
-                    int x1 = int(px) - (px < 0);
-                    int x2 = x1 + 1;
-                    int y1 = int(py) - (py < 0);
-                    int y2 = y1 + 1;
-
-                    int distx = int((px - x1) * 256);
-                    int disty = int((py - y1) * 256);
-                    int idistx = 256 - distx;
-                    int idisty = 256 - disty;
-
-                    x1 %= image_width;
-                    x2 %= image_width;
-                    y1 %= image_height;
-                    y2 %= image_height;
-
-                    if (x1 < 0) x1 += image_width;
-                    if (x2 < 0) x2 += image_width;
-                    if (y1 < 0) y1 += image_height;
-                    if (y2 < 0) y2 += image_height;
-
-                    Q_ASSERT(x1 >= 0 && x1 < image_width);
-                    Q_ASSERT(x2 >= 0 && x2 < image_width);
-                    Q_ASSERT(y1 >= 0 && y1 < image_height);
-                    Q_ASSERT(y2 >= 0 && y2 < image_height);
-
-                    int y1_offset = y1 * scanline_offset;
-                    int y2_offset = y2 * scanline_offset;
-
-#if defined(Q_IRIX_GCC3_3_WORKAROUND)
-                    uint tl = gccBug(image_bits[y1_offset + x1]);
-                    uint tr = gccBug(image_bits[y1_offset + x2]);
-                    uint bl = gccBug(image_bits[y2_offset + x1]);
-                    uint br = gccBug(image_bits[y2_offset + x2]);
-#else
-                    uint tl = image_bits[y1_offset + x1];
-                    uint tr = image_bits[y1_offset + x2];
-                    uint bl = image_bits[y2_offset + x1];
-                    uint br = image_bits[y2_offset + x2];
-#endif
-
-                    uint xtop = INTERPOLATE_PIXEL_256(tl, idistx, tr, distx);
-                    uint xbot = INTERPOLATE_PIXEL_256(bl, idistx, br, distx);
-                    *b = INTERPOLATE_PIXEL_256(xtop, idisty, xbot, disty);
-                    ++b;
-                    x += fdx;
-                    y += fdy;
-                    w += fdw;
-                }
-                if (spanMethod == RegularSpans)
-                    func(target, buffer, l, coverage);
-                else
-                    drawBufferSpan(data, buffer, buffer_size,
-                                   spans->x + spans->len - length,
-                                   spans->y, l, coverage);
-                target += l;
-                length -= l;
-            }
-            ++spans;
-        }
-    }
 }
 
 template <SpanMethod spanMethod>
@@ -6163,7 +6077,7 @@ static void blend_transformed_argb8565(int count, const QSpan *spans,
 static void blend_transformed_rgb565(int count, const QSpan *spans,
                                        void *userData)
 {
-#if defined(QT_QWS_DEPTH_16)
+#if !defined(Q_WS_QWS) || defined(QT_QWS_DEPTH_16)
     QSpanData *data = reinterpret_cast<QSpanData *>(userData);
 
     if (data->texture.format == QImage::Format_ARGB8565_Premultiplied)
@@ -6576,7 +6490,7 @@ static void blend_transformed_tiled_argb8565(int count, const QSpan *spans,
 static void blend_transformed_tiled_rgb565(int count, const QSpan *spans,
                                            void *userData)
 {
-#if defined(QT_QWS_DEPTH_16)
+#if !defined(Q_WS_QWS) || defined(QT_QWS_DEPTH_16)
     QSpanData *data = reinterpret_cast<QSpanData *>(userData);
 
     if (data->texture.format == QImage::Format_ARGB8565_Premultiplied)
@@ -6737,7 +6651,7 @@ static const ProcessSpans processTextureSpans[NBlendTypes][QImage::NImageFormats
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // Indexed8
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // RGB32
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // ARGB32
-        SPANFUNC_POINTER(blend_transformed_bilinear_argb, RegularSpans), // ARGB32_Premultiplied
+        blend_transformed_bilinear_argb<RegularSpans, BlendTransformedBilinear>, // ARGB32_Premultiplied
         blend_transformed_bilinear_rgb565,
         blend_transformed_bilinear_argb8565,
         blend_transformed_bilinear_rgb666,
@@ -6756,7 +6670,7 @@ static const ProcessSpans processTextureSpans[NBlendTypes][QImage::NImageFormats
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // Indexed8
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // RGB32
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // ARGB32
-        SPANFUNC_POINTER(blend_transformed_bilinear_tiled_argb, RegularSpans), // ARGB32_Premultiplied
+        blend_transformed_bilinear_argb<RegularSpans, BlendTransformedBilinearTiled>, // ARGB32_Premultiplied
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // RGB16
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // ARGB8565_Premultiplied
         SPANFUNC_POINTER(blend_src_generic, RegularSpans), // RGB666
@@ -6855,7 +6769,7 @@ static const ProcessSpans processTextureSpansCallback[NBlendTypes][QImage::NImag
         blend_src_generic<CallbackSpans>,   // Indexed8
         blend_src_generic<CallbackSpans>,   // RGB32
         blend_src_generic<CallbackSpans>,   // ARGB32
-        blend_transformed_bilinear_argb<CallbackSpans>, // ARGB32_Premultiplied
+        blend_transformed_bilinear_argb<CallbackSpans, BlendTransformedBilinear>, // ARGB32_Premultiplied
         blend_src_generic<CallbackSpans>,   // RGB16
         blend_src_generic<CallbackSpans>,   // ARGB8565_Premultiplied
         blend_src_generic<CallbackSpans>,   // RGB666
@@ -6874,7 +6788,7 @@ static const ProcessSpans processTextureSpansCallback[NBlendTypes][QImage::NImag
         blend_src_generic<CallbackSpans>,   // Indexed8
         blend_src_generic<CallbackSpans>,   // RGB32
         blend_src_generic<CallbackSpans>,   // ARGB32
-        blend_transformed_bilinear_tiled_argb<CallbackSpans>, // ARGB32_Premultiplied
+        blend_transformed_bilinear_argb<CallbackSpans, BlendTransformedBilinearTiled>, // ARGB32_Premultiplied
         blend_src_generic<CallbackSpans>,   // RGB16
         blend_src_generic<CallbackSpans>,   // ARGB8565_Premultiplied
         blend_src_generic<CallbackSpans>,   // RGB666
@@ -7134,6 +7048,11 @@ void qt_build_pow_tables() {
     int winSmooth;
     if (SystemParametersInfo(0x200C /* SPI_GETFONTSMOOTHINGCONTRAST */, 0, &winSmooth, 0))
         smoothing = winSmooth / 1000.0;
+
+    // Safeguard ourselves against corrupt registry values...
+    if (smoothing > 5 || smoothing < 1)
+        smoothing = 1.4;
+
 #endif
 
 #ifdef Q_WS_X11
@@ -7720,199 +7639,6 @@ static void qt_memfill16_setup(quint16 *dest, quint16 value, int count);
 qt_memfill32_func qt_memfill32 = qt_memfill32_setup;
 qt_memfill16_func qt_memfill16 = qt_memfill16_setup;
 
-enum CPUFeatures {
-    None        = 0,
-    MMX         = 0x1,
-    MMXEXT      = 0x2,
-    MMX3DNOW    = 0x4,
-    MMX3DNOWEXT = 0x8,
-    SSE         = 0x10,
-    SSE2        = 0x20,
-    CMOV        = 0x40,
-    IWMMXT      = 0x80,
-    NEON        = 0x100
-};
-
-static uint detectCPUFeatures()
-{
-#if defined (Q_OS_WINCE)
-#if defined (ARM)
-    if (IsProcessorFeaturePresent(PF_ARM_INTEL_WMMX))
-        return IWMMXT;
-#elif defined(_X86_)
-    uint features = 0;
-#if defined QT_HAVE_MMX
-    if (IsProcessorFeaturePresent(PF_MMX_INSTRUCTIONS_AVAILABLE))
-        features |= MMX;
-#endif
-#if defined QT_HAVE_3DNOW
-    if (IsProcessorFeaturePresent(PF_3DNOW_INSTRUCTIONS_AVAILABLE))
-        features |= MMX3DNOW;
-#endif
-    return features;
-#endif
-    return 0;
-#elif defined(QT_HAVE_IWMMXT)
-    // runtime detection only available when running as a previlegied process
-    static const bool doIWMMXT = !qgetenv("QT_NO_IWMMXT").toInt();
-    return doIWMMXT ? IWMMXT : 0;
-#elif defined(QT_HAVE_NEON)
-    static const bool doNEON = !qgetenv("QT_NO_NEON").toInt();
-    return doNEON ? NEON : 0;
-#else
-    uint features = 0;
-#if defined(__x86_64__) || defined(Q_OS_WIN64)
-    features = MMX|SSE|SSE2|CMOV;
-#elif defined(__ia64__)
-    features = MMX|SSE|SSE2;
-#elif defined(__i386__) || defined(_M_IX86)
-    unsigned int extended_result = 0;
-    uint result = 0;
-    /* see p. 118 of amd64 instruction set manual Vol3 */
-#if defined(Q_CC_GNU)
-    asm ("push %%ebx\n"
-         "pushf\n"
-         "pop %%eax\n"
-         "mov %%eax, %%ebx\n"
-         "xor $0x00200000, %%eax\n"
-         "push %%eax\n"
-         "popf\n"
-         "pushf\n"
-         "pop %%eax\n"
-         "xor %%edx, %%edx\n"
-         "xor %%ebx, %%eax\n"
-         "jz 1f\n"
-
-         "mov $0x00000001, %%eax\n"
-         "cpuid\n"
-         "1:\n"
-         "pop %%ebx\n"
-         "mov %%edx, %0\n"
-        : "=r" (result)
-        :
-        : "%eax", "%ecx", "%edx"
-        );
-
-    asm ("push %%ebx\n"
-         "pushf\n"
-         "pop %%eax\n"
-         "mov %%eax, %%ebx\n"
-         "xor $0x00200000, %%eax\n"
-         "push %%eax\n"
-         "popf\n"
-         "pushf\n"
-         "pop %%eax\n"
-         "xor %%edx, %%edx\n"
-         "xor %%ebx, %%eax\n"
-         "jz 2f\n"
-
-         "mov $0x80000000, %%eax\n"
-         "cpuid\n"
-         "cmp $0x80000000, %%eax\n"
-         "jbe 2f\n"
-         "mov $0x80000001, %%eax\n"
-         "cpuid\n"
-         "2:\n"
-         "pop %%ebx\n"
-         "mov %%edx, %0\n"
-        : "=r" (extended_result)
-        :
-        : "%eax", "%ecx", "%edx"
-        );
-#elif defined (Q_OS_WIN)
-    _asm {
-        push eax
-        push ebx
-        push ecx
-        push edx
-        pushfd
-        pop eax
-        mov ebx, eax
-        xor eax, 00200000h
-        push eax
-        popfd
-        pushfd
-        pop eax
-        mov edx, 0
-        xor eax, ebx
-        jz skip
-
-        mov eax, 1
-        cpuid
-        mov result, edx
-    skip:
-        pop edx
-        pop ecx
-        pop ebx
-        pop eax
-    }
-
-    _asm {
-        push eax
-        push ebx
-        push ecx
-        push edx
-        pushfd
-        pop eax
-        mov ebx, eax
-        xor eax, 00200000h
-        push eax
-        popfd
-        pushfd
-        pop eax
-        mov edx, 0
-        xor eax, ebx
-        jz skip2
-
-        mov eax, 80000000h
-        cpuid
-        cmp eax, 80000000h
-        jbe skip2
-        mov eax, 80000001h
-        cpuid
-        mov extended_result, edx
-    skip2:
-        pop edx
-        pop ecx
-        pop ebx
-        pop eax
-    }
-#endif
-
-    // result now contains the standard feature bits
-    if (result & (1u << 15))
-        features |= CMOV;
-    if (result & (1u << 23))
-        features |= MMX;
-    if (extended_result & (1u << 22))
-        features |= MMXEXT;
-    if (extended_result & (1u << 31))
-        features |= MMX3DNOW;
-    if (extended_result & (1u << 30))
-        features |= MMX3DNOWEXT;
-    if (result & (1u << 25))
-        features |= SSE;
-    if (result & (1u << 26))
-        features |= SSE2;
-#endif // i386
-
-    if (qgetenv("QT_NO_MMX").toInt())
-        features ^= MMX;
-    if (qgetenv("QT_NO_MMXEXT").toInt())
-        features ^= MMXEXT;
-    if (qgetenv("QT_NO_3DNOW").toInt())
-        features ^= MMX3DNOW;
-    if (qgetenv("QT_NO_3DNOWEXT").toInt())
-        features ^= MMX3DNOWEXT;
-    if (qgetenv("QT_NO_SSE").toInt())
-        features ^= SSE;
-    if (qgetenv("QT_NO_SSE2").toInt())
-        features ^= SSE2;
-
-    return features;
-#endif
-}
-
 #if defined(Q_CC_RVCT) && defined(QT_HAVE_ARMV6)
 // Move these to qdrawhelper_arm.c when all
 // functions are implemented using arm assembly.
@@ -8005,10 +7731,6 @@ static void qt_blend_color_argb_armv6(int count, const QSpan *spans, void *userD
 
 void qInitDrawhelperAsm()
 {
-    static uint features = 0xffffffff;
-    if (features != 0xffffffff)
-        return;
-    features = detectCPUFeatures();
 
     qt_memfill32 = qt_memfill_template<quint32, quint32>;
     qt_memfill16 = qt_memfill_quint16; //qt_memfill_template<quint16, quint16>;
@@ -8016,7 +7738,7 @@ void qInitDrawhelperAsm()
     CompositionFunction *functionForModeAsm = 0;
     CompositionFunctionSolid *functionForModeSolidAsm = 0;
 
-#ifdef QT_NO_DEBUG
+    const uint features = qDetectCPUFeatures();
     if (false) {
 #ifdef QT_HAVE_SSE2
     } else if (features & SSE2) {
@@ -8096,6 +7818,15 @@ void qInitDrawhelperAsm()
 
 #ifdef QT_HAVE_SSE2
         if (features & SSE2) {
+            extern void QT_FASTCALL comp_func_SourceOver_sse2(uint *destPixels,
+                                                  const uint *srcPixels,
+                                                  int length,
+                                                  uint const_alpha);
+            extern void QT_FASTCALL comp_func_solid_SourceOver_sse2(uint *destPixels, int length, uint color, uint const_alpha);
+
+            functionForModeAsm[0] = comp_func_SourceOver_sse2;
+            functionForModeSolidAsm[0] = comp_func_solid_SourceOver_sse2;
+
             extern void qt_blend_rgb32_on_rgb32_sse2(uchar *destPixels, int dbpl,
                                                      const uchar *srcPixels, int sbpl,
                                                      int w, int h,
@@ -8104,7 +7835,6 @@ void qInitDrawhelperAsm()
                                                        const uchar *srcPixels, int sbpl,
                                                        int w, int h,
                                                        int const_alpha);
-
 
             qBlendFunctions[QImage::Format_RGB32][QImage::Format_RGB32] = qt_blend_rgb32_on_rgb32_sse2;
             qBlendFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_RGB32] = qt_blend_rgb32_on_rgb32_sse2;
@@ -8139,8 +7869,6 @@ void qInitDrawhelperAsm()
     }
 #endif // IWMMXT
 
-#endif // QT_NO_DEBUG
-
 #if defined(Q_CC_RVCT) && defined(QT_HAVE_ARMV6)
         functionForModeAsm = qt_functionForMode_ARMv6;
         functionForModeSolidAsm = qt_functionForModeSolid_ARMv6;
@@ -8159,6 +7887,24 @@ void qInitDrawhelperAsm()
             qBlendFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_RGB32] = qt_blend_rgb32_on_rgb32_neon;
             qBlendFunctions[QImage::Format_RGB32][QImage::Format_ARGB32_Premultiplied] = qt_blend_argb32_on_argb32_neon;
             qBlendFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_ARGB32_Premultiplied] = qt_blend_argb32_on_argb32_neon;
+            qBlendFunctions[QImage::Format_RGB16][QImage::Format_ARGB32_Premultiplied] = qt_blend_argb32_on_rgb16_neon;
+            qBlendFunctions[QImage::Format_ARGB32_Premultiplied][QImage::Format_RGB16] = qt_blend_rgb16_on_argb32_neon;
+
+            qScaleFunctions[QImage::Format_RGB16][QImage::Format_ARGB32_Premultiplied] = qt_scale_image_argb32_on_rgb16_neon;
+            qScaleFunctions[QImage::Format_RGB16][QImage::Format_RGB16] = qt_scale_image_rgb16_on_rgb16_neon;
+
+            qTransformFunctions[QImage::Format_RGB16][QImage::Format_ARGB32_Premultiplied] = qt_transform_image_argb32_on_rgb16_neon;
+            qTransformFunctions[QImage::Format_RGB16][QImage::Format_RGB16] = qt_transform_image_rgb16_on_rgb16_neon;
+
+            qDrawHelper[QImage::Format_RGB16].alphamapBlit = qt_alphamapblit_quint16_neon;
+
+            functionForMode_C[QPainter::CompositionMode_SourceOver] = qt_blend_argb32_on_argb32_scanline_neon;
+            functionForModeSolid_C[QPainter::CompositionMode_SourceOver] = comp_func_solid_SourceOver_neon;
+            destFetchProc[QImage::Format_RGB16] = qt_destFetchRGB16_neon;
+            destStoreProc[QImage::Format_RGB16] = qt_destStoreRGB16_neon;
+
+            qMemRotateFunctions[QImage::Format_RGB16][0] = qt_memrotate90_16_neon;
+            qMemRotateFunctions[QImage::Format_RGB16][2] = qt_memrotate270_16_neon;
         }
 #endif
 

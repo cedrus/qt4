@@ -56,6 +56,7 @@ namespace WebCore {
     class Widget;
 
     struct FrameLoadRequest;
+    struct ViewportArguments;
     struct WindowFeatures;
 
 #if USE(ACCELERATED_COMPOSITING)
@@ -82,6 +83,8 @@ namespace WebCore {
 
         virtual bool canTakeFocus(FocusDirection) = 0;
         virtual void takeFocus(FocusDirection) = 0;
+
+        virtual void focusedNodeChanged(Node*) = 0;
 
         // The Frame pointer provides the ChromeClient with context about which
         // Frame wants to create the new Page.  Also, the newly created window
@@ -121,11 +124,16 @@ namespace WebCore {
         virtual bool shouldInterruptJavaScript() = 0;
         virtual bool tabsToLinks() const = 0;
 
+        virtual void registerProtocolHandler(const String&, const String&, const String&, const String&) { }
+        virtual void registerContentHandler(const String&, const String&, const String&, const String&) { }
+
         virtual IntRect windowResizerRect() const = 0;
 
         // Methods used by HostWindow.
-        virtual void repaint(const IntRect&, bool contentChanged, bool immediate = false, bool repaintContentOnly = false) = 0;
-        virtual void scroll(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect) = 0;
+        virtual void invalidateWindow(const IntRect&, bool) = 0;
+        virtual void invalidateContentsAndWindow(const IntRect&, bool) = 0;
+        virtual void invalidateContentsForSlowScroll(const IntRect&, bool) = 0;
+        virtual void scroll(const IntSize&, const IntRect&, const IntRect&) = 0;
         virtual IntPoint screenToWindow(const IntPoint&) const = 0;
         virtual IntRect windowToScreen(const IntRect&) const = 0;
         virtual PlatformPageClient platformPageClient() const = 0;
@@ -137,6 +145,8 @@ namespace WebCore {
         virtual void mouseDidMoveOverElement(const HitTestResult&, unsigned modifierFlags) = 0;
 
         virtual void setToolTip(const String&, TextDirection) = 0;
+
+        virtual void didReceiveViewportArguments(Frame*, const ViewportArguments&) const { }
 
         virtual void print(Frame*) = 0;
 
@@ -176,10 +186,13 @@ namespace WebCore {
         virtual bool paintCustomScrollCorner(GraphicsContext*, const FloatRect&);
 
         // This can be either a synchronous or asynchronous call. The ChromeClient can display UI asking the user for permission
-        // to use Geolococation. The ChromeClient must call Geolocation::setShouldClearCache() appropriately.
+        // to use Geolocation.
         virtual void requestGeolocationPermissionForFrame(Frame*, Geolocation*) = 0;
+        virtual void cancelGeolocationPermissionRequestForFrame(Frame*) = 0;
             
         virtual void runOpenPanel(Frame*, PassRefPtr<FileChooser>) = 0;
+        // Asynchronous request to load an icon for specified filenames.
+        virtual void chooseIconForFiles(const Vector<String>&, PassRefPtr<FileChooser>) = 0;
 
         virtual bool setCursor(PlatformCursorHandle) = 0;
 
@@ -201,12 +214,19 @@ namespace WebCore {
         // Sets a flag to specify that the view needs to be updated, so we need
         // to do an eager layout before the drawing.
         virtual void scheduleCompositingLayerSync() = 0;
+        // Returns whether or not the client can render the composited layer,
+        // regardless of the settings.
+        virtual bool allowsAcceleratedCompositing() const { return true; }
 #endif
 
         virtual bool supportsFullscreenForNode(const Node*) { return false; }
         virtual void enterFullscreenForNode(Node*) { }
         virtual void exitFullscreenForNode(Node*) { }
-        
+
+#if ENABLE(TILED_BACKING_STORE)
+        virtual IntRect visibleRectForTiledBackingStore() const { return IntRect(); }
+#endif
+
 #if PLATFORM(MAC)
         virtual KeyboardUIMode keyboardUIMode() { return KeyboardAccessDefault; }
 
@@ -214,6 +234,18 @@ namespace WebCore {
         virtual void makeFirstResponder(NSResponder *) { }
 
         virtual void willPopUpMenu(NSMenu *) { }
+#endif
+
+#if ENABLE(TOUCH_EVENTS)
+        virtual void needTouchEvents(bool) = 0;
+#endif
+
+#if ENABLE(WIDGETS_10_SUPPORT)
+        virtual bool isWindowed() { return false; }
+        virtual bool isFloating() { return false; }
+        virtual bool isFullscreen() { return false; }
+        virtual bool isMaximized() { return false; }
+        virtual bool isMinimized() { return false; }
 #endif
 
     protected:

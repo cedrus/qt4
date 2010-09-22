@@ -145,7 +145,9 @@ void tst_Bic::initTestCase_data()
     QTest::newRow("QtGui") << "QtGui";
 
     QTest::newRow("Qt3Support") << "Qt3Support";
+#ifndef QT_NO_DBUS
     QTest::newRow("QtDBus") << "QtDBus";
+#endif
     QTest::newRow("QtDesigner") << "QtDesigner";
     QTest::newRow("QtMultimedia") << "QtMultimedia";
     QTest::newRow("QtNetwork") << "QtNetwork";
@@ -189,7 +191,7 @@ void tst_Bic::sizesAndVTables_data()
 #elif defined Q_OS_MAC && defined(__i386__)
 #  define FILESUFFIX "macx-gcc-ia32"
 #elif defined Q_OS_MAC && defined(__amd64__)
-#  define FILESUFFIX "macx-gcc-amd64";
+#  define FILESUFFIX "macx-gcc-amd64"
 #elif defined Q_OS_WIN && defined Q_CC_GNU
 #  define FILESUFFIX "win32-gcc-ia32"
 #else
@@ -236,6 +238,9 @@ QBic::Info tst_Bic::getCurrentInfo(const QString &libName)
     QStringList args;
     args << "-c"
          << "-I" + qtDir + "/include"
+#ifdef Q_OS_MAC
+        << "-arch" << "i386" // Always use 32-bit data on Mac.
+#endif
 #ifndef Q_OS_WIN
          << "-I/usr/X11R6/include/"
 #endif

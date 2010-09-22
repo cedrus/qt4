@@ -102,7 +102,7 @@ void QMenuBarExtension::paintEvent(QPaintEvent *)
     QStylePainter p(this);
     QStyleOptionToolButton opt;
     initStyleOption(&opt);
-    // We do not need to draw both extention arrows
+    // We do not need to draw both extension arrows
     opt.features &= ~QStyleOptionToolButton::HasMenu;
     p.drawComplexControl(QStyle::CC_ToolButton, opt);
 }
@@ -268,19 +268,15 @@ void QMenuBarPrivate::updateGeometries()
 
 QRect QMenuBarPrivate::actionRect(QAction *act) const
 {
-    Q_Q(const QMenuBar);
     const int index = actions.indexOf(act);
-    if (index == -1)
-        return QRect();
 
     //makes sure the geometries are up-to-date
     const_cast<QMenuBarPrivate*>(this)->updateGeometries();
 
-    if (index >= actionRects.count())
+    if (index < 0 || index >= actionRects.count())
         return QRect(); // that can happen in case of native menubar
 
-    QRect ret = actionRects.at(index);
-    return QStyle::visualRect(q->layoutDirection(), q->rect(), ret);
+    return actionRects.at(index);
 }
 
 void QMenuBarPrivate::focusFirstAction()
@@ -505,6 +501,9 @@ void QMenuBarPrivate::calcActionRects(int max_width, int start) const
 
         //keep moving along..
         x += rect.width() + itemSpacing;
+
+        //make sure we follow the layout direction
+        rect = QStyle::visualRect(q->layoutDirection(), q->rect(), rect);
     }
 }
 
@@ -769,7 +768,7 @@ QAction *QMenuBarPrivate::getNextAction(const int _start, const int increment) c
     const int start = (_start == -1 && increment == -1) ? actions.count() : _start;
     const int end =  increment == -1 ? 0 : actions.count() - 1;
 
-    for (int i = start; start != end;) {
+    for (int i = start; i != end;) {
         i += increment;
         QAction *current = actions.at(i);
         if (!actionRects.at(i).isNull() && (allowActiveAndDisabled || current->isEnabled()))
@@ -1932,9 +1931,9 @@ void QMenuBar::setNativeMenuBar(bool nativeMenuBar)
             d->macCreateMenuBar(parentWidget());
         }
         macUpdateMenuBar();
-        updateGeometry();
-        setVisible(false);
-        setVisible(true);
+	updateGeometry();
+	if (!d->nativeMenuBar && parentWidget())
+	    setVisible(true);
 #endif
     }
 }

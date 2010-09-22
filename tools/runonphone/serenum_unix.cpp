@@ -46,13 +46,130 @@
 #include <QFileInfo>
 #include <QDir>
 
-QList<SerialPortId> enumerateSerialPorts()
+#include <usb.h>
+
+QList<SerialPortId> enumerateSerialPorts(int loglevel)
 {
+    QList<QString> eligableInterfaces;
     QList<SerialPortId> list;
+
+    usb_init();
+    usb_find_busses();
+    usb_find_devices();
+
+    for (struct usb_bus *bus = usb_get_busses(); bus; bus = bus->next) {
+        for (struct usb_device *device = bus->devices; device; device = device->next) {
+            for (int n = 0; n < device->descriptor.bNumConfigurations; ++n) {
+                struct usb_config_descriptor &usbConfig =device->config[n];
+                QList<int> usableInterfaces;
+                for (int m = 0; m < usbConfig.bNumInterfaces; ++m) {
+                    for (int o = 0; o < usbConfig.interface[m].num_altsetting; ++o) {
+                        struct usb_interface_descriptor &descriptor = usbConfig.interface[m].altsetting[o];
+                        if (descriptor.bInterfaceClass != 2 // "Communication"
+                                || descriptor.bInterfaceSubClass != 2 // Abstract (modem)
+                                || descriptor.bInterfaceProtocol != 255) // Vendor Specific
+                            continue;
+
+                        unsigned char *buf = descriptor.extra;
+                        unsigned int size = descriptor.extralen;
+                        while (size >= 2 * sizeof(u_int8_t)) {
+                            // for Communication devices there is a slave interface for the actual
+                            // data transmission.
+                            // the extra info stores that as a index for the interface
+                            if (buf[0] >= 5 && buf[1] == 36 && buf[2] == 6) { // CDC Union
+                                for (int i = 4; i < buf[0]; i++)
+                                    usableInterfaces.append((int) buf[i]);
+                            }
+                            size -= buf[0];
+                            buf += buf[0];
+                        }
+                    }
+                }
+                
+                if (usableInterfaces.isEmpty())
+                    continue;
+                
+                QString manufacturerString;
+                QString productString;
+                
+                usb_dev_handle *devh = usb_open(device);
+                if (devh) {
+                    QByteArray buf;
+                    buf.resize(256);
+                    int err = usb_get_string_simple(devh, device->descriptor.iManufacturer, buf.data(), buf.size());
+                    if (err < 0) {
+                        if (loglevel > 1)
+                            qDebug() << "      can't read manufacturer name, error:" << err;
+                    } else {
+                        manufacturerString = QString::fromAscii(buf);
+                        if (loglevel > 1)
+                            qDebug() << "      manufacturer:" << manufacturerString;
+                    }
+
+                    buf.resize(256);
+                    err = usb_get_string_simple(devh, device->descriptor.iProduct, buf.data(), buf.size());
+                    if (err < 0) {
+                        if (loglevel > 1)
+                            qDebug() << "      can't read product name, error:" << err;
+                    } else {
+                        productString = QString::fromAscii(buf);
+                        if (loglevel > 1)
+                            qDebug() << "      product:" << productString;
+                    }
+                    usb_close(devh);
+                } else if (loglevel > 0) {
+                    qDebug() << "      can't open usb device";
+                }
+
+                // second loop to find the actual data interface.
+                foreach (int i, usableInterfaces) {
+                    for (int m = 0; m < usbConfig.bNumInterfaces; ++m) {
+                        for (int o = 0; o < usbConfig.interface[m].num_altsetting; ++o) {
+                            struct usb_interface_descriptor &descriptor = usbConfig.interface[m].altsetting[o];
+                            if (descriptor.bInterfaceNumber != i)
+                                continue;
+                            if (descriptor.bInterfaceClass == 10) { // "CDC Data"
+                                if (loglevel > 1) {
+                                    qDebug() << "      found the data port"
+                                             << "bus:" << bus->dirname
+                                             << "device" << device->filename
+                                             << "interface" << descriptor.bInterfaceNumber;
+                                }
+                                // ### manufacturer and product strings are only readable as root :(
+                                if (!manufacturerString.isEmpty() && !productString.isEmpty()) {
+                                    eligableInterfaces << QString("usb-%1_%2-if%3")
+                                                          .arg(manufacturerString.replace(QChar(' '), QChar('_')))
+                                                          .arg(productString.replace(QChar(' '), QChar('_')))
+                                                          .arg(i, 2, 16, QChar('0'));
+                                } else {
+                                    eligableInterfaces << QString("if%1").arg(i, 2, 16, QChar('0')); // fix!
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if (loglevel > 1)
+        qDebug() << "      searching for interfaces:" << eligableInterfaces;
+
     QDir dir("/dev/serial/by-id/");
-    QFileInfoList ports(dir.entryInfoList());
-    foreach (const QFileInfo &info, ports) {
+    foreach (const QFileInfo &info, dir.entryInfoList()) {
         if (!info.isDir()) {
+            bool usable = eligableInterfaces.isEmpty();
+            foreach (const QString &iface, eligableInterfaces) {
+                if (info.fileName().contains(iface)) {
+                    if (loglevel > 1)
+                        qDebug() << "      found device file:" << info.fileName() << endl;
+                    usable = true;
+                    break;
+                }
+            }
+            if (!usable)
+                continue;
+
             SerialPortId id;
             id.friendlyName = info.fileName();
             id.portName = info.canonicalFilePath();

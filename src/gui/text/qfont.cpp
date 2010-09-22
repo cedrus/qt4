@@ -73,7 +73,7 @@
 #endif
 #endif
 #ifdef Q_OS_SYMBIAN
-#include "qt_s60_p.h"
+#include <private/qt_s60_p.h>
 #endif
 
 #include <QMutexLocker>
@@ -1266,6 +1266,15 @@ QFont::StyleHint QFont::styleHint() const
     \value OldEnglish the font matcher prefers decorative fonts.
     \value Decorative is a synonym for \c OldEnglish.
 
+    \value Monospace the font matcher prefers fonts that map to the
+    CSS generic font-family 'monospace'.
+
+    \value Fantasy the font matcher prefers fonts that map to the
+    CSS generic font-family 'fantasy'.
+
+    \value Cursive the font matcher prefers fonts that map to the
+    CSS generic font-family 'cursive'.
+
     \value System the font matcher prefers system fonts.
 */
 
@@ -1289,9 +1298,11 @@ QFont::StyleHint QFont::styleHint() const
     \value PreferAntialias antialias if possible.
     \value OpenGLCompatible forces the use of OpenGL compatible
            fonts.
-    \value NoFontMerging If a font does not contain a character requested
-           to draw then Qt automatically chooses a similar looking for that contains
-           the character. This flag disables this feature.
+    \value NoFontMerging If the font selected for a certain writing system
+           does not contain a character requested to draw, then Qt automatically chooses a similar
+           looking font that contains the character. The NoFontMerging flag disables this feature.
+           Please note that enabling this flag will not prevent Qt from automatically picking a
+           suitable font when the selected font does not support the writing system of the text.
 
     Any of these may be OR-ed with one of these flags:
 
@@ -1300,6 +1311,8 @@ QFont::StyleHint QFont::styleHint() const
     \value PreferQuality prefer the best quality font. The font matcher
            will use the nearest standard point size that the font
            supports.
+    \value ForceIntegerMetrics forces the use of integer values in font engines that support fractional
+           font metrics.
 */
 
 /*!

@@ -49,6 +49,8 @@
 #include "qdbusmetatype.h"
 #include "qdbusutil_p.h"
 
+#ifndef QT_NO_DBUS
+
 QT_BEGIN_NAMESPACE
 
 extern QDBUS_EXPORT QString qDBusGenerateMetaObjectXml(QString interface, const QMetaObject *mo,
@@ -131,7 +133,7 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
         if (mm.methodType() == QMetaMethod::Signal)
             // adding a signal
             isSignal = true;
-        else if (mm.methodType() == QMetaMethod::Slot && mm.access() == QMetaMethod::Public)
+        else if (mm.access() == QMetaMethod::Public && (mm.methodType() == QMetaMethod::Slot || mm.methodType() == QMetaMethod::Method))
             isSignal = false;
         else
             continue;           // neither signal nor public slot
@@ -139,9 +141,9 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
         if (isSignal && !(flags & (QDBusConnection::ExportScriptableSignals |
                                    QDBusConnection::ExportNonScriptableSignals)))
             continue;           // we're not exporting any signals
-        if (!isSignal && !(flags & (QDBusConnection::ExportScriptableSlots |
-                                    QDBusConnection::ExportNonScriptableSlots)))
-            continue;           // we're not exporting any slots
+        if (!isSignal && (!(flags & (QDBusConnection::ExportScriptableSlots | QDBusConnection::ExportNonScriptableSlots)) &&
+                          !(flags & (QDBusConnection::ExportScriptableInvokables | QDBusConnection::ExportNonScriptableInvokables))))
+            continue;           // we're not exporting any slots or invokables
 
         QString xml = QString::fromLatin1("    <%1 name=\"%2\">\n")
                       .arg(isSignal ? QLatin1String("signal") : QLatin1String("method"))
@@ -158,7 +160,7 @@ static QString generateInterfaceXml(const QMetaObject *mo, int flags, int method
                 // do we need to describe this argument?
                 if (QDBusMetaType::signatureToType(typeName) == QVariant::Invalid)
                     xml += QString::fromLatin1("      <annotation name=\"com.trolltech.QtDBus.QtTypeName.Out0\" value=\"%1\"/>\n")
-                           .arg(typeNameToXml(mm.typeName()));
+                        .arg(typeNameToXml(QVariant::typeToName(QVariant::Type(typeId))));
             } else
                 continue;
         }
@@ -302,3 +304,5 @@ QString qDBusGenerateMetaObjectXml(QString interface, const QMetaObject *mo, con
 #endif
 
 QT_END_NAMESPACE
+
+#endif // QT_NO_DBUS

@@ -40,6 +40,7 @@
 ****************************************************************************/
 #include "private/qpathclipper_p.h"
 #include "paths.h"
+#include "pathcompare.h"
 
 #include <QtTest/QtTest>
 
@@ -94,6 +95,8 @@ private slots:
 
     void task209056();
     void task251909();
+
+    void qtbug3778();
 };
 
 Q_DECLARE_METATYPE(QPainterPath)
@@ -282,46 +285,6 @@ static QPainterPath samplePath10()
     return path;
 }
 
-static QPainterPath samplePath11()
-{
-    QPainterPath path;
-    path.moveTo(QPointF(165.71429, 338.79076));
-    path.lineTo(QPointF(227.74288, 338.79076));
-    path.cubicTo(QPointF(232.95048, 338.79076),
-                 QPointF(237.14288, 342.88102),
-                 QPointF(237.14288, 347.96176));
-    path.lineTo(QPointF(237.14288, 366.76261));
-    path.cubicTo(QPointF(237.14288, 371.84335),
-                 QPointF(232.95048, 375.93361),
-                 QPointF(227.74288, 375.93361));
-    path.lineTo(QPointF(165.7142905131896, 375.93361));
-    path.lineTo(QPointF(165.71429, 338.79076));
-    return path;
-}
-static QPainterPath samplePath12()
-{
-    QPainterPath path;
-    path.moveTo(QPointF(333.297085225735, 61.53486494396167));
-    path.cubicTo(QPointF(339.851755668807, 65.26555884471786),
-                 QPointF(346.7164458828328, 69.04482864715078),
-                 QPointF(353.4159970843586, 72.56059416636147));
-    path.cubicTo(QPointF(353.4166971116034, 72.56155590850551),
-                 QPointF(353.4173961086004, 72.56251809989483),
-                 QPointF(353.4180950127331, 72.56348028832946));
-    path.cubicTo(QPointF(342.4340366381152, 76.42344228577481),
-                 QPointF(317.0596805768079, 94.67086588954379),
-                 QPointF(309.78055, 101.00195));
-    path.cubicTo(QPointF(286.0370715501102, 121.6530659984711),
-                 QPointF(272.7748256344584, 134.1525788344904),
-                 QPointF(250.7436468364447, 150.4434491585085));
-    path.lineTo(QPointF(247.03629, 146.56585));
-    path.lineTo(QPointF(240.71086, 91.501867));
-    path.cubicTo(QPointF(240.71086, 91.501867),
-                 QPointF(305.6382515924416, 62.21715375368672),
-                 QPointF(333.297085225735, 61.53486494396167));
-    return path;
-}
-
 static QPainterPath samplePath13()
 {
     QPainterPath path;
@@ -336,13 +299,17 @@ static QPainterPath samplePath13()
 static QPainterPath samplePath14()
 {
     QPainterPath path;
-    path.moveTo(QPointF(100, 180));
-    path.lineTo(QPointF(100, 80));
-    path.lineTo(QPointF(120, 80));
-    path.lineTo(QPointF(120, 100));
-    path.lineTo(QPointF(160, 100));
-    path.lineTo(QPointF(160, 180));
-    path.lineTo(QPointF(100, 180));
+
+    path.moveTo(160, 80);
+    path.lineTo(160, 180);
+    path.lineTo(100, 180);
+    path.lineTo(100, 80);
+    path.lineTo(160, 80);
+    path.moveTo(160, 80);
+    path.lineTo(160, 100);
+    path.lineTo(120, 100);
+    path.lineTo(120, 80);
+
     return path;
 }
 
@@ -405,16 +372,6 @@ void tst_QPathClipper::clip_data()
                                  << QPathClipper::BoolAnd
                                  << samplePath10();
 
-    QTest::newRow( "simple11" )  << Paths::frame2()*QTransform().translate(40, 235)
-                                 << Paths::frame1()
-                                 << QPathClipper::BoolAnd
-                                 << samplePath11();
-
-    QTest::newRow( "intersection_at_edge" )  << Paths::lips()
-                                             << Paths::mailbox()*QTransform().translate(-85, 34)
-                                             << QPathClipper::BoolAnd
-                                             << samplePath12();
-
     QTest::newRow( "simple_move_to1" )  << Paths::rect4()
                                        << Paths::rect2() * QTransform().translate(-20, 50)
                                        << QPathClipper::BoolAnd
@@ -426,82 +383,6 @@ void tst_QPathClipper::clip_data()
                                         << samplePath14();
 }
 
-static const int precision = 8;
-static const qreal epsilon = pow(0.1, precision);
-
-static inline bool fuzzyIsZero(qreal x, qreal relative)
-{
-    if (qAbs(relative) < epsilon)
-        return qAbs(x) < epsilon;
-    else
-        return qAbs(x / relative) < epsilon;
-}
-
-static bool fuzzyCompare(const QPointF &a, const QPointF &b)
-{
-    const QPointF delta = a - b;
-
-    const qreal x = qMax(qAbs(a.x()), qAbs(b.x()));
-    const qreal y = qMax(qAbs(a.y()), qAbs(b.y()));
-
-    return fuzzyIsZero(delta.x(), x) && fuzzyIsZero(delta.y(), y);
-}
-
-static bool isClosed(const QPainterPath &path)
-{
-    if (path.elementCount() == 0)
-        return false;
-
-    QPointF first = path.elementAt(0);
-    QPointF last = path.elementAt(path.elementCount() - 1);
-
-    return fuzzyCompare(first, last);
-}
-
-// rotation and direction independent path comparison
-// allows paths to be shifted or reversed relative to each other
-static bool comparePaths(const QPainterPath &actual, const QPainterPath &expected)
-{
-    const int endActual = isClosed(actual) ? actual.elementCount() - 1 : actual.elementCount();
-    const int endExpected = isClosed(expected) ? expected.elementCount() - 1 : expected.elementCount();
-
-    if (endActual != endExpected)
-        return false;
-
-    for (int i = 0; i < endActual; ++i) {
-        int k = 0;
-        for (k = 0; k < endActual; ++k) {
-            int i1 = k;
-            int i2 = (i + k) % endActual;
-
-            QPointF a = actual.elementAt(i1);
-            QPointF b = expected.elementAt(i2);
-
-            if (!fuzzyCompare(a, b))
-                break;
-        }
-
-        if (k == endActual)
-            return true;
-
-        for (k = 0; k < endActual; ++k) {
-            int i1 = k;
-            int i2 = (i + endActual - k) % endActual;
-
-            QPointF a = actual.elementAt(i1);
-            QPointF b = expected.elementAt(i2);
-
-            if (!fuzzyCompare(a, b))
-                break;
-        }
-
-        if (k == endActual)
-            return true;
-    }
-
-    return false;
-}
-
 // sanity check to make sure comparePaths declared above works
 void tst_QPathClipper::testComparePaths()
 {
@@ -511,12 +392,12 @@ void tst_QPathClipper::testComparePaths()
     a.addRect(0, 0, 10, 10);
     b.addRect(0, 0, 10.00001, 10.00001);
 
-    QVERIFY(!comparePaths(a, b));
+    QVERIFY(!QPathCompare::comparePaths(a, b));
 
     b = QPainterPath();
     b.addRect(0, 0, 10.00000000001, 10.00000000001);
 
-    QVERIFY(comparePaths(a, b));
+    QVERIFY(QPathCompare::comparePaths(a, b));
 
     b = QPainterPath();
     b.moveTo(10, 0);
@@ -524,9 +405,9 @@ void tst_QPathClipper::testComparePaths()
     b.lineTo(0, 10);
     b.lineTo(10, 10);
 
-    QVERIFY(comparePaths(a, b));
+    QVERIFY(QPathCompare::comparePaths(a, b));
     b.lineTo(10, 0);
-    QVERIFY(comparePaths(a, b));
+    QVERIFY(QPathCompare::comparePaths(a, b));
 
     b = QPainterPath();
     b.moveTo(10, 0);
@@ -534,7 +415,7 @@ void tst_QPathClipper::testComparePaths()
     b.lineTo(0, 0);
     b.lineTo(10, 10);
 
-    QVERIFY(!comparePaths(a, b));
+    QVERIFY(!QPathCompare::comparePaths(a, b));
 }
 
 void tst_QPathClipper::clip()
@@ -549,7 +430,7 @@ void tst_QPathClipper::clip()
     QPathClipper clipper(subject, clip);
     QPainterPath x = clipper.clip(op);
 
-    QVERIFY(comparePaths(x, result));
+    QVERIFY(QPathCompare::comparePaths(x, result));
 }
 
 static inline QPointF randomPointInRect(const QRectF &rect)
@@ -1415,6 +1296,33 @@ void tst_QPathClipper::task251909()
     QPainterPath result = p1.united(p2);
 
     QVERIFY(result.elementCount() <= 5);
+}
+
+void tst_QPathClipper::qtbug3778()
+{
+    QPainterPath path1;
+    path1.moveTo(200, 3.22409e-5);
+    // e-5 and higher leads to a bug
+    // Using 3.22409e-4 starts to work correctly
+    path1.lineTo(0, 0);
+    path1.lineTo(1.07025e-13, 1450);
+    path1.lineTo(750, 950);
+    path1.lineTo(950, 750);
+    path1.lineTo(200, 3.22409e-13);
+
+    QPainterPath path2;
+    path2.moveTo(0, 0);
+    path2.lineTo(200, 800);
+    path2.lineTo(600, 1500);
+    path2.lineTo(1500, 1400);
+    path2.lineTo(1900, 1200);
+    path2.lineTo(2000, 1000);
+    path2.lineTo(1400, 0);
+    path2.lineTo(0, 0);
+
+    QPainterPath p12 = path1.intersected(path2);
+
+    QVERIFY(p12.contains(QPointF(100, 100)));
 }
 
 QTEST_APPLESS_MAIN(tst_QPathClipper)

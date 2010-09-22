@@ -56,6 +56,7 @@
 #include <qscrollbar.h>
 #include <qtreeview.h>
 #include <qheaderview.h>
+#include <qmath.h>
 #ifndef QT_NO_IM
 #include "qinputcontext.h"
 #endif
@@ -112,7 +113,15 @@ QStyleOptionMenuItem QComboMenuDelegate::getStyleOption(const QStyleOptionViewIt
                                                         const QModelIndex &index) const
 {
     QStyleOptionMenuItem menuOption;
-    menuOption.palette = option.palette.resolve(QApplication::palette("QMenu"));
+
+    QPalette resolvedpalette = option.palette.resolve(QApplication::palette("QMenu"));
+    QVariant value = index.data(Qt::ForegroundRole);
+    if (qVariantCanConvert<QBrush>(value)) {
+        resolvedpalette.setBrush(QPalette::WindowText, qvariant_cast<QBrush>(value));
+        resolvedpalette.setBrush(QPalette::ButtonText, qvariant_cast<QBrush>(value));
+        resolvedpalette.setBrush(QPalette::Text, qvariant_cast<QBrush>(value));
+    }
+    menuOption.palette = resolvedpalette;
     menuOption.state = QStyle::State_None;
     if (mCombo->window()->isActiveWindow())
         menuOption.state = QStyle::State_Active;
@@ -323,7 +332,7 @@ QSize QComboBoxPrivate::recomputeSizeHint(QSize &sh) const
 
 
         // height
-        sh.setHeight(qMax(fm.height(), 14) + 2);
+        sh.setHeight(qMax(qCeil(QFontMetricsF(fm).height()), 14) + 2);
         if (hasIcon) {
             sh.setHeight(qMax(sh.height(), iconSize.height() + 2));
         }
@@ -695,6 +704,11 @@ void QComboBoxPrivateContainer::hideEvent(QHideEvent *)
 {
     emit resetButton();
     combo->update();
+    // QGraphicsScenePrivate::removePopup closes the combo box popup, it hides it non-explicitly.
+    // Hiding/showing the QComboBox after this will unexpectedly show the popup as well.
+    // Re-hiding the popup container makes sure it is explicitly hidden.
+    if (QGraphicsProxyWidget *proxy = graphicsProxyWidget())
+        proxy->hide();
 }
 
 void QComboBoxPrivateContainer::mousePressEvent(QMouseEvent *e)
@@ -896,7 +910,7 @@ QComboBox::QComboBox(bool rw, QWidget *parent, const char *name)
     interaction. The highlighted() signal is emitted when the user
     highlights an item in the combobox popup list. All three signals
     exist in two versions, one with a QString argument and one with an
-    \c int argument. If the user selectes or highlights a pixmap, only
+    \c int argument. If the user selects or highlights a pixmap, only
     the \c int signals are emitted. Whenever the text of an editable
     combobox is changed the editTextChanged() signal is emitted.
 
@@ -1283,7 +1297,8 @@ QComboBox::~QComboBox()
 
     By default, this property has a value of 10.
 
-    \note This property is ignored for non-editable comboboxes in Mac style.
+    \note This property is ignored for non-editable comboboxes in styles that returns
+    false for QStyle::SH_ComboBox_Popup such as the Mac style or the Gtk+ Style.
 */
 int QComboBox::maxVisibleItems() const
 {
@@ -2363,7 +2378,7 @@ void QComboBox::showPopup()
                     toCheck.push(idx);
 #endif
                 ++count;
-                if (!usePopup && count > d->maxVisibleItems) {
+                if (!usePopup && count >= d->maxVisibleItems) {
                     toCheck.clear();
                     break;
                 }

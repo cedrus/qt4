@@ -47,6 +47,8 @@
 #include <QtCore/qlist.h>
 #include <QtCore/qvariant.h>
 
+#ifndef QT_NO_DBUS
+
 QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
@@ -104,6 +106,9 @@ public:
     void setDelayedReply(bool enable) const;
     bool isDelayedReply() const;
 
+    void setAutoStartService(bool enable);
+    bool autoStartService() const;
+
     void setArguments(const QList<QVariant> &arguments);
     QList<QVariant> arguments() const;
 
@@ -122,5 +127,6 @@ QT_END_NAMESPACE
 
 QT_END_HEADER
 
+#endif // QT_NO_DBUS
 #endif
 

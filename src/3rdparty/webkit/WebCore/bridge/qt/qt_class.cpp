@@ -98,10 +98,12 @@ JSValue QtClass::fallbackObject(ExecState* exec, Instance* inst, const Identifie
         if (m.access() == QMetaMethod::Private)
             continue;
 
-        QByteArray signature = m.signature();
-        signature.truncate(signature.indexOf('('));
+        int iter = 0;
+        const char* signature = m.signature();
+        while (signature[iter] && signature[iter] != '(')
+            ++iter;
 
-        if (normal == signature) {
+        if (normal == QByteArray::fromRawData(signature, iter)) {
             QtRuntimeMetaMethod* val = new (exec) QtRuntimeMetaMethod(exec, identifier, static_cast<QtInstance*>(inst), index, normal, false);
             qtinst->m_methods.insert(name, val);
             return val;
@@ -127,7 +129,7 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
 
     QObject* obj = qtinst->getObject();
     UString ustring = identifier.ustring();
-    QString objName((const QChar*)ustring.rep()->data(), ustring.size());
+    QString objName((const QChar*)ustring.rep()->characters(), ustring.size());
     QByteArray ba = objName.toAscii();
 
     // First check for a cached field
@@ -139,6 +141,7 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
             // other types so we can delete them later
             if (f->fieldType() == QtField::MetaProperty)
                 return f;
+#ifndef QT_NO_PROPERTIES
             else if (f->fieldType() == QtField::DynamicProperty) {
                 if (obj->dynamicPropertyNames().indexOf(ba) >= 0)
                     return f;
@@ -147,7 +150,9 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
                     qtinst->m_fields.remove(objName);
                     delete f;
                 }
-            } else {
+            }
+#endif
+            else {
                 QList<QObject*> children = obj->children();
                 for (int index = 0; index < children.count(); ++index) {
                     QObject *child = children.at(index);
@@ -172,6 +177,7 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
             }
         }
 
+#ifndef QT_NO_PROPERTIES
         // Dynamic properties
         index = obj->dynamicPropertyNames().indexOf(ba);
         if (index >= 0) {
@@ -179,6 +185,7 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
             qtinst->m_fields.insert(objName, f);
             return f;
         }
+#endif
 
         // Child objects
 
@@ -202,12 +209,14 @@ Field* QtClass::fieldNamed(const Identifier& identifier, Instance* instance) con
         if (qtinst->m_methods.contains(ba))
             return 0;
 
+#ifndef QT_NO_PROPERTIES
         // deleted qobject, but can't throw an error from here (no exec)
         // create a fake QtField that will throw upon access
         if (!f) {
             f = new QtField(ba);
             qtinst->m_fields.insert(objName, f);
         }
+#endif
         return f;
     }
 }

@@ -325,7 +325,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     control over size of header items and row and column sizes.
 
     \sa QStyleOption, QStylePainter, {Styles Example},
-        {Implementing Styles and Style Aware Widgets}, QStyledItemDelegate
+        {Styles &amp Style Aware Widgets}, QStyledItemDelegate
 */
 
 /*!
@@ -2421,9 +2421,10 @@ QT_BEGIN_INCLUDE_NAMESPACE
 #include <QDebug>
 QT_END_INCLUDE_NAMESPACE
 
+#if !defined(QT_NO_DEBUG_STREAM)
 QDebug operator<<(QDebug debug, QStyle::State state)
 {
-#if !defined(QT_NO_DEBUG) && !defined(QT_NO_DEBUG_STREAM)
+#if !defined(QT_NO_DEBUG)
     debug << "QStyle::State(";
 
     QStringList states;
@@ -2458,6 +2459,7 @@ QDebug operator<<(QDebug debug, QStyle::State state)
 #endif
     return debug;
 }
+#endif
 
 /*!
     \since 4.6

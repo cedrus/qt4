@@ -177,7 +177,7 @@ const Node *CodeMarker::nodeForString(const QString& string)
 QString CodeMarker::stringForNode(const Node *node)
 {
     if (sizeof(const Node *) == sizeof(ulong)) {
-        return QString::number(reinterpret_cast<ulong>(node));
+        return QString::number(reinterpret_cast<quintptr>(node));
     }
     else {
         return QString::number(reinterpret_cast<qulonglong>(node));
@@ -257,6 +257,7 @@ QString CodeMarker::typified(const QString &string)
 QString CodeMarker::taggedNode(const Node* node)
 {
     QString tag;
+    QString name = node->name();
 
     switch (node->type()) {
     case Node::Namespace:
@@ -277,11 +278,20 @@ QString CodeMarker::taggedNode(const Node* node)
     case Node::Property:
         tag = QLatin1String("@property");
         break;
+#ifdef QDOC_QML
+    case Node::Fake:
+        if (node->subType() == Node::QmlClass) {
+            if (node->name().startsWith(QLatin1String("QML:")))
+                name = name.mid(4);                 // remove the "QML:" prefix
+        }
+        tag = QLatin1String("@property");
+        break;
+#endif
     default:
         tag = QLatin1String("@unknown");
         break;
     }
-    return QLatin1Char('<') + tag + QLatin1Char('>') + protect(node->name())
+    return QLatin1Char('<') + tag + QLatin1Char('>') + protect(name)
         + QLatin1String("</") + tag + QLatin1Char('>');
 }
 
@@ -457,7 +467,7 @@ bool CodeMarker::insertReimpFunc(FastSection& fs, Node* node, Status status)
 void CodeMarker::append(QList<Section>& sectionList, const FastSection& fs)
 {
     if (!fs.isEmpty()) {
-	Section section(fs.name,fs.singularMember,fs.pluralMember);
+	Section section(fs.name,fs.divClass,fs.singularMember,fs.pluralMember);
 	section.members = fs.memberMap.values();
         section.reimpMembers = fs.reimpMemberMap.values();
 	section.inherited = fs.inherited;
@@ -614,10 +624,20 @@ QString CodeMarker::macName(const Node *node, const QString &name)
   Get the list of documentation sections for the children of
   the specified QmlClassNode.
  */
-QList<Section> CodeMarker::qmlSections(const QmlClassNode* , SynopsisStyle )
+QList<Section> CodeMarker::qmlSections(const QmlClassNode* ,
+                                       SynopsisStyle ,
+                                       const Tree* )
 {
     return QList<Section>();
 }
 #endif
+
+const Node* CodeMarker::resolveTarget(const QString& , 
+                                      const Tree* ,
+		                      const Node* ,
+                                      const Node* )
+{
+    return 0;
+}
 
 QT_END_NAMESPACE

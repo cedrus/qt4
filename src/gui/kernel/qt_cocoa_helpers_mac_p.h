@@ -73,6 +73,9 @@
 **
 ****************************************************************************/
 
+#ifndef QT_COCOA_HELPERS_MAC_P_H
+#define QT_COCOA_HELPERS_MAC_P_H
+
 //
 //  W A R N I N G
 //  -------------
@@ -114,6 +117,12 @@ typedef struct CGPoint NSPoint;
 #endif
 
 QT_BEGIN_NAMESPACE
+
+enum {
+    QtCocoaEventSubTypeWakeup       = SHRT_MAX,
+    QtCocoaEventSubTypePostMessage  = SHRT_MAX-1
+};
+
 Qt::MouseButtons qt_mac_get_buttons(int buttons);
 Qt::MouseButton qt_mac_get_button(EventMouseButton button);
 void macWindowFade(void * /*OSWindowRef*/ window, float durationSeconds = 0.15);
@@ -125,6 +134,8 @@ void macWindowSetHasShadow( void * /*OSWindowRef*/ window, bool hasShadow );
 void macWindowFlush(void * /*OSWindowRef*/ window);
 void macSendToolbarChangeEvent(QWidget *widget);
 void qt_mac_updateContentBorderMetricts(void * /*OSWindowRef */window, const ::HIContentBorderMetrics &metrics);
+void qt_mac_replaceDrawRect(void * /*OSWindowRef */window, QWidgetPrivate *widget);
+void qt_mac_replaceDrawRectOriginal(void * /*OSWindowRef */window, QWidgetPrivate *widget);
 void qt_mac_showBaseLineSeparator(void * /*OSWindowRef */window, bool show);
 void * /*NSImage */qt_mac_create_nsimage(const QPixmap &pm);
 void qt_mac_update_mouseTracking(QWidget *widget);
@@ -134,6 +145,10 @@ void qt_dispatchTabletProximityEvent(void * /*NSEvent * */ tabletEvent);
 #ifdef QT_MAC_USE_COCOA
 bool qt_dispatchKeyEventWithCocoa(void * /*NSEvent * */ keyEvent, QWidget *widgetToGetEvent);
 void qt_cocoaChangeOverrideCursor(const QCursor &cursor);
+// These methods exists only for supporting unified mode.
+void macDrawRectOnTop(void * /*OSWindowRef */ window);
+void macSyncDrawingOnFirstInvocation(void * /*OSWindowRef */window);
+void qt_cocoaStackChildWindowOnTopOfOtherChildren(QWidget *widget);
 #endif
 void qt_mac_menu_collapseSeparators(void * /*NSMenu */ menu, bool collapse);
 bool qt_dispatchKeyEvent(void * /*NSEvent * */ keyEvent, QWidget *widgetToGetEvent);
@@ -181,6 +196,29 @@ inline QString qt_mac_NSStringToQString(const NSString *nsstr)
 
 inline NSString *qt_mac_QStringToNSString(const QString &qstr)
 { return [reinterpret_cast<const NSString *>(QCFString::toCFStringRef(qstr)) autorelease]; }
+
+#ifdef QT_MAC_USE_COCOA
+class QCocoaPostMessageArgs {
+public:
+    id target;
+    SEL selector;
+    QCocoaPostMessageArgs(id target, SEL selector) : target(target), selector(selector)
+    {
+        [target retain];
+    }
+
+    ~QCocoaPostMessageArgs()
+    {
+        [target release];
+    }
+};
+bool qt_cocoaPostMessage(id target, SEL selector);
 #endif
 
+#endif
+
+void qt_mac_post_retranslateAppMenu();
+
 QT_END_NAMESPACE
+
+#endif // QT_COCOA_HELPERS_MAC_P_H

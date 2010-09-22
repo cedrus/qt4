@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -347,6 +333,7 @@
     \row    \o vcapp         \o Creates a Visual Studio Project file to build
                              an application.
     \row    \o vclib         \o Creates a Visual Studio Project file to build a library.
+    \row    \o vcsubdirs     \o Creates a Visual Studio Solution file to build projects in sub-directories.
     \endtable
 
     See the \l{qmake Tutorial} for advice on writing project files for
@@ -872,7 +859,7 @@
 
     Developers using Visual Studio to write Qt applications can use the
     Visual Studio integration facilities provided with the
-    \l{Qt Commercial Editions} and do not need to worry about how
+    \l{Qt Commercial Edition} and do not need to worry about how
     project dependencies are managed.
 
     However, some developers may need to import an existing \c qmake project
@@ -1329,9 +1316,13 @@
     \target DEF_FILE
     \section1 DEF_FILE
 
-    \e {This is only used on Windows when using the \c app template}.
+    \e {This is only used on Windows when using the \c app template,
+    and on Symbian when building a shared DLL}.
 
-    Specifies a \c .def file to be included in the project.
+    Specifies a \c .def file to be included in the project. On Symbian
+    a directory may be specified instead, in which case the real files
+    will be located under the standard Symbian directories \c bwins and
+    \c eabi.
 
     \target DEPENDPATH
     \section1 DEPENDPATH
@@ -2004,7 +1995,7 @@ distinction between shared and
     \section1 QMAKE_CFLAGS_WARN_OFF
 
     This variable is not empty if the warn_off
-    \l{#TEMPLATE}{TEMPLATE} option is specified.  The value of this
+    \l{#CONFIG}{CONFIG} option is specified.  The value of this
     variable is typically handled by \c qmake or \l{#QMAKESPEC}{qmake.conf}
     and rarely needs to be modified.
 
@@ -2012,7 +2003,7 @@ distinction between shared and
     \section1 QMAKE_CFLAGS_WARN_ON
 
     This variable is not empty if the warn_on
-    \l{#TEMPLATE}{TEMPLATE} option is specified.
+    \l{#CONFIG}{CONFIG} option is specified.
     The value of this variable is typically handled by
     \c qmake or \l{#QMAKESPEC}{qmake.conf} and rarely needs
     to be modified.
@@ -2279,11 +2270,11 @@ For example:
     If the OpenGL implementation uses EGL (most OpenGL/ES systems),
     then QMAKE_INCDIR_EGL may also need to be set.
 
-    \section1 QMAKE_INCDIR_OPENGL_ES1, QMAKE_INCDIR_OPENGL_ES1CL, QMAKE_INCDIR_OPENGL_ES2
+    \section1 QMAKE_INCDIR_OPENGL_ES1, QMAKE_INCDIR_OPENGL_ES2
 
     These variables contain the location of OpenGL headers files to be added
-    to INCLUDEPATH when building an application with OpenGL ES 1, OpenGL ES 1 Common
-    Lite or OpenGL ES 2 support respectively.
+    to INCLUDEPATH when building an application with OpenGL ES 1
+    or OpenGL ES 2 support respectively.
 
     The value of this variable is typically handled by \c qmake or
     \l{#QMAKESPEC}{qmake.conf} and rarely needs to be modified.
@@ -2537,10 +2528,10 @@ For example:
     variable is typically handled by \c qmake or
      \l{#QMAKESPEC}{qmake.conf} and rarely needs to be modified.
 
-    \section1 QMAKE_LIBS_OPENGL_ES1, QMAKE_LIBS_OPENGL_ES1CL, QMAKE_LIBS_OPENGL_ES2
+    \section1 QMAKE_LIBS_OPENGL_ES1, QMAKE_LIBS_OPENGL_ES2
 
-    These variables contain all the OpenGL libraries for OpenGL ES 1,
-    OpenGL ES 1 Common Lite profile and OpenGL ES 2.
+    These variables contain all the OpenGL libraries for OpenGL ES 1
+    and OpenGL ES 2.
 
     The value of these variables is typically handled by \c qmake or
     \l{#QMAKESPEC}{qmake.conf} and rarely needs to be modified.
@@ -2609,7 +2600,7 @@ For example:
 
     \section1 QMAKE_LIBS_THREAD
 
-    \e {This is used on Unix platforms only.}
+    \e {This is used on Unix and Symbian platforms only.}
 
     This variable contains all libraries that need to be linked against
     when building a multi-threaded application.  The

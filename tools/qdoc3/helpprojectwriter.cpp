@@ -39,9 +39,9 @@
 **
 ****************************************************************************/
 
-#include <QtXml>
 #include <QHash>
 #include <QMap>
+//#include <qdebug.h>
 
 #include "atom.h"
 #include "helpprojectwriter.h"
@@ -91,6 +91,7 @@ HelpProjectWriter::HelpProjectWriter(const Config &config, const QString &defaul
             subproject.title = config.getString(subprefix + "title");
             subproject.indexTitle = config.getString(subprefix + "indexTitle");
             subproject.sortPages = config.getBool(subprefix + "sortPages");
+            subproject.type = config.getString(subprefix + "type");
             readSelectors(subproject, config.getStringList(subprefix + "selectors"));
             project.subprojects[name] = subproject;
         }
@@ -117,6 +118,11 @@ void HelpProjectWriter::readSelectors(SubProject &subproject, const QStringList 
     typeHash["property"] = Node::Property;
     typeHash["variable"] = Node::Variable;
     typeHash["target"] = Node::Target;
+#ifdef QDOC_QML
+    typeHash["qmlproperty"] = Node::QmlProperty;
+    typeHash["qmlsignal"] = Node::QmlSignal;
+    typeHash["qmlmethod"] = Node::QmlMethod;
+#endif
 
     QHash<QString, Node::SubType> subTypeHash;
     subTypeHash["example"] = Node::Example;
@@ -128,6 +134,8 @@ void HelpProjectWriter::readSelectors(SubProject &subproject, const QStringList 
     subTypeHash["externalpage"] = Node::ExternalPage;
 #ifdef QDOC_QML
     subTypeHash["qmlclass"] = Node::QmlClass;
+    subTypeHash["qmlpropertygroup"] = Node::QmlPropertyGroup;
+    subTypeHash["qmlbasictype"] = Node::QmlBasicType;
 #endif
 
     QSet<Node::SubType> allSubTypes = QSet<Node::SubType>::fromList(subTypeHash.values());
@@ -177,7 +185,13 @@ QStringList HelpProjectWriter::keywordDetails(const Node *node) const
 {
     QStringList details;
 
-    if (node->parent() && !node->parent()->name().isEmpty()) {
+    if (node->type() == Node::QmlProperty) {
+        // "name"
+        details << node->name();
+        // "id"
+        details << node->parent()->parent()->name()+"::"+node->name();
+    }
+    else if (node->parent() && !node->parent()->name().isEmpty()) {
         // "name"
         if (node->type() == Node::Enum || node->type() == Node::Typedef)
             details << node->parent()->name()+"::"+node->name();
@@ -185,29 +199,29 @@ QStringList HelpProjectWriter::keywordDetails(const Node *node) const
             details << node->name();
         // "id"
         details << node->parent()->name()+"::"+node->name();
-    } else if (node->type() == Node::Fake) {
+    }
+    else if (node->type() == Node::Fake) {
         const FakeNode *fake = static_cast<const FakeNode *>(node);
-#ifdef QDOC_QML
         if (fake->subType() == Node::QmlClass) {
             details << (QmlClassNode::qmlOnly ? fake->name() : fake->fullTitle());
             details << "QML." + fake->name();
-        } else
-#endif
-        {
+        }
+        else {
             details << fake->fullTitle();
             details << fake->fullTitle();
         }
-    } else {
+    }
+    else {
         details << node->name();
         details << node->name();
     }
     details << tree->fullDocumentLocation(node);
-
     return details;
 }
 
 bool HelpProjectWriter::generateSection(HelpProject &project,
-                        QXmlStreamWriter & /* writer */, const Node *node)
+                                        QXmlStreamWriter & /* writer */,
+                                        const Node *node)
 {
     if (!node->url().isEmpty())
         return false;
@@ -226,9 +240,10 @@ bool HelpProjectWriter::generateSection(HelpProject &project,
     if (node->type() == Node::Fake) {
         const FakeNode *fake = static_cast<const FakeNode *>(node);
         objName = fake->fullTitle();
-    } else
+    }
+    else
         objName = tree->fullDocumentName(node);
-
+    
     // Only add nodes to the set for each subproject if they match a selector.
     // Those that match will be listed in the table of contents.
 
@@ -290,6 +305,9 @@ bool HelpProjectWriter::generateSection(HelpProject &project,
             break;
 
         case Node::Property:
+        case Node::QmlProperty:
+        case Node::QmlSignal:
+        case Node::QmlMethod:
             project.keywords.append(keywordDetails(node));
             break;
 
@@ -400,7 +418,7 @@ void HelpProjectWriter::generateSections(HelpProject &project,
 {
     if (!generateSection(project, writer, node))
         return;
-
+    
     if (node->isInnerNode()) {
         const InnerNode *inner = static_cast<const InnerNode *>(node);
 
@@ -409,8 +427,23 @@ void HelpProjectWriter::generateSections(HelpProject &project,
         foreach (const Node *node, inner->childNodes()) {
             if (node->access() == Node::Private)
                 continue;
-            if (node->type() == Node::Fake)
-                childMap[static_cast<const FakeNode *>(node)->fullTitle()] = node;
+            if (node->type() == Node::Fake) {
+                /*
+                  Don't visit QML property group nodes,
+                  but visit their children, which are all
+                  QML property nodes.
+                 */
+                if (node->subType() == Node::QmlPropertyGroup) {
+                    const InnerNode* inner = static_cast<const InnerNode*>(node);
+                    foreach (const Node* n, inner->childNodes()) {
+                        if (n->access() == Node::Private)
+                            continue;
+                        childMap[tree->fullDocumentName(n)] = n;
+                    }
+                }
+                else
+                    childMap[static_cast<const FakeNode *>(node)->fullTitle()] = node;
+            }
             else {
                 if (node->type() == Node::Function) {
                     const FunctionNode *funcNode = static_cast<const FunctionNode *>(node);
@@ -593,44 +626,99 @@ void HelpProjectWriter::generateProject(HelpProject &project)
     foreach (const QString &name, project.subprojects.keys()) {
         SubProject subproject = project.subprojects[name];
 
-        if (!name.isEmpty()) {
-            writer.writeStartElement("section");
-            QString indexPath = tree->fullDocumentLocation(tree->findFakeNodeByTitle(subproject.indexTitle));
-            writer.writeAttribute("ref", HtmlGenerator::cleanRef(indexPath));
-            writer.writeAttribute("title", subproject.title);
-            project.files.insert(indexPath);
-        }
-        if (subproject.sortPages) {
-            QStringList titles = subproject.nodes.keys();
-            titles.sort();
-            foreach (const QString &title, titles)
-                writeNode(project, writer, subproject.nodes[title]);
-        } else {
-            // Find a contents node and navigate from there, using the NextLink values.
-            foreach (const Node *node, subproject.nodes) {
-                QString nextTitle = node->links().value(Node::NextLink).first;
-                if (!nextTitle.isEmpty() &&
-                    node->links().value(Node::ContentsLink).first.isEmpty()) {
+        if (subproject.type == QLatin1String("manual")) {
 
-                    FakeNode *nextPage = const_cast<FakeNode *>(tree->findFakeNodeByTitle(nextTitle));
+            const FakeNode *indexPage = tree->findFakeNodeByTitle(subproject.indexTitle);
+            if (indexPage) {
+                Text indexBody = indexPage->doc().body();
+                const Atom *atom = indexBody.firstAtom();
+                QStack<int> sectionStack;
+                bool inItem = false;
 
-                    // Write the contents node.
-                    writeNode(project, writer, node);
+                while (atom) {
+                    switch (atom->type()) {
+                    case Atom::ListLeft:
+                        sectionStack.push(0);
+                        break;
+                    case Atom::ListRight:
+                        if (sectionStack.pop() > 0)
+                            writer.writeEndElement(); // section
+                        break;
+                    case Atom::ListItemLeft:
+                        inItem = true;
+                        break;
+                    case Atom::ListItemRight:
+                        inItem = false;
+                        break;
+                    case Atom::Link:
+                        if (inItem) {
+                            if (sectionStack.top() > 0)
+                                writer.writeEndElement(); // section
 
-                    while (nextPage) {
-                        writeNode(project, writer, nextPage);
-                        nextTitle = nextPage->links().value(Node::NextLink).first;
-                        if(nextTitle.isEmpty())
-                            break;
-                        nextPage = const_cast<FakeNode *>(tree->findFakeNodeByTitle(nextTitle));
+                            const FakeNode *page = tree->findFakeNodeByTitle(atom->string());
+                            writer.writeStartElement("section");
+                            QString indexPath = tree->fullDocumentLocation(page);
+                            writer.writeAttribute("ref", HtmlGenerator::cleanRef(indexPath));
+                            writer.writeAttribute("title", atom->string());
+                            project.files.insert(indexPath);
+
+                            sectionStack.top() += 1;
+                        }
+                        break;
+                    default:
+                        ;
                     }
-                    break;
+
+                    if (atom == indexBody.lastAtom())
+                        break;
+                    atom = atom->next();
+                }
+            } else
+                rootNode->doc().location().warning(
+                    tr("Failed to find index: %1").arg(subproject.indexTitle)
+                    );
+
+        } else {
+
+            if (!name.isEmpty()) {
+                writer.writeStartElement("section");
+                QString indexPath = tree->fullDocumentLocation(tree->findFakeNodeByTitle(subproject.indexTitle));
+                writer.writeAttribute("ref", HtmlGenerator::cleanRef(indexPath));
+                writer.writeAttribute("title", subproject.title);
+                project.files.insert(indexPath);
+            }
+            if (subproject.sortPages) {
+                QStringList titles = subproject.nodes.keys();
+                titles.sort();
+                foreach (const QString &title, titles)
+                    writeNode(project, writer, subproject.nodes[title]);
+            } else {
+                // Find a contents node and navigate from there, using the NextLink values.
+                foreach (const Node *node, subproject.nodes) {
+                    QString nextTitle = node->links().value(Node::NextLink).first;
+                    if (!nextTitle.isEmpty() &&
+                        node->links().value(Node::ContentsLink).first.isEmpty()) {
+
+                        FakeNode *nextPage = const_cast<FakeNode *>(tree->findFakeNodeByTitle(nextTitle));
+
+                        // Write the contents node.
+                        writeNode(project, writer, node);
+
+                        while (nextPage) {
+                            writeNode(project, writer, nextPage);
+                            nextTitle = nextPage->links().value(Node::NextLink).first;
+                            if(nextTitle.isEmpty())
+                                break;
+                            nextPage = const_cast<FakeNode *>(tree->findFakeNodeByTitle(nextTitle));
+                        }
+                        break;
+                    }
                 }
             }
-        }
 
-        if (!name.isEmpty())
-            writer.writeEndElement(); // section
+            if (!name.isEmpty())
+                writer.writeEndElement(); // section
+        }
     }
 
     writer.writeEndElement(); // section

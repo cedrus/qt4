@@ -63,7 +63,7 @@ QT_BEGIN_NAMESPACE
 // The VxWorks DIAB compiler crashes when initializing the anonymouse union with { a7 }
 #if !defined(Q_CC_DIAB)
 #  define QT_INIT_TEXTUNDOCOMMAND(c, a1, a2, a3, a4, a5, a6, a7, a8) \
-          QTextUndoCommand c = { a1, a2, 0, 0, a3, a4, a5, a6, { a7 }, a8 }
+          QTextUndoCommand c = { a1, a2, 0, 0, quint8(a3), a4, a5, a6, { a7 }, a8 }
 #else
 #  define QT_INIT_TEXTUNDOCOMMAND(c, a1, a2, a3, a4, a5, a6, a7, a8) \
           QTextUndoCommand c = { a1, a2, 0, 0, a3, a4, a5, a6 }; c.blockFormat = a7; c.revision = a8
@@ -192,6 +192,7 @@ QTextDocumentPrivate::QTextDocumentPrivate()
     initialBlockCharFormatIndex(-1) // set correctly later in init()
 {
     editBlock = 0;
+    editBlockCursorPosition = -1;
     docChangeFrom = -1;
 
     undoState = 0;
@@ -259,8 +260,7 @@ void QTextDocumentPrivate::clear()
         objects.clear();
 
         title.clear();
-        undoState = 0;
-        truncateUndoStack();
+        clearUndoRedoStacks(QTextDocument::UndoAndRedoStacks);
         text = QString();
         unreachableCharacterCount = 0;
         modifiedState = 0;
@@ -292,7 +292,7 @@ QTextDocumentPrivate::~QTextDocumentPrivate()
     cursors.clear();
     undoState = 0;
     undoEnabled = true;
-    truncateUndoStack();
+    clearUndoRedoStacks(QTextDocument::RedoStack);
 }
 
 void QTextDocumentPrivate::setLayout(QAbstractTextDocumentLayout *layout)
@@ -871,6 +871,7 @@ int QTextDocumentPrivate::undoRedo(bool undo)
     undoEnabled = false;
     beginEditBlock();
     int editPos = -1;
+    int editLength = -1;
     while (1) {
         if (undo)
             --undoState;
@@ -883,12 +884,16 @@ int QTextDocumentPrivate::undoRedo(bool undo)
             PMDEBUG("   erase: from %d, length %d", c.pos, c.length);
             c.command = QTextUndoCommand::Removed;
             editPos = c.pos;
+            editLength = 0;
 	    break;
         case QTextUndoCommand::Removed:
             PMDEBUG("   insert: format %d (from %d, length %d, strpos=%d)", c.format, c.pos, c.length, c.strPos);
             insert_string(c.pos, c.strPos, c.length, c.format, (QTextUndoCommand::Operation)c.operation);
             c.command = QTextUndoCommand::Inserted;
-            editPos = c.pos + c.length;
+            if (editPos != (int)c.pos)
+                editLength = 0;
+            editPos = c.pos;
+            editLength += c.length;
 	    break;
 	case QTextUndoCommand::BlockInserted:
 	case QTextUndoCommand::BlockAdded:
@@ -899,6 +904,7 @@ int QTextDocumentPrivate::undoRedo(bool undo)
 	    else
 		c.command = QTextUndoCommand::BlockDeleted;
             editPos = c.pos;
+            editLength = 0;
 	    break;
 	case QTextUndoCommand::BlockRemoved:
 	case QTextUndoCommand::BlockDeleted:
@@ -909,7 +915,10 @@ int QTextDocumentPrivate::undoRedo(bool undo)
 		c.command = QTextUndoCommand::BlockInserted;
 	    else
 		c.command = QTextUndoCommand::BlockAdded;
-            editPos = c.pos + 1;
+            if (editPos != (int)c.pos)
+                editLength = 0;
+            editPos = c.pos;
+            editLength += 1;
 	    break;
 	case QTextUndoCommand::CharFormatChanged: {
             resetBlockRevision = -1; // ## TODO
@@ -920,7 +929,10 @@ int QTextDocumentPrivate::undoRedo(bool undo)
             int oldFormat = it.value()->format;
             setCharFormat(c.pos, c.length, formats.charFormat(c.format));
             c.format = oldFormat;
-            editPos = c.pos + c.length;
+            if (editPos != (int)c.pos)
+                editLength = 0;
+            editPos = c.pos;
+            editLength += c.length;
 	    break;
 	}
 	case QTextUndoCommand::BlockFormatChanged: {
@@ -956,6 +968,10 @@ int QTextDocumentPrivate::undoRedo(bool undo)
             editPos = -1;
 	    break;
 	}
+        case QTextUndoCommand::CursorMoved:
+            editPos = c.pos;
+            editLength = 0;
+            break;
 	case QTextUndoCommand::Custom:
             resetBlockRevision = -1; // ## TODO
             if (undo)
@@ -988,13 +1004,19 @@ int QTextDocumentPrivate::undoRedo(bool undo)
             break;
     }
     undoEnabled = true;
-    if (editPos < 0 && docChangeFrom >= 0) {
-        editPos = qMin(docChangeFrom + docChangeLength, length() - 1);
-    }
+
+    int newCursorPos = -1;
+
+    if (editPos >=0)
+        newCursorPos = editPos + editLength;
+    else if (docChangeFrom >= 0)
+        newCursorPos= qMin(docChangeFrom + docChangeLength, length() - 1);
+
     endEditBlock();
     emitUndoAvailable(isUndoAvailable());
     emitRedoAvailable(isRedoAvailable());
-    return editPos;
+
+    return newCursorPos;
 }
 
 /*!
@@ -1027,7 +1049,19 @@ void QTextDocumentPrivate::appendUndoItem(const QTextUndoCommand &c)
     if (!undoEnabled)
         return;
     if (undoState < undoStack.size())
-        truncateUndoStack();
+        clearUndoRedoStacks(QTextDocument::RedoStack);
+
+    if (editBlock != 0 && editBlockCursorPosition >= 0) { // we had a beginEditBlock() with a cursor position
+        if (c.pos != (quint32) editBlockCursorPosition) { // and that cursor position is different from the command
+            // generate a CursorMoved undo item
+            QT_INIT_TEXTUNDOCOMMAND(cc, QTextUndoCommand::CursorMoved, true, QTextUndoCommand::MoveCursor,
+                                    0, 0, editBlockCursorPosition, 0, 0);
+            undoStack.append(cc);
+            undoState++;
+            editBlockCursorPosition = -1;
+        }
+    }
+
 
     if (!undoStack.isEmpty() && modified) {
         QTextUndoCommand &last = undoStack[undoState - 1];
@@ -1050,26 +1084,46 @@ void QTextDocumentPrivate::appendUndoItem(const QTextUndoCommand &c)
         emit document()->undoCommandAdded();
 }
 
-void QTextDocumentPrivate::truncateUndoStack()
+void QTextDocumentPrivate::clearUndoRedoStacks(QTextDocument::Stacks stacksToClear,
+                                               bool emitSignals)
 {
-    if (undoState == undoStack.size())
-        return;
-
-    for (int i = undoState; i < undoStack.size(); ++i) {
-        QTextUndoCommand c = undoStack[i];
-        if (c.command & QTextUndoCommand::Removed) {
-            // ########
-//             QTextFragment *f = c.fragment_list;
-//             while (f) {
-//                 QTextFragment *n = f->right;
-//                 delete f;
-//                 f = n;
-//             }
-        } else if (c.command & QTextUndoCommand::Custom) {
-            delete c.custom;
+    bool undoCommandsAvailable = undoState != 0;
+    bool redoCommandsAvailable = undoState != undoStack.size();
+    if (stacksToClear == QTextDocument::UndoStack && undoCommandsAvailable) {
+        for (int i = 0; i < undoState; ++i) {
+            QTextUndoCommand c = undoStack[undoState];
+            if (c.command & QTextUndoCommand::Custom)
+                delete c.custom;
         }
+        undoStack.remove(0, undoState);
+        undoStack.resize(undoStack.size() - undoState);
+        undoState = 0;
+        if (emitSignals)
+            emitUndoAvailable(false);
+    } else if (stacksToClear == QTextDocument::RedoStack
+               && redoCommandsAvailable) {
+        for (int i = undoState; i < undoStack.size(); ++i) {
+            QTextUndoCommand c = undoStack[i];
+            if (c.command & QTextUndoCommand::Custom)
+                delete c.custom;
+        }
+        undoStack.resize(undoState);
+        if (emitSignals)
+            emitRedoAvailable(false);
+    } else if (stacksToClear == QTextDocument::UndoAndRedoStacks
+               && !undoStack.isEmpty()) {
+        for (int i = 0; i < undoStack.size(); ++i) {
+            QTextUndoCommand c = undoStack[i];
+            if (c.command & QTextUndoCommand::Custom)
+                delete c.custom;
+        }
+        undoState = 0;
+        undoStack.resize(0);
+        if (emitSignals && undoCommandsAvailable)
+            emitUndoAvailable(false);
+        if (emitSignals && redoCommandsAvailable)
+            emitRedoAvailable(false);
     }
-    undoStack.resize(undoState);
 }
 
 void QTextDocumentPrivate::emitUndoAvailable(bool available)
@@ -1097,7 +1151,7 @@ void QTextDocumentPrivate::enableUndoRedo(bool enable)
 
     if (!enable) {
         undoState = 0;
-        truncateUndoStack();
+        clearUndoRedoStacks(QTextDocument::RedoStack);
         emitUndoAvailable(false);
         emitRedoAvailable(false);
     }
@@ -1129,6 +1183,8 @@ void QTextDocumentPrivate::endEditBlock()
                 emit document()->undoCommandAdded();
         }
     }
+
+    editBlockCursorPosition = -1;
 
     finishEdit();
 }

@@ -114,8 +114,11 @@ bool QMacPrintEngine::end()
     Q_D(QMacPrintEngine);
     if (d->state == QPrinter::Aborted)
         return true;  // I was just here a function call ago :)
-    if(d->paintEngine->type() == QPaintEngine::CoreGraphics)
+    if(d->paintEngine->type() == QPaintEngine::CoreGraphics) {
+        // We dont need the paint engine to call restoreGraphicsState()
+        static_cast<QCoreGraphicsPaintEngine*>(d->paintEngine)->d_func()->stackCount = 0;
         static_cast<QCoreGraphicsPaintEngine*>(d->paintEngine)->d_func()->hd = 0;
+    }
     d->paintEngine->end();
     if (d->state != QPrinter::Idle)
 	d->releaseSession();
@@ -685,6 +688,7 @@ void QMacPrintEngine::setProperty(PrintEnginePropertyKey key, const QVariant &va
     case PPK_FullPage:
         d->fullPage = value.toBool();
         break;
+    case PPK_CopyCount: // fallthrough
     case PPK_NumberOfCopies:
         PMSetCopies(d->settings, value.toInt(), false);
         break;
@@ -786,6 +790,15 @@ QVariant QMacPrintEngine::property(PrintEnginePropertyKey key) const
         break;
     case PPK_NumberOfCopies:
         ret = 1;
+        break;
+    case PPK_CopyCount: {
+        UInt32 copies = 1;
+        PMGetCopies(d->settings, &copies);
+        ret = (uint) copies;
+        break;
+    }
+    case PPK_SupportsMultipleCopies:
+        ret = true;
         break;
     case PPK_Orientation:
         PMOrientation orientation;

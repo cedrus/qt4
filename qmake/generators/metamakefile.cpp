@@ -58,6 +58,8 @@ MetaMakefileGenerator::~MetaMakefileGenerator()
         delete project;
 }
 
+#ifndef QT_QMAKE_PARSER_ONLY
+
 class BuildsMetaMakefileGenerator : public MetaMakefileGenerator
 {
 private:
@@ -293,7 +295,15 @@ SubdirsMetaMakefileGenerator::init()
     init_flag = true;
     bool hasError = false;
 
-    if(Option::recursive) {
+    // It might make sense to bequeath the CONFIG option to the recursed
+    // projects. OTOH, one would most likely have it in all projects anyway -
+    // either through a qmakespec, a .qmake.cache or explicitly - as otherwise
+    // running qmake in a subdirectory would have a different auto-recurse
+    // setting than in parent directories.
+    bool recurse = Option::recursive == Option::QMAKE_RECURSIVE_YES
+                   || (Option::recursive == Option::QMAKE_RECURSIVE_DEFAULT
+                       && project->isRecursive());
+    if(recurse) {
         QString old_output_dir = Option::output_dir;
 	QString old_output = Option::output.fileName();
         QString oldpwd = qmake_getpwd();
@@ -375,7 +385,7 @@ SubdirsMetaMakefileGenerator::init()
     Subdir *self = new Subdir;
     self->input_dir = qmake_getpwd();
     self->output_dir = Option::output_dir;
-    if(!Option::recursive || (!Option::output.fileName().endsWith(Option::dir_sep) && !QFileInfo(Option::output).isDir()))
+    if(!recurse || (!Option::output.fileName().endsWith(Option::dir_sep) && !QFileInfo(Option::output).isDir()))
 	self->output_file = Option::output.fileName();
     self->makefile = new BuildsMetaMakefileGenerator(project, name, false);
     self->makefile->init();
@@ -432,10 +442,11 @@ QT_BEGIN_INCLUDE_NAMESPACE
 #include "pbuilder_pbx.h"
 #include "msvc_nmake.h"
 #include "borland_bmake.h"
-#include "msvc_dsp.h"
 #include "msvc_vcproj.h"
+#include "msvc_vcxproj.h"
 #include "symmake_abld.h"
 #include "symmake_sbsv2.h"
+#include "symbian_makefile.h"
 QT_END_INCLUDE_NAMESPACE
 
 MakefileGenerator *
@@ -458,16 +469,15 @@ MetaMakefileGenerator::createMakefileGenerator(QMakeProject *proj, bool noIO)
         mkfile = new MingwMakefileGenerator;
     } else if(gen == "PROJECTBUILDER" || gen == "XCODE") {
         mkfile = new ProjectBuilderMakefileGenerator;
-    } else if(gen == "MSVC") {
-        // Visual Studio =< v6.0
-        if(proj->first("TEMPLATE").indexOf(QRegExp("^vc.*")) != -1)
-            mkfile = new DspMakefileGenerator;
+    } else if(gen == "MSVC.NET") {
+        if (proj->first("TEMPLATE").startsWith("vc"))
+            mkfile = new VcprojGenerator;
         else
             mkfile = new NmakeMakefileGenerator;
-    } else if(gen == "MSVC.NET") {
-        // Visual Studio >= v7.0
-        if(proj->first("TEMPLATE").indexOf(QRegExp("^vc.*")) != -1 || proj->first("TEMPLATE").indexOf(QRegExp("^ce.*")) != -1)
-            mkfile = new VcprojGenerator;
+    } else if(gen == "MSBUILD") {
+        // Visual Studio >= v11.0
+        if (proj->first("TEMPLATE").startsWith("vc"))
+            mkfile = new VcxprojGenerator;
         else
             mkfile = new NmakeMakefileGenerator;
     } else if(gen == "BMAKE") {
@@ -476,6 +486,8 @@ MetaMakefileGenerator::createMakefileGenerator(QMakeProject *proj, bool noIO)
         mkfile = new SymbianAbldMakefileGenerator;
     } else if(gen == "SYMBIAN_SBSV2") {
         mkfile = new SymbianSbsv2MakefileGenerator;
+    } else if(gen == "SYMBIAN_UNIX") {
+        mkfile = new SymbianMakefileTemplate<UnixMakefileGenerator>;
     } else {
         fprintf(stderr, "Unknown generator specified: %s\n", gen.toLatin1().constData());
     }
@@ -501,6 +513,51 @@ MetaMakefileGenerator::createMetaGenerator(QMakeProject *proj, const QString &na
     if (success)
         *success = res;
     return ret;
+}
+
+#endif // QT_QMAKE_PARSER_ONLY
+
+bool
+MetaMakefileGenerator::modesForGenerator(const QString &gen,
+        Option::HOST_MODE *host_mode, Option::TARG_MODE *target_mode)
+{
+    if (gen == "UNIX") {
+#ifdef Q_OS_MAC
+        *host_mode = Option::HOST_MACX_MODE;
+        *target_mode = Option::TARG_MACX_MODE;
+#else
+        *host_mode = Option::HOST_UNIX_MODE;
+        *target_mode = Option::TARG_UNIX_MODE;
+#endif
+    } else if (gen == "MSVC.NET" || gen == "BMAKE" || gen == "MSBUILD") {
+        *host_mode = Option::HOST_WIN_MODE;
+        *target_mode = Option::TARG_WIN_MODE;
+    } else if (gen == "MINGW") {
+#if defined(Q_OS_MAC)
+        *host_mode = Option::HOST_MACX_MODE;
+#elif defined(Q_OS_UNIX)
+        *host_mode = Option::HOST_UNIX_MODE;
+#else
+        *host_mode = Option::HOST_WIN_MODE;
+#endif
+        *target_mode = Option::TARG_WIN_MODE;
+    } else if (gen == "PROJECTBUILDER" || gen == "XCODE") {
+        *host_mode = Option::HOST_MACX_MODE;
+        *target_mode = Option::TARG_MACX_MODE;
+    } else if (gen == "SYMBIAN_ABLD" || gen == "SYMBIAN_SBSV2" || gen == "SYMBIAN_UNIX") {
+#if defined(Q_OS_MAC)
+        *host_mode = Option::HOST_MACX_MODE;
+#elif defined(Q_OS_UNIX)
+        *host_mode = Option::HOST_UNIX_MODE;
+#else
+        *host_mode = Option::HOST_WIN_MODE;
+#endif
+        *target_mode = Option::TARG_SYMBIAN_MODE;
+    } else {
+        fprintf(stderr, "Unknown generator specified: %s\n", gen.toLatin1().constData());
+        return false;
+    }
+    return true;
 }
 
 QT_END_NAMESPACE

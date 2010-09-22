@@ -108,9 +108,11 @@ private slots:
     void testCustomPageSizes();
     void printDialogCompleter();
 
-    void testActualNumCopies();
+    void testCopyCount();
+    void testCurrentPage();
 
     void taskQTBUG4497_reusePrinterOnDifferentFiles();
+    void testPdfTitle();
 
 private:
 };
@@ -417,7 +419,7 @@ void tst_QPrinter::testMargins()
     printer.setFullPage(fullpage);
     printer.setPageSize((QPrinter::PageSize)pagesize);
     if (withPainter)
-	painter = new QPainter(&printer);
+        painter = new QPainter(&printer);
 
 #ifdef QT3_SUPPORT
     Q3PaintDeviceMetrics metrics(&printer);
@@ -456,7 +458,7 @@ void tst_QPrinter::testNonExistentPrinter()
     printer.pageSize();
     printer.orientation();
     printer.fullPage();
-    printer.setNumCopies(1);
+    printer.setCopyCount(1);
     printer.printerName();
 
     // nor metrics
@@ -967,11 +969,11 @@ void tst_QPrinter::printDialogCompleter()
 #endif
 }
 
-void tst_QPrinter::testActualNumCopies()
+void tst_QPrinter::testCopyCount()
 {
     QPrinter p;
-    p.setNumCopies(15);
-    QCOMPARE(p.actualNumCopies(), 15);
+    p.setCopyCount(15);
+    QCOMPARE(p.copyCount(), 15);
 }
 
 static void printPage(QPainter *painter)
@@ -1004,6 +1006,53 @@ void tst_QPrinter::taskQTBUG4497_reusePrinterOnDifferentFiles()
     QVERIFY(file2.open(QIODevice::ReadOnly));
 
     QCOMPARE(file1.readAll(), file2.readAll());
+}
+
+void tst_QPrinter::testCurrentPage()
+{
+    QPrinter printer;
+    printer.setFromTo(1, 10);
+
+    // Test set print range
+    printer.setPrintRange(QPrinter::CurrentPage);
+    QCOMPARE(printer.printRange(), QPrinter::CurrentPage);
+    QCOMPARE(printer.fromPage(), 1);
+    QCOMPARE(printer.toPage(), 10);
+
+    QPrintDialog dialog(&printer);
+
+    // Test default Current Page option to off
+    QCOMPARE(dialog.isOptionEnabled(QPrintDialog::PrintCurrentPage), false);
+
+    // Test enable Current Page option
+    dialog.setOption(QPrintDialog::PrintCurrentPage);
+    QCOMPARE(dialog.isOptionEnabled(QPrintDialog::PrintCurrentPage), true);
+
+}
+
+void tst_QPrinter::testPdfTitle()
+{
+    // Check the document name is represented correctly in produced pdf
+    {
+        QPainter painter;
+        QPrinter printer;
+        // This string is just the UTF-8 encoding of the string: \()f &oslash; hiragana o
+        const char title[]={0x5c, 0x28, 0x29, 0x66, 0xc3, 0xb8, 0xe3, 0x81, 0x8a, 0x00};
+        printer.setOutputFileName("file.pdf");
+        printer.setDocName(QString::fromUtf8(title));
+        painter.begin(&printer);
+        painter.end();
+    }
+    QFile file("file.pdf");
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    // The we expect the title to appear in the PDF as:
+    // ASCII('\title (') UTF16(\\\(\)f &oslash; hiragana o) ASCII(')').
+    // which has the following binary representation
+    const char expected[] = {
+        0x2f, 0x54, 0x69, 0x74, 0x6c, 0x65, 0x20, 0x28, 0xfe,
+        0xff, 0x00, 0x5c, 0x5c, 0x00, 0x5c, 0x28, 0x00, 0x5c,
+        0x29, 0x00, 0x66, 0x00, 0xf8, 0x30, 0x4a, 0x29};
+    QVERIFY(file.readAll().contains(QByteArray(expected, 26)));
 }
 
 QTEST_MAIN(tst_QPrinter)

@@ -365,12 +365,12 @@
 #include "private/qhostinfo_p.h"
 
 #include <qabstracteventdispatcher.h>
-#include <qdatetime.h>
 #include <qhostaddress.h>
 #include <qhostinfo.h>
 #include <qmetaobject.h>
 #include <qpointer.h>
 #include <qtimer.h>
+#include <qelapsedtimer.h>
 
 #ifndef QT_NO_OPENSSL
 #include <QtNetwork/qsslsocket.h>
@@ -1380,7 +1380,7 @@ void QAbstractSocket::connectToHostImplementation(const QString &hostName, quint
 #endif
     } else {
         if (d->threadData->eventDispatcher) {
-            // this internal API for QHostInfo either immediatly gives us the desired
+            // this internal API for QHostInfo either immediately gives us the desired
             // QHostInfo from cache or later calls the _q_startConnecting slot.
             bool immediateResultValid = false;
             QHostInfo hostInfo = qt_qhostinfo_lookup(hostName,
@@ -1738,7 +1738,7 @@ bool QAbstractSocket::waitForConnected(int msecs)
 
     bool wasPendingClose = d->pendingClose;
     d->pendingClose = false;
-    QTime stopWatch;
+    QElapsedTimer stopWatch;
     stopWatch.start();
 
     if (d->state == HostLookupState) {
@@ -1819,7 +1819,7 @@ bool QAbstractSocket::waitForReadyRead(int msecs)
         return false;
     }
 
-    QTime stopWatch;
+    QElapsedTimer stopWatch;
     stopWatch.start();
 
     // handle a socket in connecting state
@@ -1878,7 +1878,7 @@ bool QAbstractSocket::waitForBytesWritten(int msecs)
     if (d->writeBuffer.isEmpty())
         return false;
 
-    QTime stopWatch;
+    QElapsedTimer stopWatch;
     stopWatch.start();
 
     // handle a socket in connecting state
@@ -1960,7 +1960,7 @@ bool QAbstractSocket::waitForDisconnected(int msecs)
         return false;
     }
 
-    QTime stopWatch;
+    QElapsedTimer stopWatch;
     stopWatch.start();
 
     // handle a socket in connecting state

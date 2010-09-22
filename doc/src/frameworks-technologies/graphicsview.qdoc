@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -46,11 +32,10 @@
 
 /*!
     \page graphicsview.html
-    \title The Graphics View Framework
+    \title Graphics View Framework
+    \ingroup qt-graphics
     \brief An overview of the Graphics View framework for interactive 2D
     graphics.
-
-    \ingroup frameworks-technologies
 
     \keyword Graphics View
     \keyword GraphicsView
@@ -221,9 +206,10 @@
       allow you to map between the three coordinate systems.
 
       When rendering, Graphics View's scene coordinates correspond to
-      QPainter's \e logical coordinates, and view coordinates are the same as
-      \e device coordinates.  In \l{The Coordinate System}, you can read about
-      the relationship between logical coordinates and device coordinates.
+      QPainter's \e logical coordinates, and view coordinates are the
+      same as \e device coordinates.  In the \l{Coordinate System}
+      documentation, you can read about the relationship between
+      logical coordinates and device coordinates.
 
       \img graphicsview-parentchild.png
 
@@ -436,11 +422,12 @@
 
       \section2 Animation
 
-        Graphics View supports animation at several levels. You can easily
-        assemble animation by using the Animation Framework. For that you'll
-		need your items to inherit from QGraphicsObject and associate 
-		QPropertyAnimation with them. QPropertyAnimation allows to animate any 
-		QObject property.
+        Graphics View supports animation at several levels. You can
+        easily assemble animation by using the Animation Framework.
+        For that you'll need your items to inherit from
+        QGraphicsObject and associate QPropertyAnimation with
+        them. QPropertyAnimation allows to animate any QObject
+        property.
 
         Another option is to create a custom item that inherits from QObject
         and QGraphicsItem. The item can the set up its own timers, and control

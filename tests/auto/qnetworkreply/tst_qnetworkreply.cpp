@@ -82,6 +82,7 @@ Q_DECLARE_METATYPE(QNetworkProxy)
 Q_DECLARE_METATYPE(QNetworkProxyQuery)
 Q_DECLARE_METATYPE(QList<QNetworkProxy>)
 Q_DECLARE_METATYPE(QNetworkReply::NetworkError)
+Q_DECLARE_METATYPE(QBuffer*)
 
 class QNetworkReplyPtr: public QSharedPointer<QNetworkReply>
 {
@@ -129,6 +130,9 @@ public:
     QString runSimpleRequest(QNetworkAccessManager::Operation op, const QNetworkRequest &request,
                              QNetworkReplyPtr &reply, const QByteArray &data = QByteArray());
 
+    QString runCustomRequest(const QNetworkRequest &request, QNetworkReplyPtr &reply,
+                             const QByteArray &verb, QIODevice *data);
+
 public Q_SLOTS:
     void finished();
     void gotError();
@@ -175,6 +179,8 @@ private Q_SLOTS:
     void deleteFromHttp();
     void putGetDeleteGetFromHttp_data();
     void putGetDeleteGetFromHttp();
+    void sendCustomRequestToHttp_data();
+    void sendCustomRequestToHttp();
 
     void ioGetFromData_data();
     void ioGetFromData();
@@ -234,6 +240,8 @@ private Q_SLOTS:
 
     void lastModifiedHeaderForFile();
     void lastModifiedHeaderForHttp();
+
+    void httpCanReadLine();
 
     void rateControl_data();
     void rateControl();
@@ -519,8 +527,8 @@ public:
         active->connectToHost("127.0.0.1", server.serverPort());
 #ifndef Q_OS_SYMBIAN
         // need more time as working with embedded
-		// device and testing from emualtor
-		// things tend to get slower
+        // device and testing from emualtor
+        // things tend to get slower
         if (!active->waitForConnected(1000))
             return false;
 
@@ -805,6 +813,32 @@ QString tst_QNetworkReply::runSimpleRequest(QNetworkAccessManager::Operation op,
     return QString();
 }
 
+QString tst_QNetworkReply::runCustomRequest(const QNetworkRequest &request,
+                                            QNetworkReplyPtr &reply,
+                                            const QByteArray &verb,
+                                            QIODevice *data)
+{
+    reply = manager.sendCustomRequest(request, verb, data);
+    reply->setParent(this);
+    connect(reply, SIGNAL(finished()), SLOT(finished()));
+    connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), SLOT(gotError()));
+
+    returnCode = Timeout;
+    loop = new QEventLoop;
+    QTimer::singleShot(20000, loop, SLOT(quit()));
+    int code = returnCode == Timeout ? loop->exec() : returnCode;
+    delete loop;
+    loop = 0;
+
+    switch (code) {
+    case Failure:
+        return "Request failed: " + reply->errorString();
+    case Timeout:
+        return "Network timeout";
+    }
+    return QString();
+}
+
 void tst_QNetworkReply::finished()
 {
     loop->exit(returnCode = Success);
@@ -900,7 +934,7 @@ void tst_QNetworkReply::invalidProtocol()
 
 void tst_QNetworkReply::getFromData_data()
 {
-	QTest::addColumn<QString>("request");
+    QTest::addColumn<QString>("request");
     QTest::addColumn<QByteArray>("expected");
     QTest::addColumn<QString>("mimeType");
 
@@ -996,7 +1030,7 @@ void tst_QNetworkReply::getFromData()
 
 void tst_QNetworkReply::getFromFile()
 {
-	// create the file:
+    // create the file:
     QTemporaryFile file(QDir::currentPath() + "/temp-XXXXXX");
     file.setAutoRemove(true);
     QVERIFY(file.open());
@@ -1044,11 +1078,14 @@ void tst_QNetworkReply::getFromFileSpecial_data()
     QTest::newRow("resource") << ":/resource" <<  "qrc:/resource";
     QTest::newRow("search-path") << "srcdir:/rfc3252.txt" << "srcdir:/rfc3252.txt";
     QTest::newRow("bigfile-path") << "srcdir:/bigfile" << "srcdir:/bigfile";
+#ifdef Q_OS_WIN
+    QTest::newRow("smb-path") << "srcdir:/smb-file.txt" << "file://" + QtNetworkSettings::winServerName() + "/testshare/test.pri";
+#endif
 }
 
 void tst_QNetworkReply::getFromFileSpecial()
 {
-	QFETCH(QString, fileName);
+    QFETCH(QString, fileName);
     QFETCH(QString, url);
 
     // open the resource so we can find out its size
@@ -1078,7 +1115,7 @@ void tst_QNetworkReply::getFromFtp_data()
 
 void tst_QNetworkReply::getFromFtp()
 {
-	QFETCH(QString, referenceName);
+    QFETCH(QString, referenceName);
     QFETCH(QString, url);
 
     QFile reference(referenceName);
@@ -1107,7 +1144,7 @@ void tst_QNetworkReply::getFromHttp_data()
 
 void tst_QNetworkReply::getFromHttp()
 {
-	QFETCH(QString, referenceName);
+    QFETCH(QString, referenceName);
     QFETCH(QString, url);
 
     QFile reference(referenceName);
@@ -1461,6 +1498,57 @@ void tst_QNetworkReply::putGetDeleteGetFromHttp()
     QCOMPARE(reply->error(), get2Error);
     QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), get2ResultCode);
 
+}
+
+void tst_QNetworkReply::sendCustomRequestToHttp_data()
+{
+    QTest::addColumn<QUrl>("url");
+    QTest::addColumn<QByteArray>("verb");
+    QTest::addColumn<QBuffer *>("device");
+    QTest::addColumn<int>("resultCode");
+    QTest::addColumn<QNetworkReply::NetworkError>("error");
+    QTest::addColumn<QByteArray>("expectedContent");
+
+    QTest::newRow("options") << QUrl("http://" + QtNetworkSettings::serverName()) <<
+            QByteArray("OPTIONS") << (QBuffer *) 0 << 200 << QNetworkReply::NoError << QByteArray();
+    QTest::newRow("trace") << QUrl("http://" + QtNetworkSettings::serverName()) <<
+            QByteArray("TRACE") << (QBuffer *) 0 << 200 << QNetworkReply::NoError << QByteArray();
+    QTest::newRow("connect") << QUrl("http://" + QtNetworkSettings::serverName()) <<
+            QByteArray("CONNECT") << (QBuffer *) 0 << 400 << QNetworkReply::UnknownContentError << QByteArray(); // 400 = Bad Request
+    QTest::newRow("nonsense") << QUrl("http://" + QtNetworkSettings::serverName()) <<
+            QByteArray("NONSENSE") << (QBuffer *) 0 << 501 << QNetworkReply::ProtocolUnknownError << QByteArray(); // 501 = Method Not Implemented
+
+    QByteArray ba("test");
+    QBuffer *buffer = new QBuffer;
+    buffer->setData(ba);
+    buffer->open(QIODevice::ReadOnly);
+    QTest::newRow("post") << QUrl("http://" + QtNetworkSettings::serverName() + "/qtest/cgi-bin/md5sum.cgi") << QByteArray("POST")
+            << buffer << 200 << QNetworkReply::NoError << QByteArray("098f6bcd4621d373cade4e832627b4f6\n");
+
+    QByteArray ba2("test");
+    QBuffer *buffer2 = new QBuffer;
+    buffer2->setData(ba2);
+    buffer2->open(QIODevice::ReadOnly);
+    QTest::newRow("put") << QUrl("http://" + QtNetworkSettings::serverName() + "/qtest/cgi-bin/md5sum.cgi") << QByteArray("PUT")
+            << buffer2 << 200 << QNetworkReply::NoError << QByteArray("098f6bcd4621d373cade4e832627b4f6\n");
+}
+
+void tst_QNetworkReply::sendCustomRequestToHttp()
+{
+    QFETCH(QUrl, url);
+    QNetworkRequest request(url);
+    QNetworkReplyPtr reply;
+    QFETCH(QByteArray, verb);
+    QFETCH(QBuffer *, device);
+    runCustomRequest(request, reply, verb, device);
+    QCOMPARE(reply->url(), url);
+    QFETCH(QNetworkReply::NetworkError, error);
+    QCOMPARE(reply->error(), error);
+    QFETCH(int, resultCode);
+    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), resultCode);
+    QFETCH(QByteArray, expectedContent);
+    if (! expectedContent.isEmpty())
+        QCOMPARE(reply->readAll(), expectedContent);
 }
 
 void tst_QNetworkReply::ioGetFromData_data()
@@ -3298,6 +3386,21 @@ void tst_QNetworkReply::lastModifiedHeaderForHttp()
     QCOMPARE(header, realDate);
 }
 
+void tst_QNetworkReply::httpCanReadLine()
+{
+    QNetworkRequest request(QUrl("http://" + QtNetworkSettings::serverName() + "/qtest/rfc3252.txt"));
+    QNetworkReplyPtr reply = manager.get(request);
+
+    connect(reply, SIGNAL(finished()), &QTestEventLoop::instance(), SLOT(exitLoop()));
+    QTestEventLoop::instance().enterLoop(10);
+    QVERIFY(!QTestEventLoop::instance().timeout());
+    QCOMPARE(reply->error(), QNetworkReply::NoError);
+
+    QVERIFY(reply->canReadLine());
+    QVERIFY(!reply->readAll().isEmpty());
+    QVERIFY(!reply->canReadLine());
+}
+
 void tst_QNetworkReply::rateControl_data()
 {
     QTest::addColumn<int>("rate");
@@ -3361,8 +3464,8 @@ void tst_QNetworkReply::downloadProgress_data()
     QTest::newRow("big") << 4096;
 #else
     // it can run even with 4096
-	// but it takes lot time
-	//especially on emulator
+    // but it takes lot time
+    //especially on emulator
     QTest::newRow("big") << 1024;
 #endif
 }
@@ -3551,7 +3654,7 @@ void tst_QNetworkReply::receiveCookiesFromHttp_data()
 
 void tst_QNetworkReply::receiveCookiesFromHttp()
 {
-	QFETCH(QString, cookieString);
+    QFETCH(QString, cookieString);
 
     QByteArray data = cookieString.toLatin1() + '\n';
     QUrl url("http://" + QtNetworkSettings::serverName() + "/qtest/cgi-bin/set-cookie.cgi");
@@ -3918,7 +4021,7 @@ void tst_QNetworkReply::httpReUsingConnectionSequential()
 }
 
 class HttpReUsingConnectionFromFinishedSlot : public QObject {
-    Q_OBJECT;
+    Q_OBJECT
 public:
     QNetworkReply* reply1;
     QNetworkReply* reply2;

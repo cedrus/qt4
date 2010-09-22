@@ -141,10 +141,22 @@
 #ifndef QT_NO_IMAGEFORMAT_PNG
 #include <private/qpnghandler_p.h>
 #endif
+#ifndef QT_NO_IMAGEFORMAT_JPEG
+#include <private/qjpeghandler_p.h>
+#endif
+#ifndef QT_NO_IMAGEFORMAT_MNG
+#include <private/qmnghandler_p.h>
+#endif
+#ifndef QT_NO_IMAGEFORMAT_TIFF
+#include <private/qtiffhandler_p.h>
+#endif
+#ifdef QT_BUILTIN_GIF_READER
+#include <private/qgifhandler_p.h>
+#endif
 
 QT_BEGIN_NAMESPACE
 
-#if !defined (QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
 Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
                           (QImageIOHandlerFactoryInterface_iid, QLatin1String("/imageformats")))
 #endif
@@ -152,6 +164,18 @@ Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
 enum _qt_BuiltInFormatType {
 #ifndef QT_NO_IMAGEFORMAT_PNG
     _qt_PngFormat,
+#endif
+#ifndef QT_NO_IMAGEFORMAT_JPEG
+    _qt_JpgFormat,
+#endif
+#ifndef QT_NO_IMAGEFORMAT_MNG
+    _qt_MngFormat,
+#endif
+#ifndef QT_NO_IMAGEFORMAT_TIFF
+    _qt_TifFormat,
+#endif
+#ifdef QT_BUILTIN_GIF_READER
+    _qt_GifFormat,
 #endif
     _qt_BmpFormat,
 #ifndef QT_NO_IMAGEFORMAT_PPM
@@ -179,6 +203,18 @@ static const _qt_BuiltInFormatStruct _qt_BuiltInFormats[] = {
 #ifndef QT_NO_IMAGEFORMAT_PNG
     {_qt_PngFormat, "png"},
 #endif
+#ifndef QT_NO_IMAGEFORMAT_JPEG
+    {_qt_JpgFormat, "jpg"},
+#endif
+#ifndef QT_NO_IMAGEFORMAT_MNG
+    {_qt_MngFormat, "mng"},
+#endif
+#ifndef QT_NO_IMAGEFORMAT_TIFF
+    {_qt_TifFormat, "tif"},
+#endif
+#ifdef QT_BUILTIN_GIF_READER
+    {_qt_GifFormat, "gif"},
+#endif
     {_qt_BmpFormat, "bmp"},
 #ifndef QT_NO_IMAGEFORMAT_PPM
     {_qt_PpmFormat, "ppm"},
@@ -205,7 +241,7 @@ static QImageIOHandler *createReadHandlerHelper(QIODevice *device,
     QByteArray form = format.toLower();
     QImageIOHandler *handler = 0;
 
-#if !defined (QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
     // check if we have plugins that support the image format
     QFactoryLoader *l = loader();
     QStringList keys = l->keys();
@@ -217,7 +253,7 @@ static QImageIOHandler *createReadHandlerHelper(QIODevice *device,
              << keys.size() << "plugins available: " << keys;
 #endif
 
-#if !defined (QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
     int suffixPluginIndex = -1;
     if (device && format.isEmpty() && autoDetectImageFormat && !ignoresFormatAndExtension) {
         // if there's no format, see if \a device is a file, and if so, find
@@ -246,7 +282,7 @@ static QImageIOHandler *createReadHandlerHelper(QIODevice *device,
     if (ignoresFormatAndExtension)
         testFormat = QByteArray();
 
-#if !defined (QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
     if (suffixPluginIndex != -1) {
         // check if the plugin that claims support for this format can load
         // from this device with this format.
@@ -301,8 +337,24 @@ static QImageIOHandler *createReadHandlerHelper(QIODevice *device,
     if (!handler && !testFormat.isEmpty()) {
         if (false) {
 #ifndef QT_NO_IMAGEFORMAT_PNG
-	} else if (testFormat == "png") {
+        } else if (testFormat == "png") {
             handler = new QPngHandler;
+#endif
+#ifndef QT_NO_IMAGEFORMAT_JPEG
+        } else if (testFormat == "jpg" || testFormat == "jpeg") {
+            handler = new QJpegHandler;
+#endif
+#ifndef QT_NO_IMAGEFORMAT_MNG
+        } else if (testFormat == "mng") {
+            handler = new QMngHandler;
+#endif
+#ifndef QT_NO_IMAGEFORMAT_TIFF
+        } else if (testFormat == "tif" || testFormat == "tiff") {
+            handler = new QTiffHandler;
+#endif
+#ifdef QT_BUILTIN_GIF_READER
+        } else if (testFormat == "gif") {
+            handler = new QGifHandler;
 #endif
 #ifndef QT_NO_IMAGEFORMAT_BMP
         } else if (testFormat == "bmp") {
@@ -331,7 +383,7 @@ static QImageIOHandler *createReadHandlerHelper(QIODevice *device,
 #endif
     }
 
-#if !defined (QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
     if (!handler && (autoDetectImageFormat || ignoresFormatAndExtension)) {
         // check if any of our plugins recognize the file from its contents.
         const qint64 pos = device ? device->pos() : 0;
@@ -350,7 +402,7 @@ static QImageIOHandler *createReadHandlerHelper(QIODevice *device,
         if (device && !device->isSequential())
             device->seek(pos);
     }
-#endif
+#endif // QT_NO_LIBRARY
 
     if (!handler && (autoDetectImageFormat || ignoresFormatAndExtension)) {
         // check if any of our built-in handlers recognize the file from its
@@ -378,6 +430,30 @@ static QImageIOHandler *createReadHandlerHelper(QIODevice *device,
             case _qt_PngFormat:
                 if (QPngHandler::canRead(device))
                     handler = new QPngHandler;
+                break;
+#endif
+#ifndef QT_NO_IMAGEFORMAT_JPEG
+            case _qt_JpgFormat:
+                if (QJpegHandler::canRead(device))
+                    handler = new QJpegHandler;
+                break;
+#endif
+#ifndef QT_NO_IMAGEFORMAT_MNG
+            case _qt_MngFormat:
+                if (QMngHandler::canRead(device))
+                    handler = new QMngHandler;
+                break;
+#endif
+#ifndef QT_NO_IMAGEFORMAT_TIFF
+            case _qt_TifFormat:
+                if (QTiffHandler::canRead(device))
+                    handler = new QTiffHandler;
+                break;
+#endif
+#ifdef QT_BUILTIN_GIF_READER
+            case _qt_GifFormat:
+                if (QGifHandler::canRead(device))
+                    handler = new QGifHandler;
                 break;
 #endif
 #ifndef QT_NO_IMAGEFORMAT_BMP
@@ -503,7 +579,7 @@ QImageReaderPrivate::~QImageReaderPrivate()
 bool QImageReaderPrivate::initHandler()
 {
     // check some preconditions
-    if (!device || (!deleteDevice && !device->isOpen())) {
+    if (!device || (!deleteDevice && !device->isOpen() && !device->open(QIODevice::ReadOnly))) {
         imageReaderError = QImageReader::DeviceError;
         errorString = QLatin1String(QT_TRANSLATE_NOOP(QImageReader, "Invalid device"));
         return false;
@@ -1414,7 +1490,7 @@ QList<QByteArray> QImageReader::supportedImageFormats()
     for (int i = 0; i < _qt_NumFormats; ++i)
         formats << _qt_BuiltInFormats[i].extension;
 
-#if !defined (QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
     QFactoryLoader *l = loader();
     QStringList keys = l->keys();
 

@@ -795,7 +795,7 @@ const QBrush &QPalette::brush(ColorGroup gr, ColorRole cr) const
 /*!
     \fn void QPalette::setColor(ColorGroup group, ColorRole role, const QColor &color)
 
-    Sets the brush in the specified color \a group, used for the given
+    Sets the color in the specified color \a group, used for the given
     color \a role, to the specified solid \a color.
 
     \sa setBrush() color() ColorRole
@@ -868,11 +868,21 @@ void QPalette::detach()
 
     Returns true (slowly) if this palette is different from \a p;
     otherwise returns false (usually quickly).
+
+    \note The current ColorGroup is not taken into account when
+    comparing palettes
+
+    \sa operator==
 */
 
 /*!
     Returns true (usually quickly) if this palette is equal to \a p;
     otherwise returns false (slowly).
+
+    \note The current ColorGroup is not taken into account when
+    comparing palettes
+
+    \sa operator!=
 */
 bool QPalette::operator==(const QPalette &p) const
 {

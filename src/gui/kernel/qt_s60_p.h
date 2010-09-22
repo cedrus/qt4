@@ -62,6 +62,8 @@
 #include "QtGui/qevent.h"
 #include "qpointer.h"
 #include "qapplication.h"
+#include "qelapsedtimer.h"
+#include "QtCore/qthreadstorage.h"
 #include <w32std.h>
 #include <coecntrl.h>
 #include <eikenv.h>
@@ -85,10 +87,21 @@ const TInt KInternalStatusPaneChange = 0x50000000;
 //this macro exists because EColor16MAP enum value doesn't exist in Symbian OS 9.2
 #define Q_SYMBIAN_ECOLOR16MAP TDisplayMode(13)
 
+class Q_AUTOTEST_EXPORT QS60ThreadLocalData
+{
+public:
+    QS60ThreadLocalData();
+    ~QS60ThreadLocalData();
+    bool usingCONEinstances;
+    RWsSession wsSession;
+    CWsScreenDevice *screenDevice;
+};
+
 class QS60Data
 {
 public:
     QS60Data();
+    QThreadStorage<QS60ThreadLocalData *> tls;
     TUid uid;
     int screenDepth;
     QPoint lastCursorPos;
@@ -102,16 +115,21 @@ public:
     int defaultDpiX;
     int defaultDpiY;
     WId curWin;
-    int virtualMouseLastKey;
     enum PressedKeys {
         Select = 0x1,
         Right = 0x2,
         Down = 0x4,
         Left = 0x8,
-        Up = 0x10
+        Up = 0x10,
+        LeftUp = 0x20,
+        RightUp = 0x40,
+        RightDown = 0x80,
+        LeftDown = 0x100
     };
     int virtualMousePressedKeys; // of the above type, but avoids casting problems
-    int virtualMouseAccel;
+    int virtualMouseAccelDX;
+    int virtualMouseAccelDY;
+    QElapsedTimer virtualMouseAccelTimeout;
     int virtualMouseMaxAccel;
 #ifndef Q_SYMBIAN_FIXED_POINTER_CURSORS
     int brokenPointerCursors : 1;
@@ -124,10 +142,18 @@ public:
     int avkonComponentsSupportTransparency : 1;
     int menuBeingConstructed : 1;
     QApplication::QS60MainApplicationFactory s60ApplicationFactory; // typedef'ed pointer type
+
+    enum ScanCodeState {
+        Unpressed,
+        KeyDown,
+        KeyDownAndKey
+    };
+    QHash<TInt, ScanCodeState> scanCodeStates;
+
     static inline void updateScreenSize();
-    static inline RWsSession& wsSession();
+    inline RWsSession& wsSession();
     static inline RWindowGroup& windowGroup();
-    static inline CWsScreenDevice* screenDevice();
+    inline CWsScreenDevice* screenDevice();
     static inline CCoeAppUi* appUi();
     static inline CEikMenuBar* menuBar();
 #ifdef Q_WS_S60
@@ -136,12 +162,16 @@ public:
     static inline CAknTitlePane* titlePane();
     static inline CAknContextPane* contextPane();
     static inline CEikButtonGroupContainer* buttonGroupContainer();
+    static void setStatusPaneAndButtonGroupVisibility(bool statusPaneVisible, bool buttonGroupVisible);
+#endif
+    static void controlVisibilityChanged(CCoeControl *control, bool visible);
 
+#ifdef Q_OS_SYMBIAN
     TTrapHandler *s60InstalledTrapHandler;
 #endif
 };
 
-QS60Data* qGlobalS60Data();
+Q_AUTOTEST_EXPORT QS60Data* qGlobalS60Data();
 #define S60 qGlobalS60Data()
 
 class QAbstractLongTapObserver
@@ -189,7 +219,7 @@ protected: // from MAknFadedComponent
     TInt CountFadedComponents() {return 1;}
     CCoeControl* FadedComponent(TInt /*aIndex*/) {return this;}
 #else
-    #warning No fallback implementation for QSymbianControl::FadeBehindPopup
+    // #warning No fallback implementation for QSymbianControl::FadeBehindPopup
     void FadeBehindPopup(bool /*fade*/){ }
 #endif
 
@@ -202,7 +232,9 @@ protected:
 private:
     void HandlePointerEvent(const TPointerEvent& aPointerEvent);
     TKeyResponse OfferKeyEvent(const TKeyEvent& aKeyEvent,TEventCode aType);
+    TKeyResponse sendSymbianKeyEvent(const TKeyEvent &keyEvent, QEvent::Type type);
     TKeyResponse sendKeyEvent(QWidget *widget, QKeyEvent *keyEvent);
+    TKeyResponse handleVirtualMouse(const TKeyEvent& keyEvent,TEventCode type);
     bool sendMouseEvent(QWidget *widget, QMouseEvent *mEvent);
     void sendMouseEvent(
             QWidget *receiver,
@@ -210,10 +242,13 @@ private:
             const QPoint &globalPos,
             Qt::MouseButton button,
             Qt::KeyboardModifiers modifiers);
+    void processTouchEvent(int pointerNumber, TPointerEvent::TType type, QPointF screenPos, qreal pressure);
     void HandleLongTapEventL( const TPoint& aPenEventLocation, const TPoint& aPenEventScreenLocation );
 #ifdef QT_SYMBIAN_SUPPORTS_ADVANCED_POINTER
     void translateAdvancedPointerEvent(const TAdvancedPointerEvent *event);
 #endif
+
+public:
     void handleClientAreaChange();
 
 private:
@@ -222,6 +257,7 @@ private:
 private:
     QWidget *qwidget;
     QLongTapTimer* m_longTapDetector;
+    QElapsedTimer m_doubleClickTimer;
     bool m_ignoreFocusChanged : 1;
     bool m_symbianPopupIsOpen : 1;
 
@@ -232,8 +268,34 @@ private:
 };
 
 inline QS60Data::QS60Data()
+: uid(TUid::Null()),
+  screenDepth(0),
+  screenWidthInPixels(0),
+  screenHeightInPixels(0),
+  screenWidthInTwips(0),
+  screenHeightInTwips(0),
+  defaultDpiX(0),
+  defaultDpiY(0),
+  curWin(0),
+  virtualMousePressedKeys(0),
+  virtualMouseAccelDX(0),
+  virtualMouseAccelDY(0),
+  virtualMouseMaxAccel(0),
+#ifndef Q_SYMBIAN_FIXED_POINTER_CURSORS
+  brokenPointerCursors(0),
+#endif
+  hasTouchscreen(0),
+  mouseInteractionEnabled(0),
+  virtualMouseRequired(0),
+  qtOwnsS60Environment(0),
+  supportsPremultipliedAlpha(0),
+  avkonComponentsSupportTransparency(0),
+  menuBeingConstructed(0),
+  s60ApplicationFactory(0)
+#ifdef Q_OS_SYMBIAN
+  ,s60InstalledTrapHandler(0)
+#endif
 {
-    memclr(this, sizeof(QS60Data)); //zero init data
 }
 
 inline void QS60Data::updateScreenSize()
@@ -246,7 +308,7 @@ inline void QS60Data::updateScreenSize()
     S60->screenWidthInTwips = params.iTwipsSize.iWidth;
     S60->screenHeightInTwips = params.iTwipsSize.iHeight;
 
-    S60->virtualMouseMaxAccel = qMax(S60->screenHeightInPixels, S60->screenWidthInPixels) / 20;
+    S60->virtualMouseMaxAccel = qMax(S60->screenHeightInPixels, S60->screenWidthInPixels) / 10;
 
     TReal inches = S60->screenHeightInTwips / (TReal)KTwipsPerInch;
     S60->defaultDpiY = S60->screenHeightInPixels / inches;
@@ -256,7 +318,10 @@ inline void QS60Data::updateScreenSize()
 
 inline RWsSession& QS60Data::wsSession()
 {
-    return CCoeEnv::Static()->WsSession();
+    if(!tls.hasLocalData()) {
+        tls.setLocalData(new QS60ThreadLocalData);
+    }
+    return tls.localData()->wsSession;
 }
 
 inline RWindowGroup& QS60Data::windowGroup()
@@ -266,7 +331,10 @@ inline RWindowGroup& QS60Data::windowGroup()
 
 inline CWsScreenDevice* QS60Data::screenDevice()
 {
-    return CCoeEnv::Static()->ScreenDevice();
+    if(!tls.hasLocalData()) {
+        tls.setLocalData(new QS60ThreadLocalData);
+    }
+    return tls.localData()->screenDevice;
 }
 
 inline CCoeAppUi* QS60Data::appUi()

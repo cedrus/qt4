@@ -120,18 +120,21 @@ symbian {
         kernel/qkeymapper_s60.cpp\
         kernel/qclipboard_s60.cpp\
         kernel/qdnd_s60.cpp \
-        kernel/qsound_s60.cpp \
-        kernel/qsoftkeymanager_s60.cpp
+        kernel/qsound_s60.cpp
 
     HEADERS += \
         kernel/qt_s60_p.h \
-        kernel/qeventdispatcher_s60_p.h \
-        kernel/qsoftkeymanager_s60_p.h
+        kernel/qeventdispatcher_s60_p.h
 
     LIBS += -lbafl -lestor
 
     INCLUDEPATH += $$MW_LAYER_SYSTEMINCLUDE
     INCLUDEPATH += ../3rdparty/s60
+
+    contains(QT_CONFIG, s60) {
+        SOURCES += kernel/qsoftkeymanager_s60.cpp
+        HEADERS += kernel/qsoftkeymanager_s60_p.h
+    }
 }
 
 
@@ -206,6 +209,7 @@ embedded {
 
         OBJECTIVE_HEADERS += \
                 qcocoawindow_mac_p.h \
+                qcocoapanel_mac_p.h \
                 qcocoawindowdelegate_mac_p.h \
                 qcocoaview_mac_p.h \
                 qcocoaapplication_mac_p.h \

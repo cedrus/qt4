@@ -64,36 +64,8 @@
 #include "qcache.h"
 #include "qglpaintdevice_p.h"
 
-#ifndef QT_OPENGL_ES_1_CL
-#define q_vertexType float
-#define q_vertexTypeEnum GL_FLOAT
-#define f2vt(f)     (f)
-#define vt2f(x)     (x)
-#define i2vt(i)     (float(i))
-#else
-#define FLOAT2X(f)      (int( (f) * (65536)))
-#define X2FLOAT(x)      (float(x) / 65536.0f)
-#define f2vt(f)     FLOAT2X(f)
-#define i2vt(i)     ((i)*65536)
-#define vt2f(x)     X2FLOAT(x)
-#define q_vertexType GLfixed
-#define q_vertexTypeEnum GL_FIXED
-#endif //QT_OPENGL_ES_1_CL
-
-#if defined(QT_OPENGL_ES) || defined(QT_OPENGL_ES_2)
-QT_BEGIN_INCLUDE_NAMESPACE
-
-#if defined(QT_OPENGL_ES_2)
-#   include <GLES2/gl2.h>
-#endif
-
-#if defined(QT_GLES_EGL)
-#   include <GLES/egl.h>
-#else
-#   include <EGL/egl.h>
-#endif
-
-QT_END_INCLUDE_NAMESPACE
+#ifndef QT_NO_EGL
+#include <QtGui/private/qegl_p.h>
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -114,7 +86,7 @@ QT_BEGIN_INCLUDE_NAMESPACE
 QT_END_INCLUDE_NAMESPACE
 # ifdef old_qDebug
 #   undef qDebug
-#   define qDebug QT_QDEBUG_MACRO
+#   define qDebug QT_NO_QDEBUG_MACRO
 #   undef old_qDebug
 # endif
 class QMacWindowChangeEvent;
@@ -124,7 +96,7 @@ class QMacWindowChangeEvent;
 class QWSGLWindowSurface;
 #endif
 
-#if defined(QT_OPENGL_ES)
+#ifndef QT_NO_EGL
 class QEglContext;
 #endif
 
@@ -138,11 +110,15 @@ public:
     QGLFormatPrivate()
         : ref(1)
     {
-        opts = QGL::DoubleBuffer | QGL::DepthBuffer | QGL::Rgba | QGL::DirectRendering | QGL::StencilBuffer;
+        opts = QGL::DoubleBuffer | QGL::DepthBuffer | QGL::Rgba | QGL::DirectRendering
+             | QGL::StencilBuffer | QGL::DeprecatedFunctions;
         pln = 0;
         depthSize = accumSize = stencilSize = redSize = greenSize = blueSize = alphaSize = -1;
         numSamples = -1;
         swapInterval = -1;
+        majorVersion = 1;
+        minorVersion = 0;
+        profile = QGLFormat::NoProfile;
     }
     QGLFormatPrivate(const QGLFormatPrivate *other)
         : ref(1),
@@ -156,7 +132,10 @@ public:
           blueSize(other->blueSize),
           alphaSize(other->alphaSize),
           numSamples(other->numSamples),
-          swapInterval(other->swapInterval)
+          swapInterval(other->swapInterval),
+          majorVersion(other->majorVersion),
+          minorVersion(other->minorVersion),
+          profile(other->profile)
     {
     }
     QAtomicInt ref;
@@ -171,6 +150,9 @@ public:
     int alphaSize;
     int numSamples;
     int swapInterval;
+    int majorVersion;
+    int minorVersion;
+    QGLFormat::OpenGLContextProfile profile;
 };
 
 class QGLWidgetPrivate : public QWidgetPrivate
@@ -182,7 +164,7 @@ public:
 #ifdef Q_WS_QWS
                        , wsurf(0)
 #endif
-#if defined(Q_WS_X11) && defined(QT_OPENGL_ES)
+#if defined(Q_WS_X11) && !defined(QT_NO_EGL)
                        , eglSurfaceWindowId(0)
 #endif
     {
@@ -195,6 +177,10 @@ public:
     void initContext(QGLContext *context, const QGLWidget* shareWidget);
     bool renderCxPm(QPixmap *pixmap);
     void cleanupColormaps();
+    void aboutToDestroy() {
+        if (glcx)
+            glcx->reset();
+    }
 
     QGLContext *glcx;
     QGLWidgetGLPaintDevice glDevice;
@@ -212,8 +198,8 @@ public:
     QGLContext *olcx;
 #elif defined(Q_WS_X11)
     QGLOverlayWidget *olw;
-#if defined(QT_OPENGL_ES)
-    void recreateEglSurface(bool force);
+#ifndef QT_NO_EGL
+    void recreateEglSurface();
     WId eglSurfaceWindowId;
 #endif
 #elif defined(Q_WS_MAC)
@@ -248,7 +234,7 @@ public:
     static void addShare(const QGLContext *context, const QGLContext *share);
     static void removeShare(const QGLContext *context);
 private:
-    QGLContextGroup(const QGLContext *context) : m_context(context), m_guards(0), m_refs(1) { }
+    QGLContextGroup(const QGLContext *context);
 
     QGLExtensionFuncs m_extensionFuncs;
     const QGLContext *m_context; // context group's representative
@@ -296,8 +282,6 @@ public:
     Q_DECLARE_FLAGS(Extensions, Extension)
 
     static Extensions glExtensions();
-
-private:
     static Extensions currentContextExtensions();
 };
 
@@ -350,6 +334,11 @@ public:
 
     void setVertexAttribArrayEnabled(int arrayIndex, bool enabled = true);
     void syncGlState(); // Makes sure the GL context's state is what we think it is
+    void swapRegion(const QRegion *region);
+
+#if defined(Q_WS_WIN)
+    void updateFormatVersion();
+#endif
 
 #if defined(Q_WS_WIN)
     HGLRC rc;
@@ -360,10 +349,12 @@ public:
     HBITMAP hbitmap;
     HDC hbitmap_hdc;
 #endif
-#if defined(QT_OPENGL_ES)
+#ifndef QT_NO_EGL
+    uint ownsEglContext : 1;
     QEglContext *eglContext;
     EGLSurface eglSurface;
     void destroyEglSurfaceForDevice();
+    EGLSurface eglSurfaceForDevice() const;
 #elif defined(Q_WS_X11) || defined(Q_WS_MAC)
     void* cx;
 #endif
@@ -375,7 +366,7 @@ public:
     quint32 gpm;
     int screen;
     QHash<QPixmapData*, QPixmap> boundPixmaps;
-    QGLTexture *bindTextureFromNativePixmap(QPixmapData*, const qint64 key,
+    QGLTexture *bindTextureFromNativePixmap(QPixmap*, const qint64 key,
                                             QGLContext::BindOptions options);
     static void destroyGlSurfaceForPixmap(QPixmapData*);
     static void unbindPixmapFromTexture(QPixmapData*);
@@ -396,6 +387,15 @@ public:
     uint internal_context : 1;
     uint version_flags_cached : 1;
     uint extension_flags_cached : 1;
+
+    // workarounds for driver/hw bugs on different platforms
+    uint workaround_needsFullClearOnEveryFrame : 1;
+    uint workaround_brokenFBOReadBack : 1;
+    uint workaroundsCached : 1;
+
+    uint workaround_brokenTextureFromPixmap : 1;
+    uint workaround_brokenTextureFromPixmap_init : 1;
+
     QPaintDevice *paintDevice;
     QColor transpColor;
     QGLContext *q_ptr;
@@ -419,7 +419,7 @@ public:
 
 #if defined(Q_WS_X11) || defined(Q_WS_MAC) || defined(Q_WS_QWS)
     static QGLExtensionFuncs qt_extensionFuncs;
-    static inline QGLExtensionFuncs& extensionFuncs(const QGLContext *) { return qt_extensionFuncs; }
+    static Q_OPENGL_EXPORT QGLExtensionFuncs& extensionFuncs(const QGLContext *);
 #endif
 
     static void setCurrentContext(QGLContext *context);
@@ -530,30 +530,69 @@ public:
     QSize bindCompressedTexturePVR(const char *buf, int len);
 };
 
+struct QGLTextureCacheKey {
+    qint64 key;
+    QGLContextGroup *group;
+};
+
+inline bool operator==(const QGLTextureCacheKey &a, const QGLTextureCacheKey &b)
+{
+    return a.key == b.key && a.group == b.group;
+}
+
+inline uint qHash(const QGLTextureCacheKey &key)
+{
+    return qHash(key.key) ^ qHash(key.group);
+}
+
+
 class Q_AUTOTEST_EXPORT QGLTextureCache {
 public:
     QGLTextureCache();
     ~QGLTextureCache();
 
     void insert(QGLContext *ctx, qint64 key, QGLTexture *texture, int cost);
-    void remove(quint64 key) { m_cache.remove(key); }
+    void remove(qint64 key);
+    inline int size();
+    inline void setMaxCost(int newMax);
+    inline int maxCost();
+    inline QGLTexture* getTexture(QGLContext *ctx, qint64 key);
+
     bool remove(QGLContext *ctx, GLuint textureId);
     void removeContextTextures(QGLContext *ctx);
-    int size() { return m_cache.size(); }
-    void setMaxCost(int newMax) { m_cache.setMaxCost(newMax); }
-    int maxCost() {return m_cache.maxCost(); }
-    QGLTexture* getTexture(quint64 key) { return m_cache.object(key); }
-
     static QGLTextureCache *instance();
-    static void deleteIfEmpty();
     static void cleanupTexturesForCacheKey(qint64 cacheKey);
     static void cleanupTexturesForPixampData(QPixmapData* pixmap);
     static void cleanupBeforePixmapDestruction(QPixmapData* pixmap);
 
 private:
-    QCache<qint64, QGLTexture> m_cache;
+    QCache<QGLTextureCacheKey, QGLTexture> m_cache;
+    QReadWriteLock m_lock;
 };
 
+int QGLTextureCache::size() {
+    QReadLocker locker(&m_lock);
+    return m_cache.size();
+}
+
+void QGLTextureCache::setMaxCost(int newMax)
+{
+    QWriteLocker locker(&m_lock);
+    m_cache.setMaxCost(newMax);
+}
+
+int QGLTextureCache::maxCost()
+{
+    QReadLocker locker(&m_lock);
+    return m_cache.maxCost();
+}
+
+QGLTexture* QGLTextureCache::getTexture(QGLContext *ctx, qint64 key)
+{
+    QReadLocker locker(&m_lock);
+    const QGLTextureCacheKey cacheKey = {key, QGLContextPrivate::contextGroup(ctx)};
+    return m_cache.object(cacheKey);
+}
 
 extern Q_OPENGL_EXPORT QPaintEngine* qt_qgl_paint_engine();
 

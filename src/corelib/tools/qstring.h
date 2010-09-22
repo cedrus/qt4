@@ -73,6 +73,16 @@ typedef std::basic_string<wchar_t> QStdWString;
 #error qstring.h must be included before any header file that defines truncate
 #endif
 
+#if defined(Q_CC_GNU) && (__GNUC__ == 4 && __GNUC_MINOR__ == 0)
+//There is a bug in GCC 4.0 that tries to instantiate template of annonymous enum
+#  ifdef QT_USE_FAST_OPERATOR_PLUS
+#    undef QT_USE_FAST_OPERATOR_PLUS
+#  endif
+#  ifdef QT_USE_FAST_CONCATENATION
+#    undef QT_USE_FAST_CONCATENATION
+#  endif
+#endif
+
 QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
@@ -91,7 +101,8 @@ class Q_CORE_EXPORT QString
 {
 public:
     inline QString();
-    QString(const QChar *unicode, int size);
+    QString(const QChar *unicode, int size); // Qt5: don't cap size < 0
+    explicit QString(const QChar *unicode); // Qt5: merge with the above
     QString(QChar c);
     QString(int size, QChar c);
     inline QString(const QLatin1String &latin1);
@@ -122,6 +133,7 @@ public:
 
     inline void detach();
     inline bool isDetached() const;
+    inline bool isSharedWith(const QString &other) const { return d == other.d; }
     void clear();
 
     inline const QChar at(int i) const;
@@ -331,6 +343,7 @@ public:
     int toWCharArray(wchar_t *array) const;
     static QString fromWCharArray(const wchar_t *, int size = -1);
 
+    QString &setRawData(const QChar *unicode, int size);
     QString &setUnicode(const QChar *unicode, int size);
     inline QString &setUtf16(const ushort *utf16, int size);
 
@@ -577,7 +590,7 @@ public:
 #endif
 
     bool isSimpleText() const { if (!d->clean) updateProperties(); return d->simpletext; }
-    bool isRightToLeft() const { if (!d->clean) updateProperties(); return d->righttoleft; }
+    bool isRightToLeft() const;
 
     QString(int size, Qt::Initialization);
 
@@ -594,7 +607,7 @@ private:
     struct Data {
         QBasicAtomicInt ref;
         int alloc, size;
-        ushort *data;
+        ushort *data; // QT5: put that after the bit field to fill alignment gap; don't use sizeof any more then
         ushort clean : 1;
         ushort simpletext : 1;
         ushort righttoleft : 1;
@@ -1083,12 +1096,6 @@ public:
 Q_DECLARE_TYPEINFO(QString, Q_MOVABLE_TYPE);
 Q_DECLARE_SHARED(QString)
 Q_DECLARE_OPERATORS_FOR_FLAGS(QString::SectionFlags)
-
-#if defined(Q_OS_WIN32) || defined(Q_OS_WINCE)
-extern Q_CORE_EXPORT QByteArray qt_winQString2MB(const QString& s, int len=-1);
-extern Q_CORE_EXPORT QByteArray qt_winQString2MB(const QChar *ch, int len);
-extern Q_CORE_EXPORT QString qt_winMB2QString(const char* mb, int len=-1);
-#endif
 
 
 class Q_CORE_EXPORT QStringRef {

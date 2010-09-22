@@ -47,7 +47,6 @@
 #include "qeventloop.h"
 #include "qcorecmdlineargs_p.h"
 #include <qdatastream.h>
-#include <qdatetime.h>
 #include <qdebug.h>
 #include <qdir.h>
 #include <qfile.h>
@@ -59,10 +58,12 @@
 #include <qthreadpool.h>
 #include <qthreadstorage.h>
 #include <private/qthread_p.h>
+#include <qelapsedtimer.h>
 #include <qlibraryinfo.h>
 #include <qvarlengtharray.h>
 #include <private/qfactoryloader_p.h>
 #include <private/qfunctions_p.h>
+#include <private/qlocale_p.h>
 
 #ifdef Q_OS_SYMBIAN
 #  include <exception>
@@ -514,16 +515,17 @@ QCoreApplication::QCoreApplication(int &argc, char **argv)
 {
     init();
     QCoreApplicationPrivate::eventDispatcher->startingUp();
-#if defined(Q_OS_SYMBIAN) && !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#if defined(Q_OS_SYMBIAN) && !defined(QT_NO_LIBRARY)
     // Refresh factoryloader, as text codecs are requested during lib path
     // resolving process and won't be therefore properly loaded.
     // Unknown if this is symbian specific issue.
     QFactoryLoader::refreshAll();
 #endif
 
+#if defined(Q_OS_SYMBIAN) && !defined(QT_NO_SYSTEMLOCALE)
+    d_func()->symbianInit();
+#endif
 }
-
-extern void set_winapp_name();
 
 // ### move to QCoreApplicationPrivate constructor?
 void QCoreApplication::init()
@@ -533,11 +535,6 @@ void QCoreApplication::init()
 #ifdef Q_OS_UNIX
     setlocale(LC_ALL, "");                // use correct char set mapping
     qt_locale_initialized = true;
-#endif
-
-#ifdef Q_WS_WIN
-    // Get the application name/instance if qWinMain() was not invoked
-    set_winapp_name();
 #endif
 
     Q_ASSERT_X(!self, "QCoreApplication", "there should be only one application object");
@@ -603,6 +600,15 @@ void QCoreApplication::init()
 
     qt_startup_hook();
 }
+
+#if defined(Q_OS_SYMBIAN) && !defined(QT_NO_SYSTEMLOCALE)
+void QCoreApplicationPrivate::symbianInit()
+{
+    if (!environmentChangeNotifier)
+        environmentChangeNotifier.reset(new QEnvironmentChangeNotifier);
+}
+#endif
+
 
 /*!
     Destroys the QCoreApplication object.
@@ -939,7 +945,7 @@ void QCoreApplication::processEvents(QEventLoop::ProcessEventsFlags flags, int m
     QThreadData *data = QThreadData::current();
     if (!data->eventDispatcher)
         return;
-    QTime start;
+    QElapsedTimer start;
     start.start();
     if (flags & QEventLoop::DeferredDeletion)
         QCoreApplication::sendPostedEvents(0, QEvent::DeferredDelete);
@@ -1067,7 +1073,7 @@ void QCoreApplication::exit(int returnCode)
 
     The event must be allocated on the heap since the post event queue
     will take ownership of the event and delete it once it has been
-    posted.  It is \e {not safe} to modify or delete the event after
+    posted.  It is \e {not safe} to access the event after
     it has been posted.
 
     When control returns to the main event loop, all events that are
@@ -1098,7 +1104,7 @@ void QCoreApplication::postEvent(QObject *receiver, QEvent *event)
 
     The event must be allocated on the heap since the post event queue
     will take ownership of the event and delete it once it has been
-    posted.  It is \e {not safe} to modify or delete the event after
+    posted.  It is \e {not safe} to access the event after
     it has been posted.
 
     When control returns to the main event loop, all events that are
@@ -2196,7 +2202,7 @@ QString QCoreApplication::applicationVersion()
     return coreappdata()->applicationVersion;
 }
 
-#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
 
 Q_GLOBAL_STATIC_WITH_ARGS(QMutex, libraryPathMutex, (QMutex::Recursive))
 
@@ -2298,13 +2304,11 @@ QStringList QCoreApplication::libraryPaths()
  */
 void QCoreApplication::setLibraryPaths(const QStringList &paths)
 {
-#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
     QMutexLocker locker(libraryPathMutex());
     if (!coreappdata()->app_libpaths)
         coreappdata()->app_libpaths = new QStringList;
     *(coreappdata()->app_libpaths) = paths;
     QFactoryLoader::refreshAll();
-#endif
 }
 
 /*!
@@ -2325,7 +2329,6 @@ void QCoreApplication::setLibraryPaths(const QStringList &paths)
  */
 void QCoreApplication::addLibraryPath(const QString &path)
 {
-#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
     if (path.isEmpty())
         return;
 
@@ -2340,7 +2343,6 @@ void QCoreApplication::addLibraryPath(const QString &path)
         coreappdata()->app_libpaths->prepend(canonicalPath);
         QFactoryLoader::refreshAll();
     }
-#endif
 }
 
 /*!
@@ -2351,7 +2353,6 @@ void QCoreApplication::addLibraryPath(const QString &path)
 */
 void QCoreApplication::removeLibraryPath(const QString &path)
 {
-#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
     if (path.isEmpty())
         return;
 
@@ -2363,7 +2364,6 @@ void QCoreApplication::removeLibraryPath(const QString &path)
     QString canonicalPath = QDir(path).canonicalPath();
     coreappdata()->app_libpaths->removeAll(canonicalPath);
     QFactoryLoader::refreshAll();
-#endif
 }
 
 #endif //QT_NO_LIBRARY

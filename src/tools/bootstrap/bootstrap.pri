@@ -42,18 +42,19 @@ hpux-acc*|hpuxi-acc* {
 } else {
     contains(CONFIG, debug_and_release_target) {
         CONFIG(debug, debug|release) {
-            LIBS+=-L$$QT_BUILD_TREE/src/tools/bootstrap/debug
+            QMAKE_LIBDIR += $$QT_BUILD_TREE/src/tools/bootstrap/debug
         } else {
-            LIBS+=-L$$QT_BUILD_TREE/src/tools/bootstrap/release
+            QMAKE_LIBDIR += $$QT_BUILD_TREE/src/tools/bootstrap/release
         }
     } else {
-        LIBS += -L$$QT_BUILD_TREE/src/tools/bootstrap
+        QMAKE_LIBDIR += $$QT_BUILD_TREE/src/tools/bootstrap
     }
     LIBS += -lbootstrap
 }
-!contains(QT_CONFIG, zlib):!contains(QT_CONFIG, no-zlib) {
-   unix:LIBS += -lz
-#  win32:LIBS += libz.lib
+!contains(QT_CONFIG, zlib):!contains(QT_CONFIG, no-zlib):!cross_compile {
+    symbian:LIBS_PRIVATE += -llibz
+    else:if(unix|win32-g++*):LIBS_PRIVATE += -lz
+    else:LIBS += zdll.lib
 }
 win32:LIBS += -luser32
 
@@ -62,3 +63,12 @@ mac {
     LIBS += -framework CoreServices
 }
 
+# Make dummy "sis" and "freeze" target to keep recursive "make sis/freeze" working.
+sis_target.target = sis
+sis_target.commands =
+sis_target.depends = first
+QMAKE_EXTRA_TARGETS += sis_target
+freeze_target.target = freeze
+freeze_target.commands =
+freeze_target.depends = first
+QMAKE_EXTRA_TARGETS += freeze_target

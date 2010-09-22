@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -58,7 +44,7 @@
 /*!
     \page containers.html
     \title Generic Containers
-    \ingroup frameworks-technologies
+    \ingroup technology-apis
     \ingroup groups
     \keyword container class
     \keyword container classes
@@ -612,11 +598,14 @@
 
     Qt automatically takes a copy of the container when it enters a
     \c foreach loop. If you modify the container as you are
-    iterating, that won't affect the loop. (If you don't modify the
+    iterating, that won't affect the loop. (If you do not modify the
     container, the copy still takes place, but thanks to \l{implicit
-    sharing} copying a container is very fast.) Similarly, declaring
-    the variable to be a non-const reference, in order to modify the
-    current item in the list will not work either.
+    sharing} copying a container is very fast.)
+
+    Since foreach creates a copy of the container, using a non-const
+    reference for the variable does not allow you to modify the original
+    container. It only affects the copy, which is probably not what you
+    want.
 
     In addition to \c foreach, Qt also provides a \c forever
     pseudo-keyword for infinite loops:

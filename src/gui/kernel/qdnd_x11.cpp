@@ -51,10 +51,10 @@
 #include "qbitmap.h"
 #include "qdesktopwidget.h"
 #include "qevent.h"
-#include "qdatetime.h"
 #include "qiodevice.h"
 #include "qpointer.h"
 #include "qcursor.h"
+#include "qelapsedtimer.h"
 #include "qvariant.h"
 #include "qvector.h"
 #include "qurl.h"
@@ -64,6 +64,7 @@
 #include "qtextcodec.h"
 
 #include "qdnd_p.h"
+#include "qapplication_p.h"
 #include "qt_x11_p.h"
 #include "qx11info_x11.h"
 
@@ -1111,7 +1112,20 @@ void qt_xdnd_send_leave()
     waiting_for_status = false;
 }
 
-
+// TODO: remove and use QApplication::currentKeyboardModifiers() in Qt 4.8.
+static Qt::KeyboardModifiers currentKeyboardModifiers()
+{
+    Window root;
+    Window child;
+    int root_x, root_y, win_x, win_y;
+    uint keybstate;
+    for (int i = 0; i < ScreenCount(X11->display); ++i) {
+        if (XQueryPointer(X11->display, QX11Info::appRootWindow(i), &root, &child,
+                          &root_x, &root_y, &win_x, &win_y, &keybstate))
+            return X11->translateModifiers(keybstate & 0x00ff);
+    }
+    return 0;
+}
 
 void QX11Data::xdndHandleDrop(QWidget *, const XEvent * xe, bool passive)
 {
@@ -1158,6 +1172,11 @@ void QX11Data::xdndHandleDrop(QWidget *, const XEvent * xe, bool passive)
         // if we can't find it, then use the data in the drag manager
         if (!dropData)
             dropData = (manager->object) ? manager->dragPrivate()->data : manager->dropData;
+
+        // Drop coming from another app? Update keyboard modifiers.
+        if (!qt_xdnd_dragging) {
+            QApplicationPrivate::modifier_buttons = currentKeyboardModifiers();
+        }
 
         QDropEvent de(qt_xdnd_current_position, possible_actions, dropData,
                       QApplication::mouseButtons(), QApplication::keyboardModifiers());
@@ -1299,6 +1318,12 @@ bool QDragManager::eventFilter(QObject * o, QEvent * e)
         return true;
     }
 
+    if (e->type() == QEvent::ShortcutOverride) {
+        // prevent accelerators from firing while dragging
+        e->accept();
+        return true;
+    }
+
     if (e->type() == QEvent::KeyPress || e->type() == QEvent::KeyRelease) {
         QKeyEvent *ke = ((QKeyEvent*)e);
         if (ke->key() == Qt::Key_Escape && e->type() == QEvent::KeyPress) {
@@ -1340,9 +1365,9 @@ void QDragManager::updateCursor()
     if (!noDropCursor) {
 #ifndef QT_NO_CURSOR
         noDropCursor = new QCursor(Qt::ForbiddenCursor);
-        moveCursor = new QCursor(dragCursor(Qt::MoveAction), 0,0);
-        copyCursor = new QCursor(dragCursor(Qt::CopyAction), 0,0);
-        linkCursor = new QCursor(dragCursor(Qt::LinkAction), 0,0);
+        moveCursor = new QCursor(Qt::DragMoveCursor);
+        copyCursor = new QCursor(Qt::DragCopyCursor);
+        linkCursor = new QCursor(Qt::DragLinkCursor);
 #endif
     }
 
@@ -1911,23 +1936,19 @@ Qt::DropAction QDragManager::drag(QDrag * o)
         // then we could still have problems, but this is highly unlikely
         QApplication::flush();
 
-        QTime started = QTime::currentTime();
-        QTime now = started;
+        QElapsedTimer timer;
+        timer.start();
         do {
             XEvent event;
             if (XCheckTypedEvent(X11->display, ClientMessage, &event))
                 qApp->x11ProcessEvent(&event);
-
-            now = QTime::currentTime();
-            if (started > now) // crossed midnight
-                started = now;
 
             // sleep 50 ms, so we don't use up CPU cycles all the time.
             struct timeval usleep_tv;
             usleep_tv.tv_sec = 0;
             usleep_tv.tv_usec = 50000;
             select(0, 0, 0, 0, &usleep_tv);
-        } while (object && started.msecsTo(now) < 1000);
+        } while (object && timer.hasExpired(1000));
     }
 
     object = o;

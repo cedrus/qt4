@@ -491,6 +491,7 @@ private slots:
     void typenameWithUnsigned();
     void warnOnVirtualSignal();
     void QTBUG5590_dummyProperty();
+    void QTBUG12260_defaultTemplate();
 signals:
     void sigWithUnsignedArg(unsigned foo);
     void sigWithSignedArg(signed foo);
@@ -1301,6 +1302,59 @@ void tst_Moc::QTBUG5590_dummyProperty()
     o.setProperty("value2", 82);
     QCOMPARE(o.value2(), 82);
 }
+
+class QTBUG7421_ReturnConstTemplate: public QObject
+{ Q_OBJECT
+public slots:
+        const QList<int> returnConstTemplate1() { return QList<int>(); }
+        QList<int> const returnConstTemplate2() { return QList<int>(); }
+        const int returnConstInt() { return 0; }
+        const QString returnConstString(const QString s) { return s; }
+        QString const returnConstString2( QString const s) { return s; }
+};
+
+class QTBUG9354_constInName: public QObject
+{ Q_OBJECT
+public slots:
+    void slotChooseScientificConst0(struct science_constant const &) {};
+    void foo(struct science_const const &) {};
+    void foo(struct constconst const &) {};
+    void foo(struct constconst *) {};
+    void foo(struct const_ *) {};
+};
+
+
+template<typename T1, typename T2>
+class TestTemplate2
+{
+};
+
+class QTBUG11647_constInTemplateParameter : public QObject
+{ Q_OBJECT
+public slots:
+    void testSlot(TestTemplate2<const int, const short*>) {}
+    void testSlot2(TestTemplate2<int, short const * const >) {}
+    void testSlot3(TestTemplate2<TestTemplate2 < const int, const short* > const *,
+                                TestTemplate2< TestTemplate2 < void, int > , unsigned char *> > ) {}
+
+signals:
+    void testSignal(TestTemplate2<const int, const short*>);
+};
+
+class QTBUG12260_defaultTemplate_Object : public QObject
+{ Q_OBJECT
+public slots:
+    void doSomething(QHash<QString, QVariant> values = QHash<QString, QVariant>()) { Q_UNUSED(values); }
+    void doAnotherThing(bool a = (1 < 3), bool b = (1 > 4)) { Q_UNUSED(a); Q_UNUSED(b); }
+};
+
+
+void tst_Moc::QTBUG12260_defaultTemplate()
+{
+    QVERIFY(QTBUG12260_defaultTemplate_Object::staticMetaObject.indexOfSlot("doSomething(QHash<QString,QVariant>)") != -1);
+    QVERIFY(QTBUG12260_defaultTemplate_Object::staticMetaObject.indexOfSlot("doAnotherThing(bool,bool)") != -1);
+}
+
 
 QTEST_APPLESS_MAIN(tst_Moc)
 #include "tst_moc.moc"

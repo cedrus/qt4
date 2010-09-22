@@ -91,7 +91,7 @@ inline bool qCompare
     if (r1.unit == "msec") {
         variance = 0.1;
     }
-    else if (r1.unit == "instr. loads") {
+    else if (r1.unit == "instruction reads") {
         variance = 0.001;
     }
     else if (r1.unit == "ticks") {
@@ -539,7 +539,7 @@ BenchmarkResult BenchmarkResult::parse(QString const& line, QString* error)
 
     /* This code avoids using a QRegExp because QRegExp might be broken. */
 
-    /* Sample format: 4,000 msec per iteration (total: 4000, iterations: 1) */
+    /* Sample format: 4,000 msec per iteration (total: 4,000, iterations: 1) */
 
     QString sFirstNumber;
     while (!remaining.isEmpty() && !remaining.at(0).isSpace()) {
@@ -573,7 +573,7 @@ BenchmarkResult BenchmarkResult::parse(QString const& line, QString* error)
 
     remaining = remaining.mid(sizeof(periterbit)-1);
 
-    /* Remaining: 4000, iterations: 1) */
+    /* Remaining: 4,000, iterations: 1) */
     static const char itersbit[] = ", iterations: ";
     QString sTotal;
     while (!remaining.startsWith(itersbit) && !remaining.isEmpty()) {
@@ -587,9 +587,12 @@ BenchmarkResult BenchmarkResult::parse(QString const& line, QString* error)
 
     remaining = remaining.mid(sizeof(itersbit)-1);
 
-    qint64 total = sTotal.toLongLong(&ok);
+    /* 4,000 -> 4000 */
+    sTotal.remove(',');
+
+    double total = sTotal.toDouble(&ok);
     if (!ok) {
-        if (error) *error = sTotal + " (total) is not a valid integer";
+        if (error) *error = sTotal + " (total) is not a valid number";
         return out;
     }
 

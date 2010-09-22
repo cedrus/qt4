@@ -620,6 +620,20 @@ bool QLibraryPrivate::isPlugin(QSettings *settings)
     QByteArray key;
     bool success = false;
 
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+    if (fileName.endsWith(QLatin1String(".debug"))) {
+        // refuse to load a file that ends in .debug
+        // these are the debug symbols from the libraries
+        // the problem is that they are valid shared library files
+        // and dlopen is known to crash while opening them
+
+        // pretend we didn't see the file
+        errorString = QLibrary::tr("The shared library was not found.");
+        pluginState = IsNotAPlugin;
+        return false;
+    }
+#endif
+
     QFileInfo fileinfo(fileName);
 
 #ifndef QT_NO_DATESTRING
@@ -630,6 +644,22 @@ bool QLibraryPrivate::isPlugin(QSettings *settings)
                      .arg((QT_VERSION & 0xff00) >> 8)
                      .arg(QLIBRARY_AS_DEBUG ? QLatin1String("debug") : QLatin1String("false"))
                      .arg(fileName);
+#ifdef Q_WS_MAC    
+    // On Mac, add the application arch to the reg key in order to
+    // cache plugin information separately for each arch. This prevents
+    // Qt from wrongly caching plugin load failures when the archs
+    // don't match.
+#if defined(__x86_64__)
+    regkey += QLatin1String("-x86_64");
+#elif defined(__i386__)
+    regkey += QLatin1String("-i386");
+#elif defined(__ppc64__)
+    regkey += QLatin1String("-ppc64");
+#elif defined(__ppc__)
+    regkey += QLatin1String("-ppc");
+#endif
+#endif // Q_WS_MAC
+    
     QStringList reg;
 #ifndef QT_NO_SETTINGS
     if (!settings) {

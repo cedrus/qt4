@@ -97,11 +97,15 @@ public:
     // we return true since HTTP needs to send PUT/POST data again after having authenticated
     bool needsResetableUploadData() { return true; }
 
+    bool canResume() const;
+    void setResumeOffset(quint64 offset);
+
 private slots:
     void replyReadyRead();
     void replyFinished();
     void replyHeaderChanged();
     void httpAuthenticationRequired(const QHttpNetworkRequest &request, QAuthenticator *auth);
+    void httpCacheCredentials(const QHttpNetworkRequest &request, QAuthenticator *auth);
     void httpError(QNetworkReply::NetworkError error, const QString &errorString);
     bool sendCacheContents(const QNetworkCacheMetaData &metaData);
     void finished(); // override
@@ -117,6 +121,8 @@ private:
     bool pendingIgnoreAllSslErrors;
     QList<QSslError> pendingIgnoreSslErrorsList;
 #endif
+
+    quint64 resumeOffset;
 
     void disconnectFromHttp();
     void setupConnection();

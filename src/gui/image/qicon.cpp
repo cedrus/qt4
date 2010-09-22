@@ -66,6 +66,8 @@
 #include "private/qkde_p.h"
 #endif
 
+#include "private/qstylehelper_p.h"
+
 #ifndef QT_NO_ICON
 QT_BEGIN_NAMESPACE
 
@@ -261,21 +263,17 @@ QPixmap QPixmapIconEngine::pixmap(const QSize &size, QIcon::Mode mode, QIcon::St
     if (!actualSize.isNull() && (actualSize.width() > size.width() || actualSize.height() > size.height()))
         actualSize.scale(size, Qt::KeepAspectRatio);
 
-    QString key = QLatin1String("$qt_icon_")
-                  + QString::number(pm.cacheKey())
-                  + QString::number(pe->mode)
-                  + QString::number(QApplication::palette().cacheKey())
-                  + QLatin1Char('_')
-                  + QString::number(actualSize.width())
-                  + QLatin1Char('_')
-                  + QString::number(actualSize.height())
-                  + QLatin1Char('_');
-
+    QString key = QLatin1Literal("qt_")
+                  % HexString<quint64>(pm.cacheKey())
+                  % HexString<uint>(pe->mode)
+                  % HexString<quint64>(QApplication::palette().cacheKey())
+                  % HexString<uint>(actualSize.width())
+                  % HexString<uint>(actualSize.height());
 
     if (mode == QIcon::Active) {
-        if (QPixmapCache::find(key + QString::number(mode), pm))
+        if (QPixmapCache::find(key % HexString<uint>(mode), pm))
             return pm; // horray
-        if (QPixmapCache::find(key + QString::number(QIcon::Normal), pm)) {
+        if (QPixmapCache::find(key % HexString<uint>(QIcon::Normal), pm)) {
             QStyleOption opt(0);
             opt.palette = QApplication::palette();
             QPixmap active = QApplication::style()->generatedIconPixmap(QIcon::Active, pm, &opt);
@@ -284,7 +282,7 @@ QPixmap QPixmapIconEngine::pixmap(const QSize &size, QIcon::Mode mode, QIcon::St
         }
     }
 
-    if (!QPixmapCache::find(key + QString::number(mode), pm)) {
+    if (!QPixmapCache::find(key % HexString<uint>(mode), pm)) {
         if (pm.size() != actualSize)
             pm = pm.scaled(actualSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         if (pe->mode != mode && mode != QIcon::Normal) {
@@ -294,7 +292,7 @@ QPixmap QPixmapIconEngine::pixmap(const QSize &size, QIcon::Mode mode, QIcon::St
             if (!generated.isNull())
                 pm = generated;
         }
-        QPixmapCache::insert(key + QString::number(mode), pm);
+        QPixmapCache::insert(key % HexString<uint>(mode), pm);
     }
     return pm;
 }
@@ -441,7 +439,7 @@ void QPixmapIconEngine::virtual_hook(int id, void *data)
     }
 }
 
-#if !defined (QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
 Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
     (QIconEngineFactoryInterface_iid, QLatin1String("/iconengines"), Qt::CaseInsensitive))
 Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loaderV2,
@@ -876,6 +874,25 @@ QList<QSize> QIcon::availableSizes(Mode mode, State state) const
         return QList<QSize>();
     QIconEngineV2 *engine = static_cast<QIconEngineV2*>(d->engine);
     return engine->availableSizes(mode, state);
+}
+
+/*!
+    \since 4.7
+
+    Returns the name used to create the icon, if available.
+
+    Depending on the way the icon was created, it may have an associated
+    name. This is the case for icons created with fromTheme() or icons
+    using a QIconEngine which supports the QIconEngineV2::IconNameHook.
+
+    \sa fromTheme(), QIconEngine
+*/
+QString QIcon::name() const
+{
+    if (!d || !d->engine || d->engine_version < 2)
+        return QString();
+    QIconEngineV2 *engine = static_cast<QIconEngineV2*>(d->engine);
+    return engine->iconName();
 }
 
 /*!

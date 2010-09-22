@@ -41,9 +41,9 @@
 
 #include <qplatformdefs.h>
 
-#include <qdatetime.h>
 #include <qdebug.h>
 #include <qpaintdevice.h>
+#include <qelapsedtimer.h>
 
 #include <private/qt_x11_p.h>
 #include "qx11info_x11.h"
@@ -77,6 +77,9 @@ QT_BEGIN_NAMESPACE
 // from qfont_x11.cpp
 extern double qt_pointSize(double pixelSize, int dpi);
 extern double qt_pixelSize(double pointSize, int dpi);
+
+// from qapplication.cpp
+extern bool qt_is_gui_used;
 
 static inline void capitalize (char *s)
 {
@@ -1218,7 +1221,7 @@ static void load(const QString &family = QString(), int script = -1, bool forceX
     }
 
 #ifdef QFONTDATABASE_DEBUG
-    QTime t;
+    QElapsedTimer t;
     t.start();
 #endif
 
@@ -1301,7 +1304,7 @@ static void initializeDb()
     if (!db || db->count)
         return;
 
-    QTime t;
+    QElapsedTimer t;
     t.start();
 
 #ifndef QT_NO_FONTCONFIG
@@ -1314,7 +1317,7 @@ static void initializeDb()
     }
 
     loadFontConfig();
-    FD_DEBUG("QFontDatabase: loaded FontConfig: %d ms", t.elapsed());
+    FD_DEBUG("QFontDatabase: loaded FontConfig: %d ms", int(t.elapsed()));
 #endif
 
     t.start();
@@ -1938,14 +1941,19 @@ void QFontDatabase::load(const QFontPrivate *d, int script)
         } else if (X11->has_fontconfig) {
             fe = loadFc(d, script, req);
 
-            if (fe != 0 && fe->fontDef.pixelSize != req.pixelSize) {
-                delete fe;
-                fe = loadXlfd(d->screen, script, req);
+            if (fe != 0 && fe->fontDef.pixelSize != req.pixelSize && mainThread && qt_is_gui_used) {
+                QFontEngine *xlfdFontEngine = loadXlfd(d->screen, script, req);
+                if (xlfdFontEngine->fontDef.family == fe->fontDef.family) {
+                    delete fe;
+                    fe = xlfdFontEngine;
+                } else {
+                    delete xlfdFontEngine;
+                }
             }
 
 
 #endif
-        } else if (mainThread) {
+        } else if (mainThread && qt_is_gui_used) {
             fe = loadXlfd(d->screen, script, req);
         }
         if (!fe) {

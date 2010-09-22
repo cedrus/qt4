@@ -45,7 +45,7 @@ class Node;
 class PlatformMouseEvent;
 class RenderLayer;
 class RenderObject;
-class RenderPartObject;
+class RenderEmbeddedObject;
 class ScheduledEvent;
 class String;
 
@@ -72,7 +72,12 @@ public:
     void setMarginWidth(int);
     void setMarginHeight(int);
 
+    virtual void setCanHaveScrollbars(bool);
+    void updateCanHaveScrollbars();
+
     virtual PassRefPtr<Scrollbar> createScrollbar(ScrollbarOrientation);
+
+    virtual bool avoidScrollbarCreation();
 
     virtual void setContentsSize(const IntSize&);
 
@@ -87,7 +92,6 @@ public:
     RenderObject* layoutRoot(bool onlyDuringLayout = false) const;
     int layoutCount() const { return m_layoutCount; }
 
-    // These two helper functions just pass through to the RenderView.
     bool needsLayout() const;
     void setNeedsLayout();
 
@@ -103,6 +107,10 @@ public:
     // Only used with accelerated compositing, but outside the #ifdef to make linkage easier.
     // Returns true if the sync was completed.
     bool syncCompositingStateRecursive();
+
+    // Returns true when a paint with the PaintBehaviorFlattenCompositingLayers flag set gives
+    // a faithful representation of the content.
+    bool isSoftwareRenderable() const;
 
     void didMoveOnscreen();
     void willMoveOffscreen();
@@ -132,9 +140,11 @@ public:
     virtual void scrollRectIntoViewRecursively(const IntRect&);
     virtual void setScrollPosition(const IntPoint&);
     void scrollPositionChanged();
+    virtual void repaintFixedElementsAfterScrolling();
 
     String mediaType() const;
     void setMediaType(const String&);
+    void adjustMediaTypeForPrinting(bool printing);
 
     void setUseSlowRepaints();
     void setIsOverlapped(bool);
@@ -166,11 +176,12 @@ public:
     bool wasScrolledByUser() const;
     void setWasScrolledByUser(bool);
 
-    void addWidgetToUpdate(RenderPartObject*);
-    void removeWidgetToUpdate(RenderPartObject*);
+    void addWidgetToUpdate(RenderEmbeddedObject*);
+    void removeWidgetToUpdate(RenderEmbeddedObject*);
 
     virtual void paintContents(GraphicsContext*, const IntRect& damageRect);
-    void setPaintRestriction(PaintRestriction);
+    void setPaintBehavior(PaintBehavior);
+    PaintBehavior paintBehavior() const;
     bool isPainting() const;
     void setNodeToDraw(Node*);
 
@@ -199,8 +210,17 @@ public:
     bool isFrameViewScrollCorner(RenderScrollbarPart* scrollCorner) const { return m_scrollCorner == scrollCorner; }
     void invalidateScrollCorner();
 
+    // Normal delay
+    static void setRepaintThrottlingDeferredRepaintDelay(double p);
+    // Negative value would mean that first few repaints happen without a delay
+    static void setRepaintThrottlingnInitialDeferredRepaintDelayDuringLoading(double p);
+    // The delay grows on each repaint to this maximum value
+    static void setRepaintThrottlingMaxDeferredRepaintDelayDuringLoading(double p);
+    // On each repaint the delay increses by this amount
+    static void setRepaintThrottlingDeferredRepaintDelayIncrementDuringLoading(double p);
+
 protected:
-    virtual void scrollContentsFastPath(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect);
+    virtual bool scrollContentsFastPath(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect);
 
 private:
     FrameView(Frame*);
@@ -259,11 +279,14 @@ private:
 
     IntSize m_size;
     IntSize m_margins;
-    OwnPtr<HashSet<RenderPartObject*> > m_widgetUpdateSet;
+    
+    typedef HashSet<RenderEmbeddedObject*> RenderEmbeddedObjectSet;
+    OwnPtr<RenderEmbeddedObjectSet> m_widgetUpdateSet;
     RefPtr<Frame> m_frame;
 
     bool m_doFullRepaint;
     
+    bool m_canHaveScrollbars;
     bool m_useSlowRepaints;
     bool m_isOverlapped;
     bool m_contentIsOpaque;
@@ -290,7 +313,8 @@ private:
     float m_lastZoomFactor;
 
     String m_mediaType;
-    
+    String m_mediaTypeWhenNotPrinting;
+
     unsigned m_enqueueEvents;
     Vector<ScheduledEvent*> m_scheduledEvents;
     
@@ -315,7 +339,7 @@ private:
     bool m_setNeedsLayoutWasDeferred;
 
     RefPtr<Node> m_nodeToDraw;
-    PaintRestriction m_paintRestriction;
+    PaintBehavior m_paintBehavior;
     bool m_isPainting;
 
     bool m_isVisuallyNonEmpty;
@@ -325,6 +349,11 @@ private:
 
     // Renderer to hold our custom scroll corner.
     RenderScrollbarPart* m_scrollCorner;
+
+    static double s_deferredRepaintDelay;
+    static double s_initialDeferredRepaintDelayDuringLoading;
+    static double s_maxDeferredRepaintDelayDuringLoading;
+    static double s_deferredRepaintDelayIncrementDuringLoading;
 };
 
 #if ENABLE(INSPECTOR)

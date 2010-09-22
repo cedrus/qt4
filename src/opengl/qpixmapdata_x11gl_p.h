@@ -59,7 +59,13 @@
 
 #include <qgl.h>
 
+#ifndef QT_NO_EGL
+#include <QtGui/private/qeglcontext_p.h>
+#endif
+
 QT_BEGIN_NAMESPACE
+
+class QX11GLSharedContexts;
 
 class QX11GLPixmapData : public QX11PixmapData, public QGLPaintDevice
 {
@@ -67,15 +73,21 @@ public:
     QX11GLPixmapData();
     virtual ~QX11GLPixmapData();
 
+    // Re-implemented from QX11PixmapData:
+    void fill(const QColor &color);
+    void copy(const QPixmapData *data, const QRect &rect);
+    bool scroll(int dx, int dy, const QRect &rect);
+
     // Re-implemented from QGLPaintDevice
     QPaintEngine* paintEngine() const; // Also re-implements QX11PixmapData::paintEngine
     void beginPaint();
-    void endPaint();
     QGLContext* context() const;
     QSize size() const;
 
     static bool hasX11GLPixmaps();
     static QGLFormat glFormat();
+    static QX11GLSharedContexts* sharedContexts();
+
 private:
     mutable QGLContext* ctx;
 };

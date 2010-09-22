@@ -16,7 +16,7 @@ along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 */
 
-#include <LoudnessBase.h>
+#include <loudnessbase.h>
 #include "loudness.h"
 
 QT_BEGIN_NAMESPACE
@@ -49,6 +49,7 @@ const char* Loudness::description()
 bool Loudness::getParameters(CMdaAudioOutputStream *stream,
     QList<EffectParameter> &parameters)
 {
+    Q_UNUSED(parameters)
     QScopedPointer<CLoudness> effect;
     TRAPD(err, effect.reset(CLoudness::NewL(*stream)));
     return (KErrNone == err);

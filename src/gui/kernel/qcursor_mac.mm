@@ -114,27 +114,18 @@ void qt_mac_set_cursor(const QCursor *c, const QPoint &)
     }
     c->handle(); //force the cursor to get loaded, if it's not
 
-    if(1 || currentCursor != c->d) {
-        if(currentCursor && currentCursor->type == QCursorData::TYPE_ThemeCursor
-                && currentCursor->curs.tc.anim)
-            currentCursor->curs.tc.anim->stop();
-        QMacCocoaAutoReleasePool pool;
-        if(c->d->type == QCursorData::TYPE_ImageCursor) {
-            [static_cast<NSCursor *>(c->d->curs.cp.nscursor) set];
-        } else if(c->d->type == QCursorData::TYPE_ThemeCursor) {
-#ifdef QT_MAC_USE_COCOA
-            if (c->d->curs.cp.nscursor == 0)
-                [[NSCursor arrowCursor] set];
-            [static_cast<NSCursor *>(c->d->curs.cp.nscursor) set];
-#else
-            if(SetAnimatedThemeCursor(c->d->curs.tc.curs, 0) == themeBadCursorIndexErr) {
-                SetThemeCursor(c->d->curs.tc.curs);
-            } else {
-                if(!c->d->curs.tc.anim)
-                    c->d->curs.tc.anim = new QMacAnimateCursor;
-                c->d->curs.tc.anim->start(c->d->curs.tc.curs);
-            }
-#endif
+    if(currentCursor && currentCursor->type == QCursorData::TYPE_ThemeCursor
+            && currentCursor->curs.tc.anim)
+        currentCursor->curs.tc.anim->stop();
+    if(c->d->type == QCursorData::TYPE_ImageCursor) {
+        [static_cast<NSCursor *>(c->d->curs.cp.nscursor) set];
+    } else if(c->d->type == QCursorData::TYPE_ThemeCursor) {
+        if(SetAnimatedThemeCursor(c->d->curs.tc.curs, 0) == themeBadCursorIndexErr) {
+            SetThemeCursor(c->d->curs.tc.curs);
+        } else {
+            if(!c->d->curs.tc.anim)
+                c->d->curs.tc.anim = new QMacAnimateCursor;
+            c->d->curs.tc.anim->start(c->d->curs.tc.curs);
         }
     }
     currentCursor = c->d;
@@ -233,6 +224,15 @@ QPoint QCursor::pos()
 
 void QCursor::setPos(int x, int y)
 {
+#ifdef QT_MAC_USE_COCOA
+    CGPoint pos;
+    pos.x = x;
+    pos.y = y;
+
+    CGEventRef e = CGEventCreateMouseEvent(0, kCGEventMouseMoved, pos, 0);
+    CGEventPost(kCGHIDEventTap, e);
+    CFRelease(e);
+#else
     CGWarpMouseCursorPosition(CGPointMake(x, y));
 
     /* I'm not too keen on doing this, but this makes it a lot easier, so I just
@@ -249,6 +249,7 @@ void QCursor::setPos(int x, int y)
                        QApplication::mouseButtons(), QApplication::keyboardModifiers());
         qt_sendSpontaneousEvent(widget, &me);
     }
+#endif
 }
 
 void QCursorData::initCursorFromBitmap()
@@ -424,6 +425,18 @@ void QCursorData::update()
         type = QCursorData::TYPE_ThemeCursor;
         curs.cp.nscursor = [NSCursor closedHandCursor];
         break;
+    case Qt::DragCopyCursor:
+        type = QCursorData::TYPE_ThemeCursor;
+        curs.cp.nscursor = [NSCursor dragCopyCursor];
+        break;
+    case Qt::DragMoveCursor:
+        type = QCursorData::TYPE_ThemeCursor;
+        curs.cp.nscursor = [NSCursor arrowCursor];
+        break;
+    case Qt::DragLinkCursor:
+        type = QCursorData::TYPE_ThemeCursor;
+        curs.cp.nscursor = [NSCursor dragLinkCursor];
+        break;
 #define QT_USE_APPROXIMATE_CURSORS
 #ifdef QT_USE_APPROXIMATE_CURSORS
     case Qt::SizeVerCursor:
@@ -518,6 +531,18 @@ void QCursorData::update()
     case Qt::ClosedHandCursor:
         type = QCursorData::TYPE_ThemeCursor;
         curs.tc.curs = kThemeClosedHandCursor;
+        break;
+    case Qt::DragMoveCursor:
+        type = QCursorData::TYPE_ThemeCursor;
+        curs.tc.curs = kThemeArrowCursor;
+        break;
+    case Qt::DragCopyCursor:
+        type = QCursorData::TYPE_ThemeCursor;
+        curs.tc.curs = kThemeCopyArrowCursor;
+        break;
+    case Qt::DragLinkCursor:
+        type = QCursorData::TYPE_ThemeCursor;
+        curs.tc.curs = kThemeAliasArrowCursor;
         break;
 #define QT_USE_APPROXIMATE_CURSORS
 #ifdef QT_USE_APPROXIMATE_CURSORS

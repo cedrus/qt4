@@ -56,73 +56,9 @@
 #include <QtCore/qvarlengtharray.h>
 #include <QtGui/qimage.h>
 
-QT_BEGIN_INCLUDE_NAMESPACE
-
-#ifndef QT_NO_EGL
-#if defined(QT_OPENGL_ES_2)
-#   include <GLES2/gl2.h>
-#endif
-
-#if defined(QT_GLES_EGL)
-#   include <GLES/egl.h>
-#else
-#   include <EGL/egl.h>
-#endif
-#else
-
-//types from egltypes.h for compiling stub without EGL headers
-typedef int EGLBoolean;
-typedef int EGLint;
-typedef int EGLenum;
-typedef int    NativeDisplayType;
-typedef void*  NativeWindowType;
-typedef void*  NativePixmapType;
-typedef int EGLDisplay;
-typedef int EGLConfig;
-typedef int EGLSurface;
-typedef int EGLContext;
-typedef int EGLClientBuffer;
-#define EGL_NONE            0x3038  /* Attrib list terminator */
-
-#endif
-
-
-
-#if defined(Q_WS_X11)
-// If <EGL/egl.h> included <X11/Xlib.h>, then the global namespace
-// may have been polluted with X #define's.  The following makes sure
-// the X11 headers were included properly and then cleans things up.
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#undef Bool
-#undef Status
-#undef None
-#undef KeyPress
-#undef KeyRelease
-#undef FocusIn
-#undef FocusOut
-#undef Type
-#undef FontChange
-#undef CursorShape
-#endif
-
-QT_END_INCLUDE_NAMESPACE
+#include <QtGui/private/qegl_p.h>
 
 QT_BEGIN_NAMESPACE
-
-namespace QEgl {
-    enum API
-    {
-        OpenGL,
-        OpenVG
-    };
-
-    enum PixelFormatMatch
-    {
-        ExactPixelFormat,
-        BestPixelFormat
-    };
-}
 
 class QX11Info;
 class QPaintDevice;
@@ -146,15 +82,13 @@ public:
 #ifdef Q_WS_X11
     void setVisualFormat(const QX11Info *xinfo);
 #endif
-    void setRenderableType(QEgl::API api);
-
+    void setDeviceType(int devType);
     void setPaintDeviceFormat(QPaintDevice *dev);
+    void setRenderableType(QEgl::API api);
 
     bool reduceConfiguration();
 
     QString toString() const;
-
-    static void dumpAllConfigs();
 
 private:
     QVarLengthArray<int> props;

@@ -46,6 +46,7 @@
 #include "qtextlayout.h"
 #include "qcolor.h"
 #include "qfont.h"
+#include <qmath.h>
 
 #include "private/qpushbutton_p.h"
 
@@ -117,7 +118,7 @@ public:
     int topMargin() const { return 10; }
     int leftMargin() const { return 7; }
     int rightMargin() const { return 4; }
-    int bottomMargin() const { return 4; }
+    int bottomMargin() const { return 10; }
 
     QString description;
     QColor currentColor;
@@ -173,8 +174,15 @@ QFont QCommandLinkButtonPrivate::descriptionFont() const
 QRect QCommandLinkButtonPrivate::titleRect() const
 {
     Q_Q(const QCommandLinkButton);
-    return q->rect().adjusted(textOffset(), topMargin(),
-                              -rightMargin(), 0);
+    QRect r = q->rect().adjusted(textOffset(), topMargin(), -rightMargin(), 0);
+    if (description.isEmpty())
+    {
+        QFontMetrics fm(titleFont());
+        r.setTop(r.top() + qMax(0, (q->icon().actualSize(q->iconSize()).height()
+                 - fm.height()) / 2));
+    }
+
+    return r;
 }
 
 QRect QCommandLinkButtonPrivate::descriptionRect() const
@@ -242,7 +250,7 @@ int QCommandLinkButtonPrivate::descriptionHeight(int widgetWidth) const
         }
         layout.endLayout();
     }
-    return qRound(descriptionheight);
+    return qCeil(descriptionheight);
 }
 
 /*!
@@ -253,7 +261,7 @@ QSize QCommandLinkButton::minimumSizeHint() const
     Q_D(const QCommandLinkButton);
     QSize size = sizeHint();
     int minimumHeight = qMax(d->descriptionOffset() + d->bottomMargin(),
-                             iconSize().height() + d->topMargin());
+                             icon().actualSize(iconSize()).height() + d->topMargin());
     size.setHeight(minimumHeight);
     return size;
 }
@@ -327,7 +335,8 @@ int QCommandLinkButton::heightForWidth(int width) const
     int heightWithoutDescription = d->descriptionOffset() + d->bottomMargin();
     // find the width available for the description area
     return qMax(heightWithoutDescription + d->descriptionHeight(width),
-                iconSize().height() + d->topMargin() + d->bottomMargin());
+                icon().actualSize(iconSize()).height() + d->topMargin() +
+                d->bottomMargin());
 }
 
 /*! \reimp */
@@ -340,7 +349,7 @@ void QCommandLinkButton::paintEvent(QPaintEvent *)
     QStyleOptionButton option;
     initStyleOption(&option);
 
-    //Enable command link appearence on Vista
+    //Enable command link appearance on Vista
     option.features |= QStyleOptionButton::CommandLinkButton;
     option.text = QString();
     option.icon = QIcon(); //we draw this ourselves

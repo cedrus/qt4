@@ -16,7 +16,7 @@ along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 */
 
-#include <BassBoostBase.h>
+#include <bassboostbase.h>
 #include "bassboost.h"
 
 QT_BEGIN_NAMESPACE
@@ -49,6 +49,7 @@ const char* BassBoost::description()
 bool BassBoost::getParameters(CMdaAudioOutputStream *stream,
     QList<EffectParameter> &parameters)
 {
+    Q_UNUSED(parameters)
     QScopedPointer<CBassBoost> effect;
     TRAPD(err, effect.reset(CBassBoost::NewL(*stream)));
     return (KErrNone == err);

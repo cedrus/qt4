@@ -57,7 +57,7 @@ QT_BEGIN_HEADER
 #if defined(Q_WS_MAC)
 # include <OpenGL/gl.h>
 # include <OpenGL/glu.h>
-#elif defined(QT_OPENGL_ES_1) || defined(QT_OPENGL_ES_1_CL)
+#elif defined(QT_OPENGL_ES_1)
 # include <GLES/gl.h>
 #ifndef GL_DOUBLE
 # define GL_DOUBLE GL_FLOAT
@@ -144,6 +144,7 @@ namespace QGL
         DirectRendering         = 0x0080,
         HasOverlay              = 0x0100,
         SampleBuffers           = 0x0200,
+        DeprecatedFunctions     = 0x0400,
         SingleBuffer            = DoubleBuffer    << 16,
         NoDepthBuffer           = DepthBuffer     << 16,
         ColorIndex              = Rgba            << 16,
@@ -153,7 +154,8 @@ namespace QGL
         NoStereoBuffers         = StereoBuffers   << 16,
         IndirectRendering       = DirectRendering << 16,
         NoOverlay               = HasOverlay      << 16,
-        NoSampleBuffers         = SampleBuffers   << 16
+        NoSampleBuffers         = SampleBuffers   << 16,
+        NoDeprecatedFunctions   = DeprecatedFunctions << 16
     };
     Q_DECLARE_FLAGS(FormatOptions, FormatOption)
 }
@@ -235,7 +237,20 @@ public:
     static bool hasOpenGL();
     static bool hasOpenGLOverlays();
 
-    enum  OpenGLVersionFlag {
+    void setVersion(int major, int minor);
+    int majorVersion() const;
+    int minorVersion() const;
+
+    enum OpenGLContextProfile {
+        NoProfile,
+        CoreProfile,
+        CompatibilityProfile
+    };
+
+    void setProfile(OpenGLContextProfile profile);
+    OpenGLContextProfile profile() const;
+
+    enum OpenGLVersionFlag {
         OpenGL_Version_None               = 0x00000000,
         OpenGL_Version_1_1                = 0x00000001,
         OpenGL_Version_1_2                = 0x00000002,
@@ -249,7 +264,11 @@ public:
         OpenGL_ES_Common_Version_1_1      = 0x00000200,
         OpenGL_ES_CommonLite_Version_1_1  = 0x00000400,
         OpenGL_ES_Version_2_0             = 0x00000800,
-        OpenGL_Version_3_0                = 0x00001000
+        OpenGL_Version_3_0                = 0x00001000,
+        OpenGL_Version_3_1                = 0x00002000,
+        OpenGL_Version_3_2                = 0x00004000,
+        OpenGL_Version_3_3                = 0x00008000,
+        OpenGL_Version_4_0                = 0x00010000
     };
     Q_DECLARE_FLAGS(OpenGLVersionFlags, OpenGLVersionFlag)
 
@@ -262,12 +281,19 @@ private:
 
     friend Q_OPENGL_EXPORT bool operator==(const QGLFormat&, const QGLFormat&);
     friend Q_OPENGL_EXPORT bool operator!=(const QGLFormat&, const QGLFormat&);
+#ifndef QT_NO_DEBUG_STREAM
+    friend Q_OPENGL_EXPORT QDebug operator<<(QDebug, const QGLFormat &);
+#endif
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QGLFormat::OpenGLVersionFlags)
 
 Q_OPENGL_EXPORT bool operator==(const QGLFormat&, const QGLFormat&);
 Q_OPENGL_EXPORT bool operator!=(const QGLFormat&, const QGLFormat&);
+
+#ifndef QT_NO_DEBUG_STREAM
+Q_OPENGL_EXPORT QDebug operator<<(QDebug, const QGLFormat &);
+#endif
 
 class Q_OPENGL_EXPORT QGLContext
 {
@@ -359,7 +385,7 @@ protected:
 #if defined(Q_WS_WIN)
     virtual int choosePixelFormat(void* pfd, HDC pdc);
 #endif
-#if defined(Q_WS_X11) && !defined(QT_OPENGL_ES)
+#if defined(Q_WS_X11) && defined(QT_NO_EGL)
     virtual void* tryVisual(const QGLFormat& f, int bufDepth = 1);
     virtual void* chooseVisual();
 #endif
@@ -414,7 +440,9 @@ private:
     friend class QGLFramebufferObjectPrivate;
     friend class QGLFBOGLPaintDevice;
     friend class QGLPaintDevice;
+    friend class QGLWidgetGLPaintDevice;
     friend class QX11GLPixmapData;
+    friend class QX11GLSharedContexts;
 private:
     Q_DISABLE_COPY(QGLContext)
 };

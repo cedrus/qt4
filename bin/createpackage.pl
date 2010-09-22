@@ -68,16 +68,19 @@ Convenience script for creating signed packages you can install on your phone.
 
 Usage: createpackage.pl [options] templatepkg [target]-[platform] [certificate key [passphrase]]
 
-Where supported optiobns are as follows:
-     [-i|install]            = Install the package right away using PC suite
+Where supported options are as follows:
+     [-i|install]            = Install the package right away using PC suite.
      [-p|preprocess]         = Only preprocess the template .pkg file.
-     [-c|certfile=<file>]    = The file containing certificate information for signing.
+     [-c|certfile <file>]    = The file containing certificate information for signing.
                                The file can have several certificates, each specified in
                                separate line. The certificate, key and passphrase in line
                                must be ';' separated. Lines starting with '#' are treated
                                as a comments. Also empty lines are ignored. The paths in
                                <file> can be absolute or relative to <file>.
-     [-u|unsigned]           = Preserves the unsigned package
+     [-u|unsigned]           = Preserves the unsigned package.
+     [-o|only-unsigned]      = Creates only unsigned package.
+     [-s|stub]               = Generates stub sis for ROM.
+     [-n|sisname <name>]     = Specifies the final sis name.
 Where parameters are as follows:
      templatepkg             = Name of .pkg file template
      target                  = Either debug or release
@@ -85,7 +88,7 @@ Where parameters are as follows:
                                winscw | gcce | armv5 | armv6 | armv7
      certificate             = The certificate file used for signing
      key                     = The certificate's private key file
-     passphrase              = The certificate's private key file's passphrase
+     passphrase              = The passphrase of the certificate's private key file
 
 Example:
      createpackage.pl fluidlauncher_template.pkg release-armv5
@@ -101,6 +104,10 @@ Example with certfile:
 
 If no certificate and key files are provided, either a RnD certificate or
 a self-signed certificate from QtDir\\src\\s60installs directory is used.
+In the latter case the resulting package will also be automatically patched
+using patch_capabilities.pl script, which makes it unsuitable for distribution.
+Always specify certificates explicitly if you wish to distribute your package.
+
 ==============================================================================================
 
 ENDUSAGESTRING
@@ -114,12 +121,16 @@ my $preprocessonly = "";
 my $certfile = "";
 my $preserveUnsigned = "";
 my $stub = "";
+my $signed_sis_name = "";
+my $onlyUnsigned = "";
 
 unless (GetOptions('i|install' => \$install,
                    'p|preprocess' => \$preprocessonly,
                    'c|certfile=s' => \$certfile,
                    'u|unsigned' => \$preserveUnsigned,
-                   's|stub' => \$stub,)){
+                   'o|only-unsigned' => \$onlyUnsigned,
+                   's|stub' => \$stub,
+                   'n|sisname=s' => \$signed_sis_name,)) {
     Usage();
 }
 
@@ -130,16 +141,21 @@ my $templatepkg = $ARGV[0];
 my $targetplatform = lc $ARGV[1];
 
 my @tmpvalues = split('-', $targetplatform);
-my $target = $tmpvalues[0];
-my $platform = $tmpvalues[1];;
+my $target;
+$target = $tmpvalues[0] or $target = "";
+my $platform;
+$platform = $tmpvalues[1] or $platform = "";
 
 # Convert visual target to real target (debug->udeb and release->urel)
 $target =~ s/debug/udeb/i;
 $target =~ s/release/urel/i;
 
-my $certificate = $ARGV[2];
-my $key = $ARGV[3];
-my $passphrase = $ARGV[4];
+my $certificate;
+$certificate = $ARGV[2] or $certificate = "";
+my $key;
+$key = $ARGV[3] or $key = "";
+my $passphrase;
+$passphrase = $ARGV[4] or $passphrase = "";
 
 # Generate output pkg basename (i.e. file name without extension)
 my $pkgoutputbasename = $templatepkg;
@@ -149,36 +165,37 @@ if ($pkgoutputbasename eq $templatepkg) {
     $preservePkgOutput = "1";
 }
 $pkgoutputbasename =~ s/\.pkg//g;
-$pkgoutputbasename = lc($pkgoutputbasename);
+$pkgoutputbasename = $pkgoutputbasename;
 
 # Store output file names to variables
-my $pkgoutput = lc($pkgoutputbasename.".pkg");
-my $sisoutputbasename = lc($pkgoutputbasename);
-$sisoutputbasename =~ s/_$targetplatform//g;
+my $pkgoutput = $pkgoutputbasename.".pkg";
+my $sisoutputbasename;
+if ($signed_sis_name eq "") {
+    $sisoutputbasename = $pkgoutputbasename;
+    $sisoutputbasename =~ s/_$targetplatform//g;
+    $signed_sis_name = $sisoutputbasename.".sis";
+} else {
+    $sisoutputbasename = $signed_sis_name;
+    if ($sisoutputbasename =~ m/(\.sis$|\.sisx$)/i) {
+        $sisoutputbasename =~ s/$1//i;
+    } else {
+        $signed_sis_name = $signed_sis_name.".sis";
+    }
+}
+
 my $unsigned_sis_name = $sisoutputbasename."_unsigned.sis";
-my $signed_sis_name = $sisoutputbasename.".sis";
-my $stub_sis_name = $sisoutputbasename."_stub.sis";
+my $stub_sis_name = $sisoutputbasename.".sis";
 
 # Store some utility variables
 my $scriptpath = dirname(__FILE__);
 my $certtext = $certificate;
-my $certpath = $scriptpath;
-$certpath =~ s-^(.*[^\\])$-$1\\-o;          # ensure path ends with a backslash
-$certpath =~ s-/-\\-go;                     # for those working with UNIX shells
-$certpath =~ s-bin\\$-src\\s60installs\\-;  # certificates are one step up in hierarcy
+# certificates are one step up in hierarchy
+my $certpath = File::Spec->catdir($scriptpath, File::Spec->updir(), "src/s60installs/");
 
 # Check some pre-conditions and print error messages if needed.
 unless (length($templatepkg)) {
     print "\nError: Template PKG filename is not defined!\n";
     Usage();
-}
-
-# If the pkg file is not actually a template, there is no need for plaform or target.
-if ($templatepkg =~ m/_template\.pkg/i) {
-    unless (length($platform) && length($target)) {
-        print "\nError: Platform or target is not defined!\n";
-        Usage();
-    }
 }
 
 # Check template exist
@@ -197,14 +214,14 @@ if (length($certificate)) {
 } else {
     #If no certificate is given, check default options
     $certtext = "RnD";
-    $certificate = $certpath."rd.cer";
-    $key = $certpath."rd-key.pem";
+    $certificate = File::Spec->catfile($certpath, "rd.cer");
+    $key = File::Spec->catfile($certpath, "rd-key.pem");
 
     stat($certificate);
     unless( -e _ ) {
         $certtext = "Self Signed";
-        $certificate = $certpath."selfsigned.cer";
-        $key = $certpath."selfsigned.key";
+        $certificate = File::Spec->catfile($certpath, "selfsigned.cer");
+        $key = File::Spec->catfile($certpath, "selfsigned.key");
     }
 }
 
@@ -242,11 +259,20 @@ if (!$preservePkgOutput) {
 }
 
 # Preprocess PKG
+
 local $/;
 # read template file
 open( TEMPLATE, $templatepkg) or die "Error '$templatepkg': $!\n";
 $_=<TEMPLATE>;
 close (TEMPLATE);
+
+# If the pkg file does not contain macros, there is no need for platform or target.
+if (m/\$\(PLATFORM\)/) {
+    unless (length($platform) && length($target)) {
+        print "\nError: Platform or target is not defined!\n";
+        Usage();
+    }
+}
 
 # replace the PKG variables
 s/\$\(PLATFORM\)/$platform/gm;
@@ -269,29 +295,56 @@ if($stub) {
     # Create stub SIS.
     system ("makesis -s $pkgoutput $stub_sis_name");
 } else {
+    if ($certtext eq "Self Signed"
+        && !@certificates
+        && $templatepkg !~ m/_installer\.pkg$/i
+        && !$onlyUnsigned) {
+        print("Auto-patching capabilities for self signed package.\n");
+        system ("patch_capabilities $pkgoutput");
+    }
+
     # Create SIS.
-    system ("makesis $pkgoutput $unsigned_sis_name");
+    # The 'and' is because system uses 0 to indicate success.
+    system ("makesis $pkgoutput $unsigned_sis_name") and die ("makesis failed");
     print("\n");
 
+    my $targetInsert = "";
+    if ($targetplatform ne "-") {
+        $targetInsert = " for $targetplatform";
+    }
+
+    if ($onlyUnsigned) {
+        stat($unsigned_sis_name);
+        if( -e _ ) {
+            print ("Successfully created unsigned package ${unsigned_sis_name}${targetInsert}!\n");
+        } else {
+            print ("\nUnsigned package creation failed!\n");
+        }
+
+        if (!$preservePkgOutput) {
+            unlink $pkgoutput;
+        }
+        exit;
+    }
+
     # Sign SIS with certificate info given as an argument.
-    system ("signsis $unsigned_sis_name $signed_sis_name $certificate $key $passphrase");
+    my $relcert = File::Spec->abs2rel($certificate);
+    my $relkey = File::Spec->abs2rel($key);
+    # The 'and' is because system uses 0 to indicate success.
+    system ("signsis $unsigned_sis_name $signed_sis_name $relcert $relkey $passphrase") and die ("signsis failed");
 
     # Check if creating signed SIS Succeeded
     stat($signed_sis_name);
     if( -e _ ) {
-        my $targetInsert = "";
-        if ($targetplatform ne "-") {
-            $targetInsert = "for $targetplatform ";
-        }
-        print ("Successfully created $signed_sis_name ${targetInsert}using certificate: $certtext!\n");
+        print ("Successfully created signed package ${signed_sis_name}${targetInsert} using certificate: $certtext!\n");
 
         # Sign with additional certificates & keys
         for my $row ( @certificates ) {
             # Get certificate absolute file names, relative paths are relative to certfilepath
-            my $abscert = File::Spec->rel2abs( $row->[0], $certfilepath);
-            my $abskey = File::Spec->rel2abs( $row->[1], $certfilepath);
+            my $relcert = File::Spec->abs2rel(File::Spec->rel2abs( $row->[0], $certfilepath));
+            my $relkey = File::Spec->abs2rel(File::Spec->rel2abs( $row->[1], $certfilepath));
 
-            system ("signsis $signed_sis_name $signed_sis_name $abscert $abskey $row->[2]");
+            system ("signsis $signed_sis_name $signed_sis_name $relcert $relkey $row->[2]");
             print ("\tAdditionally signed the SIS with certificate: $row->[0]!\n");
         }
 

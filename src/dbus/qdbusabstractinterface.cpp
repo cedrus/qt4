@@ -42,6 +42,8 @@
 #include "qdbusabstractinterface.h"
 #include "qdbusabstractinterface_p.h"
 
+#include <qthread.h>
+
 #include "qdbusargument.h"
 #include "qdbuspendingcall.h"
 #include "qdbusmessage_p.h"
@@ -50,6 +52,8 @@
 #include "qdbusutil_p.h"
 
 #include <qdebug.h>
+
+#ifndef QT_NO_DBUS
 
 QT_BEGIN_NAMESPACE
 
@@ -438,7 +442,8 @@ QDBusMessage QDBusAbstractInterface::callWithArgumentList(QDBus::CallMode mode,
     msg.setArguments(args);
 
     QDBusMessage reply = d->connection.call(msg, mode);
-    d->lastError = reply;       // will clear if reply isn't an error
+    if (thread() == QThread::currentThread())
+        d->lastError = reply;       // will clear if reply isn't an error
 
     // ensure that there is at least one element
     if (reply.arguments().isEmpty())
@@ -764,5 +769,7 @@ QDBusMessage QDBusAbstractInterface::internalConstCall(QDBus::CallMode mode,
 }
 
 QT_END_NAMESPACE
+
+#endif // QT_NO_DBUS
 
 #include "moc_qdbusabstractinterface.cpp"

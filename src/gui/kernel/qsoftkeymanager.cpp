@@ -43,7 +43,7 @@
 #include "qevent.h"
 #include "qbitmap.h"
 #include "private/qsoftkeymanager_p.h"
-#include "private/qobject_p.h"
+#include "private/qaction_p.h"
 #include "private/qsoftkeymanager_common_p.h"
 
 #ifdef Q_WS_S60
@@ -104,7 +104,7 @@ QAction *QSoftKeyManager::createAction(StandardSoftKey standardKey, QWidget *act
     QAction::SoftKeyRole softKeyRole = QAction::NoSoftKey;
     switch (standardKey) {
     case MenuSoftKey: // FALL-THROUGH
-        action->setProperty(MENU_ACTION_PROPERTY, QVariant(true)); // TODO: can be refactored away to use _q_action_menubar
+        QActionPrivate::get(action)->menuActionSoftkeys = true;
     case OkSoftKey:
     case SelectSoftKey:
     case DoneSoftKey:
@@ -162,6 +162,7 @@ void QSoftKeyManager::sendKeyEvent()
 
 void QSoftKeyManager::updateSoftKeys()
 {
+    QSoftKeyManager::instance()->d_func()->pendingUpdate = true;
     QEvent *event = new QEvent(QEvent::UpdateSoftKeys);
     QApplication::postEvent(QSoftKeyManager::instance(), event);
 }
@@ -250,21 +251,18 @@ bool QSoftKeyManager::handleUpdateSoftKeys()
     }
 
     d->updateSoftKeys_sys();
+    d->pendingUpdate = false;
     return true;
 }
 
 void QSoftKeyManager::setForceEnabledInSoftkeys(QAction *action)
 {
-    action->setProperty(FORCE_ENABLED_PROPERTY, QVariant(true));
+    QActionPrivate::get(action)->forceEnabledInSoftkeys = true;
 }
 
 bool QSoftKeyManager::isForceEnabledInSofkeys(QAction *action)
 {
-    bool ret = false;
-    QVariant property = action->property(FORCE_ENABLED_PROPERTY);
-    if (property.isValid() && property.toBool())
-        ret = true;
-    return ret;
+    return QActionPrivate::get(action)->forceEnabledInSoftkeys;
 }
 
 bool QSoftKeyManager::event(QEvent *e)
@@ -279,6 +277,9 @@ bool QSoftKeyManager::event(QEvent *e)
 #ifdef Q_WS_S60
 bool QSoftKeyManager::handleCommand(int command)
 {
+    if (QSoftKeyManager::instance()->d_func()->pendingUpdate)
+        (void)QSoftKeyManager::instance()->handleUpdateSoftKeys();
+
     return static_cast<QSoftKeyManagerPrivateS60*>(QSoftKeyManager::instance()->d_func())->handleCommand(command);
 }
 #endif

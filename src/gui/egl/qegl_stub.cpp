@@ -45,6 +45,8 @@
 #include <QtCore/qdebug.h>
 
 #include "qegl_p.h"
+#include "qeglcontext_p.h"
+
 
 QT_BEGIN_NAMESPACE
 
@@ -55,12 +57,10 @@ static void noegl(const char *fn)
 
 #define NOEGL noegl(__FUNCTION__);
 
-EGLDisplay QEglContext::dpy = 0;
-
 QEglContext::QEglContext()
     : apiType(QEgl::OpenGL)
     , ctx(0)
-    , cfg(0)
+    , cfg(QEGL_NO_CONFIG)
     , currentSurface(0)
     , current(false)
     , ownsContext(true)
@@ -84,6 +84,25 @@ bool QEglContext::isCurrent() const
 {
     NOEGL
     return false;
+}
+
+EGLConfig QEgl::defaultConfig(int devType, API api, ConfigOptions options)
+{
+    Q_UNUSED(devType)
+    Q_UNUSED(api)
+    Q_UNUSED(options)
+    NOEGL
+    return QEGL_NO_CONFIG;
+}
+
+
+// Choose a configuration that matches "properties".
+EGLConfig QEgl::chooseConfig(const QEglProperties* properties, QEgl::PixelFormatMatch match)
+{
+    Q_UNUSED(properties)
+    Q_UNUSED(match)
+    NOEGL
+    return QEGL_NO_CONFIG;
 }
 
 bool QEglContext::chooseConfig(const QEglProperties& properties, QEgl::PixelFormatMatch match)
@@ -157,34 +176,70 @@ bool QEglContext::swapBuffers(EGLSurface surface)
     return false;
 }
 
-bool QEglContext::configAttrib(int name, EGLint *value) const
+bool QEglContext::swapBuffersRegion2NOK(EGLSurface surface, const QRegion *region)
 {
-    Q_UNUSED(name)
-    Q_UNUSED(value)
+    Q_UNUSED(surface)
+    Q_UNUSED(region)
     NOEGL
     return false;
 }
 
-void QEglContext::clearError()
+int QEglContext::configAttrib(int name) const
 {
+    Q_UNUSED(name)
     NOEGL
-    return;
+    return 0;
 }
 
-EGLint QEglContext::error()
+EGLDisplay QEgl::display()
 {
     NOEGL
     return 0;
 }
 
-EGLDisplay QEglContext::display()
+EGLImageKHR QEgl::eglCreateImageKHR(EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list)
 {
+    Q_UNUSED(dpy)
+    Q_UNUSED(ctx)
+    Q_UNUSED(target)
+    Q_UNUSED(buffer)
+    Q_UNUSED(attrib_list)
     NOEGL
     return 0;
 }
+
+EGLBoolean QEgl::eglDestroyImageKHR(EGLDisplay dpy, EGLImageKHR img)
+{
+    Q_UNUSED(dpy)
+    Q_UNUSED(img)
+    NOEGL
+    return 0;
+}
+
+EGLBoolean QEgl::eglSwapBuffersRegion2NOK(EGLDisplay dpy, EGLSurface surface, EGLint count, const EGLint *rects)
+{
+    Q_UNUSED(dpy);
+    Q_UNUSED(surface);
+    Q_UNUSED(count);
+    Q_UNUSED(rects);
+    NOEGL
+    return 0;
+}
+
+#ifndef Q_WS_X11
+EGLSurface QEgl::createSurface(QPaintDevice *device, EGLConfig cfg, const QEglProperties *properties)
+{
+    Q_UNUSED(device)
+    Q_UNUSED(cfg)
+    Q_UNUSED(properties)
+    NOEGL
+    return 0;
+}
+#endif
+
 
 // Return the error string associated with a specific code.
-QString QEglContext::errorString(EGLint code)
+QString QEgl::errorString(EGLint code)
 {
     Q_UNUSED(code)
     NOEGL
@@ -192,18 +247,18 @@ QString QEglContext::errorString(EGLint code)
 }
 
 // Dump all of the EGL configurations supported by the system.
-void QEglContext::dumpAllConfigs()
+void QEgl::dumpAllConfigs()
 {
     NOEGL
 }
 
-QString QEglContext::extensions()
+QString QEgl::extensions()
 {
     NOEGL
     return QString();
 }
 
-bool QEglContext::hasExtension(const char* extensionName)
+bool QEgl::hasExtension(const char* extensionName)
 {
     Q_UNUSED(extensionName)
     NOEGL
@@ -224,27 +279,23 @@ void QEglContext::setCurrentContext(QEgl::API api, QEglContext *context)
     NOEGL
 }
 
-EGLNativeDisplayType QEglContext::nativeDisplay()
+EGLNativeDisplayType QEgl::nativeDisplay()
 {
     NOEGL
     return 0;
 }
 
-void QEglContext::waitClient()
+EGLNativeWindowType QEgl::nativeWindow(QWidget* widget)
 {
+    Q_UNUSED(widget)
     NOEGL
+    return (EGLNativeWindowType)0;
 }
 
-void QEglContext::waitNative()
+EGLNativePixmapType QEgl::nativePixmap(QPixmap*)
 {
     NOEGL
-}
-
-QEglProperties QEglContext::configProperties(EGLConfig cfg) const
-{
-    Q_UNUSED(cfg)
-    NOEGL
-    return QEglProperties();
+    return (EGLNativePixmapType)0;
 }
 
 QT_END_NAMESPACE

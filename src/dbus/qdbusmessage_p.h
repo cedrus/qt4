@@ -59,6 +59,8 @@
 
 struct DBusMessage;
 
+#ifndef QT_NO_DBUS
+
 QT_BEGIN_NAMESPACE
 
 class QDBusConnectionPrivate;
@@ -85,6 +87,7 @@ public:
     mutable uint delayedReply : 1;
     uint localMessage : 1;
     mutable uint parametersValidated : 1;
+    uint autoStartService : 1;
 
     static void setParametersValidated(QDBusMessage &msg, bool enable)
     { msg.d_ptr->parametersValidated = enable; }
@@ -101,4 +104,5 @@ public:
 
 QT_END_NAMESPACE
 
+#endif // QT_NO_DBUS
 #endif

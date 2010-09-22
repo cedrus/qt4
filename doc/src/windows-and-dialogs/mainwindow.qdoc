@@ -6,32 +6,18 @@
 **
 ** This file is part of the documentation of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:FDL$
 ** Commercial Usage
 ** Licensees holding valid Qt Commercial licenses may use this file in
 ** accordance with the Qt Commercial License Agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and Nokia.
+** Software or, alternatively, in accordance with the terms contained in a
+** written agreement between you and Nokia.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU Lesser General Public License version 2.1 requirements
-** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** In addition, as a special exception, Nokia gives you certain additional
-** rights.  These rights are described in the Nokia Qt LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 3.0 as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL included in the
-** packaging of this file.  Please review the following information to
-** ensure the GNU General Public License version 3.0 requirements will be
-** met: http://www.gnu.org/copyleft/gpl.html.
+** GNU Free Documentation License
+** Alternatively, this file may be used under the terms of the GNU Free
+** Documentation License version 1.3 as published by the Free Software
+** Foundation and appearing in the file included in the packaging of this
+** file.
 **
 ** If you have questions regarding the use of this file, please contact
 ** Nokia at qt-info@nokia.com.
@@ -46,10 +32,9 @@
 
 /*!
     \page application-windows.html
-    \title Application Windows and Dialogs
-    \ingroup frameworks-technologies
-
-    \nextpage The Application Main Window
+    \title Window and Dialog Widgets
+    \brief Windows and Dialogs in Qt.
+    \ingroup qt-gui-concepts
 
     A \l{Widgets Tutorial}{widget} that is not embedded in a parent widget is called a window.
     Usually, windows have a frame and a title bar, although it is also possible to create
@@ -81,7 +66,7 @@
 
     \section1 Main Windows and Dialogs
 
-    \l{The Application Main Window} provides the framework for building the
+    The \l{Application Main Window} provides the framework for building the
     application's main user interface, and are created by subclassing QMainWindow.
     QMainWindow has its own layout to which you can add a \l{QMenuBar}{menu bar},
     \l{QToolBar}{tool bars}, \l{QDockWidget}{dockable widgets} and a
@@ -164,12 +149,9 @@
 
 /*!
     \page mainwindow.html
-    \title The Application Main Window
-    \brief Everything you need for a typical modern main application window,
-    including menus, toolbars, workspace, etc.
-
-    \contentspage Application Windows and Dialogs
-    \nextpage Dialog Windows
+    \title Application Main Window
+    \ingroup qt-gui-concepts
+    \brief Creating the application window.
 
     \tableofcontents
 

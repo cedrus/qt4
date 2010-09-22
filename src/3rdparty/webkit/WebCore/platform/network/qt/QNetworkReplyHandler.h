@@ -21,8 +21,6 @@
 
 #include <QObject>
 
-#if QT_VERSION >= 0x040400
-
 #include <QNetworkRequest>
 #include <QNetworkAccessManager>
 
@@ -64,6 +62,7 @@ private slots:
     void sendResponseIfNeeded();
     void forwardData();
     void sendQueuedItems();
+    void uploadProgress(qint64 bytesSent, qint64 bytesTotal);
 
 private:
     void start();
@@ -83,6 +82,7 @@ private:
     bool m_shouldFinish;
     bool m_shouldSendResponse;
     bool m_shouldForwardData;
+    int m_redirectionTries;
 };
 
 // Self destructing QIODevice for FormData
@@ -104,6 +104,7 @@ protected:
 
 private:
     void moveToNextElement();
+    void openFileForCurrentElement();
 
 private:
     Vector<FormDataElement> m_formElements;
@@ -112,7 +113,5 @@ private:
 };
 
 }
-
-#endif
 
 #endif // QNETWORKREPLYHANDLER_H

@@ -45,6 +45,7 @@
 #include <private/qtextcontrol_p.h>
 #include <private/qgraphicsitem_p.h>
 #include <private/qgraphicsview_p.h>
+#include <private/qgraphicsscene_p.h>
 #include <QStyleOptionGraphicsItem>
 #include <QAbstractTextDocumentLayout>
 #include <QBitmap>
@@ -61,6 +62,9 @@
 #include <QScrollBar>
 #include <QVBoxLayout>
 #include <QGraphicsEffect>
+#include <QInputContext>
+#include <QPushButton>
+#include <QLineEdit>
 
 #include "../../shared/util.h"
 
@@ -232,11 +236,12 @@ public:
     QRectF boundingRect() const
     { return br; }
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *o, QWidget *)
     {
         hints = painter->renderHints();
         painter->setBrush(brush);
         painter->drawRect(boundingRect());
+        lastExposedRect = o->exposedRect;
         ++repaints;
     }
 
@@ -246,10 +251,19 @@ public:
         return QGraphicsItem::sceneEvent(event);
     }
 
+    void reset()
+    {
+        events.clear();
+        hints = QPainter::RenderHints(0);
+        repaints = 0;
+        lastExposedRect = QRectF();
+    }
+
     QList<QEvent::Type> events;
     QPainter::RenderHints hints;
     int repaints;
     QRectF br;
+    QRectF lastExposedRect;
     QBrush brush;
 };
 
@@ -334,6 +348,7 @@ private slots:
     void childrenBoundingRect2();
     void childrenBoundingRect3();
     void childrenBoundingRect4();
+    void childrenBoundingRect5();
     void group();
     void setGroup();
     void setGroup2();
@@ -424,6 +439,10 @@ private slots:
     void modality_keyEvents();
     void itemIsInFront();
     void scenePosChange();
+    void updateMicroFocus();
+    void textItem_shortcuts();
+    void scroll();
+    void stopClickFocusPropagation();
 
     // task specific tests below me
     void task141694_textItemEnsureVisible();
@@ -441,6 +460,9 @@ private slots:
     void QT_2653_fullUpdateDiscardingOpacityUpdate();
     void QT_2649_focusScope();
     void sortItemsWhileAdding();
+    void doNotMarkFullUpdateIfNotInScene();
+    void itemDiesDuringDraggingOperation();
+    void QTBUG_12112_focusItem();
 
 private:
     QList<QGraphicsItem *> paintedItems;
@@ -941,8 +963,52 @@ class ImhTester : public QGraphicsItem
 
 void tst_QGraphicsItem::inputMethodHints()
 {
-    ImhTester item;
-    QCOMPARE(item.inputMethodHints(), Qt::ImhNone);
+    ImhTester *item = new ImhTester;
+    item->setFlag(QGraphicsItem::ItemAcceptsInputMethod, true);
+    item->setFlag(QGraphicsItem::ItemIsFocusable, true);
+    QCOMPARE(item->inputMethodHints(), Qt::ImhNone);
+    ImhTester *item2 = new ImhTester;
+    item2->setFlag(QGraphicsItem::ItemAcceptsInputMethod, true);
+    item2->setFlag(QGraphicsItem::ItemIsFocusable, true);
+    Qt::InputMethodHints imHints = item2->inputMethodHints();
+    imHints |= Qt::ImhHiddenText;
+    item2->setInputMethodHints(imHints);
+    QGraphicsScene scene;
+    scene.addItem(item);
+    scene.addItem(item2);
+    QGraphicsView view(&scene);
+    QApplication::setActiveWindow(&view);
+    view.show();
+    QTest::qWaitForWindowShown(&view);
+    item->setFocus();
+    QTRY_VERIFY(item->hasFocus());
+    QCOMPARE(view.inputMethodHints(), item->inputMethodHints());
+    item2->setFocus();
+    QTRY_VERIFY(item2->hasFocus());
+    QCOMPARE(view.inputMethodHints(), item2->inputMethodHints());
+    item->setFlag(QGraphicsItem::ItemAcceptsInputMethod, false);
+    item->setFocus();
+    QTRY_VERIFY(item->hasFocus());
+    //Focus has changed but the new item doesn't accept input method, no hints.
+    QCOMPARE(view.inputMethodHints(), 0);
+    item2->setFocus();
+    QTRY_VERIFY(item2->hasFocus());
+    QCOMPARE(view.inputMethodHints(), item2->inputMethodHints());
+    imHints = item2->inputMethodHints();
+    imHints |= (Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
+    item2->setInputMethodHints(imHints);
+    QCOMPARE(view.inputMethodHints(), item2->inputMethodHints());
+    QGraphicsProxyWidget *widget = new QGraphicsProxyWidget;
+    QLineEdit *edit = new QLineEdit;
+    edit->setEchoMode(QLineEdit::Password);
+    scene.addItem(widget);
+    widget->setFocus();
+    QTRY_VERIFY(widget->hasFocus());
+    //No widget on the proxy, so no hints
+    QCOMPARE(view.inputMethodHints(), 0);
+    widget->setWidget(edit);
+    //View should match with the line edit
+    QCOMPARE(view.inputMethodHints(), edit->inputMethodHints());
 }
 
 void tst_QGraphicsItem::toolTip()
@@ -3306,6 +3372,34 @@ void tst_QGraphicsItem::childrenBoundingRect4()
     QCOMPARE(rect2->childrenBoundingRect(), rect3->boundingRect());
 }
 
+void tst_QGraphicsItem::childrenBoundingRect5()
+{
+    QGraphicsScene scene;
+
+    QGraphicsRectItem *parent = scene.addRect(QRectF(0, 0, 100, 100));
+    QGraphicsRectItem *child = scene.addRect(QRectF(0, 0, 100, 100));
+    child->setParentItem(parent);
+
+    QGraphicsView view(&scene);
+    view.show();
+
+    QTest::qWaitForWindowShown(&view);
+
+    // Try to mess up the cached bounding rect.
+    QRectF expectedChildrenBoundingRect = parent->boundingRect();
+    QCOMPARE(parent->childrenBoundingRect(), expectedChildrenBoundingRect);
+
+    // Apply some effects.
+    QGraphicsDropShadowEffect *dropShadow = new QGraphicsDropShadowEffect;
+    dropShadow->setOffset(25, 25);
+    child->setGraphicsEffect(dropShadow);
+    parent->setGraphicsEffect(new QGraphicsOpacityEffect);
+
+    QVERIFY(parent->childrenBoundingRect() != expectedChildrenBoundingRect);
+    expectedChildrenBoundingRect |= dropShadow->boundingRect();
+    QCOMPARE(parent->childrenBoundingRect(), expectedChildrenBoundingRect);
+}
+
 void tst_QGraphicsItem::group()
 {
     QGraphicsScene scene;
@@ -4318,6 +4412,21 @@ protected:
             break;
         case QGraphicsItem::ItemScenePositionHasChanged:
             break;
+        case QGraphicsItem::ItemRotationChange:
+            oldValues << rotation();
+            break;
+        case QGraphicsItem::ItemRotationHasChanged:
+            break;
+        case QGraphicsItem::ItemScaleChange:
+            oldValues << scale();
+            break;
+        case QGraphicsItem::ItemScaleHasChanged:
+            break;
+        case QGraphicsItem::ItemTransformOriginPointChange:
+            oldValues << transformOriginPoint();
+            break;
+        case QGraphicsItem::ItemTransformOriginPointHasChanged:
+            break;
         }
         return itemChangeReturnValue.isValid() ? itemChangeReturnValue : value;
     }
@@ -4412,6 +4521,48 @@ void tst_QGraphicsItem::itemChange()
         QCOMPARE(tester.values.at(tester.changes.size() - 1), QVariant(qreal(2.0)));
         QCOMPARE(tester.oldValues.last(), QVariant(qreal(0.0)));
         QCOMPARE(tester.zValue(), qreal(2.0));
+    }
+    {
+        // ItemRotationChange / ItemRotationHasChanged
+        tester.itemChangeReturnValue = qreal(15.0);
+        tester.setRotation(10.0);
+        ++changeCount; // notification sent too
+        ++changeCount;
+        QCOMPARE(tester.changes.size(), changeCount);
+        QCOMPARE(tester.changes.at(tester.changes.size() - 2), QGraphicsItem::ItemRotationChange);
+        QCOMPARE(tester.changes.at(tester.changes.size() - 1), QGraphicsItem::ItemRotationHasChanged);
+        QCOMPARE(tester.values.at(tester.changes.size() - 2), QVariant(qreal(10.0)));
+        QCOMPARE(tester.values.at(tester.changes.size() - 1), QVariant(qreal(15.0)));
+        QCOMPARE(tester.oldValues.last(), QVariant(qreal(0.0)));
+        QCOMPARE(tester.rotation(), qreal(15.0));
+    }
+    {
+        // ItemScaleChange / ItemScaleHasChanged
+        tester.itemChangeReturnValue = qreal(2.0);
+        tester.setScale(1.5);
+        ++changeCount; // notification sent too
+        ++changeCount;
+        QCOMPARE(tester.changes.size(), changeCount);
+        QCOMPARE(tester.changes.at(tester.changes.size() - 2), QGraphicsItem::ItemScaleChange);
+        QCOMPARE(tester.changes.at(tester.changes.size() - 1), QGraphicsItem::ItemScaleHasChanged);
+        QCOMPARE(tester.values.at(tester.changes.size() - 2), QVariant(qreal(1.5)));
+        QCOMPARE(tester.values.at(tester.changes.size() - 1), QVariant(qreal(2.0)));
+        QCOMPARE(tester.oldValues.last(), QVariant(qreal(1.0)));
+        QCOMPARE(tester.scale(), qreal(2.0));
+    }
+    {
+        // ItemTransformOriginPointChange / ItemTransformOriginPointHasChanged
+        tester.itemChangeReturnValue = QPointF(2.0, 2.0);
+        tester.setTransformOriginPoint(1.0, 1.0);
+        ++changeCount; // notification sent too
+        ++changeCount;
+        QCOMPARE(tester.changes.size(), changeCount);
+        QCOMPARE(tester.changes.at(tester.changes.size() - 2), QGraphicsItem::ItemTransformOriginPointChange);
+        QCOMPARE(tester.changes.at(tester.changes.size() - 1), QGraphicsItem::ItemTransformOriginPointHasChanged);
+        QCOMPARE(tester.values.at(tester.changes.size() - 2), QVariant(QPointF(1.0, 1.0)));
+        QCOMPARE(tester.values.at(tester.changes.size() - 1), QVariant(QPointF(2.0, 2.0)));
+        QCOMPARE(tester.oldValues.last(), QVariant(QPointF(0.0, 0.0)));
+        QCOMPARE(tester.transformOriginPoint(), QPointF(2.0, 2.0));
     }
     {
         // ItemFlagsChange
@@ -7186,7 +7337,7 @@ void tst_QGraphicsItem::update()
     QCOMPARE(item->repaints, 1);
     QCOMPARE(view.repaints, 1);
     QRect itemDeviceBoundingRect = item->deviceTransform(view.viewportTransform())
-                                                         .mapRect(item->boundingRect()).toRect();
+                                                         .mapRect(item->boundingRect()).toAlignedRect();
     QRegion expectedRegion = itemDeviceBoundingRect.adjusted(-2, -2, 2, 2);
     // The entire item's bounding rect (adjusted for antialiasing) should have been painted.
     QCOMPARE(view.paintedRegion, expectedRegion);
@@ -7265,7 +7416,7 @@ void tst_QGraphicsItem::update()
     scene.addItem(parent);
     QTest::qWait(50);
     itemDeviceBoundingRect = item->deviceTransform(view.viewportTransform())
-                                                   .mapRect(item->boundingRect()).toRect();
+                                                   .mapRect(item->boundingRect()).toAlignedRect();
     expectedRegion = itemDeviceBoundingRect.adjusted(-2, -2, 2, 2);
     view.reset();
     item->repaints = 0;
@@ -7435,6 +7586,7 @@ void tst_QGraphicsItem::itemUsesExtendedStyleOption()
     scene.addItem(rect);
     rect->setPos(200, 200);
     QGraphicsView view(&scene);
+    view.setWindowFlags(Qt::X11BypassWindowManagerHint);
     rect->startTrack = false;
     view.show();
     QTest::qWaitForWindowShown(&view);
@@ -7460,10 +7612,19 @@ void tst_QGraphicsItem::itemSendsGeometryChanges()
     QTransform x = QTransform().rotate(45);
     QPointF pos(10, 10);
     qreal o(0.5);
+    qreal r(10.0);
+    qreal s(1.5);
+    QPointF origin(1.0, 1.0);
     item.setTransform(x);
     item.setPos(pos);
+    item.setRotation(r);
+    item.setScale(s);
+    item.setTransformOriginPoint(origin);
     QCOMPARE(item.transform(), x);
     QCOMPARE(item.pos(), pos);
+    QCOMPARE(item.rotation(), r);
+    QCOMPARE(item.scale(), s);
+    QCOMPARE(item.transformOriginPoint(), origin);
     QCOMPARE(item.changes.size(), 0);
 
     item.setOpacity(o);
@@ -7477,6 +7638,13 @@ void tst_QGraphicsItem::itemSendsGeometryChanges()
     QCOMPARE(item.transform(), QTransform());
     QCOMPARE(item.pos(), QPointF());
     QCOMPARE(item.opacity(), o);
+    item.setRotation(0.0);
+    item.setScale(1.0);
+    item.setTransformOriginPoint(0.0, 0.0);
+    QCOMPARE(item.changes.size(), 14); // rotation + scale + origin
+    QCOMPARE(item.rotation(), qreal(0.0));
+    QCOMPARE(item.scale(), qreal(1.0));
+    QCOMPARE(item.transformOriginPoint(), QPointF(0.0, 0.0));
 
     QCOMPARE(item.changes, QList<QGraphicsItem::GraphicsItemChange>()
              << QGraphicsItem::ItemOpacityChange
@@ -7486,7 +7654,13 @@ void tst_QGraphicsItem::itemSendsGeometryChanges()
              << QGraphicsItem::ItemTransformChange
              << QGraphicsItem::ItemTransformHasChanged
              << QGraphicsItem::ItemPositionChange
-             << QGraphicsItem::ItemPositionHasChanged);
+             << QGraphicsItem::ItemPositionHasChanged
+             << QGraphicsItem::ItemRotationChange
+             << QGraphicsItem::ItemRotationHasChanged
+             << QGraphicsItem::ItemScaleChange
+             << QGraphicsItem::ItemScaleHasChanged
+             << QGraphicsItem::ItemTransformOriginPointChange
+             << QGraphicsItem::ItemTransformOriginPointHasChanged);
 }
 
 // Make sure we update moved items correctly.
@@ -7519,7 +7693,7 @@ void tst_QGraphicsItem::moveItem()
 
     // Item's boundingRect:  (-10, -10, 20, 20).
     QRect parentDeviceBoundingRect = parent->deviceTransform(view.viewportTransform())
-                                     .mapRect(parent->boundingRect()).toRect()
+                                     .mapRect(parent->boundingRect()).toAlignedRect()
                                      .adjusted(-2, -2, 2, 2); // Adjusted for antialiasing.
 
     parent->setPos(20, 20);
@@ -7582,8 +7756,14 @@ void tst_QGraphicsItem::moveLineItem()
     QTest::qWait(200);
     view.reset();
 
+    QRectF brect = item->boundingRect();
+    // Do same adjustments as in qgraphicsscene.cpp
+    if (!brect.width())
+        brect.adjust(qreal(-0.00001), 0, qreal(0.00001), 0);
+    if (!brect.height())
+        brect.adjust(0, qreal(-0.00001), 0, qreal(0.00001));
     const QRect itemDeviceBoundingRect = item->deviceTransform(view.viewportTransform())
-                                         .mapRect(item->boundingRect()).toRect();
+                                         .mapRect(brect).toAlignedRect();
     QRegion expectedRegion = itemDeviceBoundingRect.adjusted(-2, -2, 2, 2); // antialiasing
 
     // Make sure the calculated region is correct.
@@ -7794,7 +7974,7 @@ void tst_QGraphicsItem::hitTestGraphicsEffectItem()
     QTest::qWait(50);
 
     // Make sure all visible items are repainted.
-    QCOMPARE(item1->repaints, 0);
+    QCOMPARE(item1->repaints, 1);
     QCOMPARE(item2->repaints, 1);
     QCOMPARE(item3->repaints, 1);
 
@@ -9842,6 +10022,9 @@ void tst_QGraphicsItem::scenePosChange()
     child1->setFlag(QGraphicsItem::ItemSendsScenePositionChanges, true);
     grandChild2->setFlag(QGraphicsItem::ItemSendsScenePositionChanges, true);
 
+    QVERIFY(child1->flags() & QGraphicsItem::ItemSendsScenePositionChanges);
+    QVERIFY(grandChild2->flags() & QGraphicsItem::ItemSendsScenePositionChanges);
+
     QGraphicsScene scene;
     scene.addItem(root);
 
@@ -9891,6 +10074,253 @@ void tst_QGraphicsItem::scenePosChange()
     QCOMPARE(child1->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 4);
     QCOMPARE(grandChild1->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 1);
     QCOMPARE(child2->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 0);
+
+    root->setX(1);
+    QCOMPARE(child1->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 5);
+    QCOMPARE(grandChild1->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 1);
+    QCOMPARE(child2->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 0);
+
+    root->setY(1);
+    QCOMPARE(child1->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 6);
+    QCOMPARE(grandChild1->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 1);
+    QCOMPARE(child2->changes.count(QGraphicsItem::ItemScenePositionHasChanged), 0);
+}
+
+class MyInputContext : public QInputContext
+{
+public:
+    MyInputContext() : nbUpdates(0) {}
+    ~MyInputContext() {}
+
+    QString identifierName() { return QString(); }
+    QString language() { return QString(); }
+
+    void reset() {}
+
+    bool isComposing() const { return false; }
+
+    void update() { nbUpdates++; }
+
+    bool nbUpdates;
+};
+
+class MyInputWidget : public QGraphicsWidget
+{
+public:
+    MyInputWidget()
+    {
+        setFlag(QGraphicsItem::ItemIsFocusable, true);
+        setFlag(QGraphicsItem::ItemAcceptsInputMethod, true);
+    }
+    void mousePressEvent(QGraphicsSceneMouseEvent *event)
+    {
+        event->accept();
+    }
+
+    void doUpdateMicroFocus()
+    {
+        updateMicroFocus();
+    }
+};
+
+void tst_QGraphicsItem::updateMicroFocus()
+{
+#if defined Q_OS_WIN || defined Q_OS_MAC
+    QSKIP("QTBUG-9578", SkipAll);
+    return;
+#endif
+    QGraphicsScene scene;
+    QWidget parent;
+    QGridLayout layout;
+    parent.setLayout(&layout);
+    QGraphicsView view(&scene);
+    QGraphicsView view2(&scene);
+    layout.addWidget(&view, 0, 0);
+    layout.addWidget(&view2, 0, 1);
+    MyInputContext ic2;
+    view2.setInputContext(&ic2);
+    MyInputContext ic;
+    view.setInputContext(&ic);
+    MyInputWidget input;
+    input.setPos(0, 0);
+    input.resize(150, 150);
+    scene.addItem(&input);
+    input.setFocus();
+    parent.show();
+    view.setFocus();
+    qApp->setAutoSipEnabled(true);
+    QApplication::setActiveWindow(&parent);
+    QTest::qWaitForWindowShown(&parent);
+    QTRY_COMPARE(QApplication::activeWindow(), static_cast<QWidget *>(&parent));
+    //We reset the number of updates that happened previously (initialisation)
+    ic.nbUpdates = 0;
+    ic2.nbUpdates = 0;
+    input.doUpdateMicroFocus();
+    QApplication::processEvents();
+    QTRY_COMPARE(ic.nbUpdates, 1);
+    //No update since view2 does not have the focus.
+    QTRY_COMPARE(ic2.nbUpdates, 0);
+}
+
+void tst_QGraphicsItem::textItem_shortcuts()
+{
+    QWidget w;
+    QVBoxLayout l;
+    w.setLayout(&l);
+    QGraphicsScene scene;
+    QGraphicsView view(&scene);
+    l.addWidget(&view);
+    QPushButton b("Push Me");
+    l.addWidget(&b);
+
+    QGraphicsTextItem *item = scene.addText("Troll Text");
+    item->setFlag(QGraphicsItem::ItemIsFocusable);
+    item->setTextInteractionFlags(Qt::TextEditorInteraction);
+    w.show();
+    QTest::qWaitForWindowShown(&w);
+
+    item->setFocus();
+    QTRY_VERIFY(item->hasFocus());
+    QVERIFY(item->textCursor().selectedText().isEmpty());
+
+    // Shortcut should work (select all)
+    QTest::keyClick(&view, Qt::Key_A, Qt::ControlModifier);
+    QTRY_COMPARE(item->textCursor().selectedText(), item->toPlainText());
+    QTextCursor tc = item->textCursor();
+    tc.clearSelection();
+    item->setTextCursor(tc);
+    QVERIFY(item->textCursor().selectedText().isEmpty());
+
+    // Shortcut should also work if the text item has the focus and another widget
+    // has the same shortcut.
+    b.setShortcut(QKeySequence("CTRL+A"));
+    QTest::keyClick(&view, Qt::Key_A, Qt::ControlModifier);
+    QTRY_COMPARE(item->textCursor().selectedText(), item->toPlainText());
+}
+
+void tst_QGraphicsItem::scroll()
+{
+    // Create two overlapping rectangles in the scene:
+    // +-------+
+    // |       | <- item1
+    // |   +-------+
+    // |   |       |
+    // +---|       | <- item2
+    //     |       |
+    //     +-------+
+
+    EventTester *item1 = new EventTester;
+    item1->br = QRectF(0, 0, 200, 200);
+    item1->brush = Qt::red;
+    item1->setFlag(QGraphicsItem::ItemUsesExtendedStyleOption);
+
+    EventTester *item2 = new EventTester;
+    item2->br = QRectF(0, 0, 200, 200);
+    item2->brush = Qt::blue;
+    item2->setFlag(QGraphicsItem::ItemUsesExtendedStyleOption);
+    item2->setPos(100, 100);
+
+    QGraphicsScene scene(0, 0, 300, 300);
+    scene.addItem(item1);
+    scene.addItem(item2);
+
+    MyGraphicsView view(&scene);
+    view.setFrameStyle(0);
+    view.show();
+    QTest::qWaitForWindowShown(&view);
+    QTRY_VERIFY(view.repaints > 0);
+
+    view.reset();
+    item1->reset();
+    item2->reset();
+
+    const QRectF item1BoundingRect = item1->boundingRect();
+    const QRectF item2BoundingRect = item2->boundingRect();
+
+    // Scroll item1:
+    // Item1 should get full exposure
+    // Item2 should get exposure for the part that overlaps item1.
+    item1->scroll(0, -10);
+    QTRY_VERIFY(view.repaints > 0);
+    QCOMPARE(item1->lastExposedRect, item1BoundingRect);
+
+    QRectF expectedItem2Expose = item2BoundingRect;
+    // NB! Adjusted by 2 pixels for antialiasing
+    expectedItem2Expose &= item1->mapRectToItem(item2, item1BoundingRect.adjusted(-2, -2, 2, 2));
+    QCOMPARE(item2->lastExposedRect, expectedItem2Expose);
+
+    // Enable ItemCoordinateCache on item1.
+    view.reset();
+    item1->setCacheMode(QGraphicsItem::ItemCoordinateCache);
+    QTRY_VERIFY(view.repaints > 0);
+    view.reset();
+    item1->reset();
+    item2->reset();
+
+    // Scroll item1:
+    // Item1 should only get expose for the newly exposed area (accelerated scroll).
+    // Item2 should get exposure for the part that overlaps item1.
+    item1->scroll(0, -10, QRectF(50, 50, 100, 100));
+    QTRY_VERIFY(view.repaints > 0);
+    QCOMPARE(item1->lastExposedRect, QRectF(50, 140, 100, 10));
+
+    expectedItem2Expose = item2BoundingRect;
+    // NB! Adjusted by 2 pixels for antialiasing
+    expectedItem2Expose &= item1->mapRectToItem(item2, QRectF(50, 50, 100, 100).adjusted(-2, -2, 2, 2));
+    QCOMPARE(item2->lastExposedRect, expectedItem2Expose);
+}
+
+void tst_QGraphicsItem::stopClickFocusPropagation()
+{
+    class MyItem : public QGraphicsRectItem
+    {
+    public:
+        MyItem() : QGraphicsRectItem(0, 0, 100, 100) {}
+        void paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
+        {
+            painter->fillRect(boundingRect(), hasFocus() ? QBrush(Qt::red) : brush());
+        }
+    };
+
+    QGraphicsScene scene(-50, -50, 400, 400);
+    scene.setStickyFocus(true);
+
+    QGraphicsRectItem *noFocusOnTop = new MyItem;
+    noFocusOnTop->setBrush(Qt::yellow);
+    noFocusOnTop->setFlag(QGraphicsItem::ItemStopsClickFocusPropagation);
+
+    QGraphicsRectItem *focusableUnder = new MyItem;
+    focusableUnder->setBrush(Qt::blue);
+    focusableUnder->setFlag(QGraphicsItem::ItemIsFocusable);
+    focusableUnder->setPos(50, 50);
+
+    QGraphicsRectItem *itemWithFocus = new MyItem;
+    itemWithFocus->setBrush(Qt::black);
+    itemWithFocus->setFlag(QGraphicsItem::ItemIsFocusable);
+    itemWithFocus->setPos(250, 10);
+
+    scene.addItem(noFocusOnTop);
+    scene.addItem(focusableUnder);
+    scene.addItem(itemWithFocus);
+    focusableUnder->stackBefore(noFocusOnTop);
+    itemWithFocus->setFocus();
+
+    QGraphicsView view(&scene);
+    view.show();
+    QTest::qWaitForWindowShown(&view);
+
+    QApplication::setActiveWindow(&view);
+    QTRY_COMPARE(QApplication::activeWindow(), static_cast<QWidget *>(&view));
+    QVERIFY(itemWithFocus->hasFocus());
+
+    QPointF mousePressPoint = noFocusOnTop->mapToScene(QPointF());
+    mousePressPoint.rx() += 60;
+    mousePressPoint.ry() += 60;
+    const QList<QGraphicsItem *> itemsAtMousePressPosition = scene.items(mousePressPoint);
+    QVERIFY(itemsAtMousePressPosition.contains(focusableUnder));
+
+    sendMousePress(&scene, mousePressPoint);
+    QVERIFY(itemWithFocus->hasFocus());
 }
 
 void tst_QGraphicsItem::QTBUG_5418_textItemSetDefaultColor()
@@ -10176,6 +10606,100 @@ void tst_QGraphicsItem::sortItemsWhileAdding()
     parent.resize(200, 200);
     MyGraphicsItemWithItemChange item(&parent);
     grandParent.setParentItem(&grandGrandParent);
+}
+
+void tst_QGraphicsItem::doNotMarkFullUpdateIfNotInScene()
+{
+    struct Item : public QGraphicsTextItem
+    {
+        int painted;
+        void paint(QPainter *painter, const QStyleOptionGraphicsItem *opt, QWidget *wid)
+        {
+            painted++;
+            QGraphicsTextItem::paint(painter, opt, wid);
+        }
+    };
+    QGraphicsScene scene;
+    MyGraphicsView view(&scene);
+    Item *item = new Item;
+    item->painted = 0;
+    item->setPlainText("Grandparent");
+    Item *item2 = new Item;
+    item2->setPlainText("parent");
+    item2->painted = 0;
+    Item *item3 = new Item;
+    item3->setPlainText("child");
+    item3->painted = 0;
+    QGraphicsOpacityEffect *effect = new QGraphicsOpacityEffect;
+    effect->setOpacity(0.5);
+    item2->setGraphicsEffect(effect);
+    item3->setParentItem(item2);
+    item2->setParentItem(item);
+    scene.addItem(item);
+    view.show();
+    QTest::qWaitForWindowShown(&view);
+    QTRY_COMPARE(view.repaints, 1);
+    QTRY_COMPARE(item->painted, 1);
+    QTRY_COMPARE(item2->painted, 1);
+    QTRY_COMPARE(item3->painted, 1);
+    item2->update();
+    QApplication::processEvents();
+    QTRY_COMPARE(item->painted, 2);
+    QTRY_COMPARE(item2->painted, 2);
+    QTRY_COMPARE(item3->painted, 2);
+    item2->update();
+    QApplication::processEvents();
+    QTRY_COMPARE(item->painted, 3);
+    QTRY_COMPARE(item2->painted, 3);
+    QTRY_COMPARE(item3->painted, 3);
+}
+
+void tst_QGraphicsItem::itemDiesDuringDraggingOperation()
+{
+    QGraphicsScene scene;
+    QGraphicsView view(&scene);
+    QGraphicsRectItem *item = new QGraphicsRectItem(QRectF(0, 0, 100, 100));
+    item->setFlag(QGraphicsItem::ItemIsMovable);
+    item->setAcceptDrops(true);
+    scene.addItem(item);
+    view.show();
+    QApplication::setActiveWindow(&view);
+    QTest::qWaitForWindowShown(&view);
+    QTRY_COMPARE(QApplication::activeWindow(), (QWidget *)&view);
+    QGraphicsSceneDragDropEvent dragEnter(QEvent::GraphicsSceneDragEnter);
+    dragEnter.setScenePos(item->boundingRect().center());
+    QApplication::sendEvent(&scene, &dragEnter);
+    QGraphicsSceneDragDropEvent event(QEvent::GraphicsSceneDragMove);
+    event.setScenePos(item->boundingRect().center());
+    QApplication::sendEvent(&scene, &event);
+    QVERIFY(QGraphicsScenePrivate::get(&scene)->dragDropItem == item);
+    delete item;
+    QVERIFY(QGraphicsScenePrivate::get(&scene)->dragDropItem == 0);
+}
+
+void tst_QGraphicsItem::QTBUG_12112_focusItem()
+{
+    QGraphicsScene scene;
+    QGraphicsView view(&scene);
+    QGraphicsRectItem *item1 = new QGraphicsRectItem(0, 0, 20, 20);
+    item1->setFlag(QGraphicsItem::ItemIsFocusable);
+    QGraphicsRectItem *item2 = new QGraphicsRectItem(20, 20, 20, 20);
+    item2->setFlag(QGraphicsItem::ItemIsFocusable);
+    item1->setFocus();
+    scene.addItem(item2);
+    scene.addItem(item1);
+
+    view.show();
+    QApplication::setActiveWindow(&view);
+    QTest::qWaitForWindowShown(&view);
+    QTRY_COMPARE(QApplication::activeWindow(), (QWidget *)&view);
+
+    QVERIFY(item1->focusItem());
+    QVERIFY(!item2->focusItem());
+
+    item2->setFocus();
+    QVERIFY(!item1->focusItem());
+    QVERIFY(item2->focusItem());
 }
 
 QTEST_MAIN(tst_QGraphicsItem)

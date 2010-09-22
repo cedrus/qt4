@@ -46,11 +46,12 @@
 
 #include "qapplication.h"
 #include "qgraphicssystem_raster_p.h"
+#include "qgraphicssystem_runtime_p.h"
 #include "qdebug.h"
 
 QT_BEGIN_NAMESPACE
 
-#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
 Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
     (QGraphicsSystemFactoryInterface_iid, QLatin1String("/graphicssystems"), Qt::CaseInsensitive))
 #endif
@@ -68,6 +69,10 @@ QGraphicsSystem *QGraphicsSystemFactory::create(const QString& key)
     if (system.isEmpty()) {
         system = QLatin1String("openvg");
     }
+#elif defined (QT_GRAPHICSSYSTEM_RUNTIME)
+    if (system.isEmpty()) {
+        system = QLatin1String("runtime");
+    }
 #elif defined (QT_GRAPHICSSYSTEM_RASTER) && !defined(Q_WS_WIN) && !defined(Q_OS_SYMBIAN)
     if (system.isEmpty()) {
         system = QLatin1String("raster");
@@ -76,10 +81,12 @@ QGraphicsSystem *QGraphicsSystemFactory::create(const QString& key)
 
     if (system == QLatin1String("raster"))
         return new QRasterGraphicsSystem;
+    else if (system == QLatin1String("runtime"))
+        return new QRuntimeGraphicsSystem;
     else if (system.isEmpty() || system == QLatin1String("native"))
         return 0;
 
-#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
     if (!ret) {
         if (QGraphicsSystemFactoryInterface *factory = qobject_cast<QGraphicsSystemFactoryInterface*>(loader()->instance(system)))
             ret = factory->create(system);
@@ -100,7 +107,7 @@ QGraphicsSystem *QGraphicsSystemFactory::create(const QString& key)
 */
 QStringList QGraphicsSystemFactory::keys()
 {
-#if !defined(QT_NO_LIBRARY) && !defined(QT_NO_SETTINGS)
+#ifndef QT_NO_LIBRARY
     QStringList list = loader()->keys();
 #else
     QStringList list;

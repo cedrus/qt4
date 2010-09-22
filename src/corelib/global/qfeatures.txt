@@ -1098,6 +1098,14 @@ Requires: TEMPORARYFILE
 Name: QNetworkDiskCache
 SeeAlso: ???
 
+Feature: BEARERMANAGEMENT
+Description: Provides bearer management support
+Section: Networking
+Requires: LIBRARY
+Name: Bearer Management
+SeeAlso: ???
+
+
 # Utilities
 
 Feature: COMPLETER
@@ -1177,6 +1185,12 @@ Requires: PROPERTIES
 Name: State machine
 SeeAlso: ???
 
+Feature: GESTURES
+Description: Provides a framework for gestures.
+Section: Utilities
+Requires:
+Name: Gesture
+SeeAlso: ???
 
 # SVG
 
@@ -1358,6 +1372,15 @@ Description: Support for ActiveQt
 Section: Windows
 Requires: PROPERTIES
 Name: ActiveQt
+SeeAlso: ???
+
+# D-Bus
+
+Feature: DBUS
+Description: Provides classes for D-Bus.
+Section: D-Bus
+Requires: PROPERTIES DOM
+Name: QtDBus module
 SeeAlso: ???
 
 # Phonon

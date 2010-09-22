@@ -62,6 +62,8 @@ QT_BEGIN_NAMESPACE
 
 class QX11PaintEngine;
 
+struct QXImageWrapper;
+
 class Q_GUI_EXPORT QX11PixmapData : public QPixmapData
 {
 public:
@@ -87,10 +89,18 @@ public:
     QPixmap transformed(const QTransform &transform,
                         Qt::TransformationMode mode) const;
     QImage toImage() const;
+    QImage toImage(const QRect &rect) const;
     QPaintEngine* paintEngine() const;
 
     Qt::HANDLE handle() const { return hd; }
     Qt::HANDLE x11ConvertToDefaultDepth();
+
+    static Qt::HANDLE createBitmapFromImage(const QImage &image);
+
+    void* gl_surface;
+#ifndef QT_NO_XRENDER
+    void convertToARGB32(bool preserveContents = true);
+#endif
 
 protected:
     int metric(QPaintDevice::PaintDeviceMetric metric) const;
@@ -103,14 +113,20 @@ private:
     friend class QRasterWindowSurface;
     friend class QGLContextPrivate; // Needs to access xinfo, gl_surface & flags
     friend class QEglContext; // Needs gl_surface
+    friend class QGLContext; // Needs gl_surface
     friend class QX11GLPixmapData; // Needs gl_surface
     friend bool  qt_createEGLSurfaceForPixmap(QPixmapData*, bool); // Needs gl_surface
 
     void release();
 
+    QImage toImage(const QXImageWrapper &xi, const QRect &rect) const;
+
     QBitmap mask_to_bitmap(int screen) const;
     static Qt::HANDLE bitmap_to_mask(const QBitmap &, int screen);
     void bitmapFromImage(const QImage &image);
+
+    bool canTakeQImageFromXImage(const QXImageWrapper &xi) const;
+    QImage takeQImageFromXImage(const QXImageWrapper &xi) const;
 
     Qt::HANDLE hd;
 
@@ -128,10 +144,6 @@ private:
     Qt::HANDLE picture;
     Qt::HANDLE mask_picture;
     Qt::HANDLE hd2; // sorted in the default display depth
-    Qt::HANDLE gl_surface;
-#ifndef QT_NO_XRENDER
-    void convertToARGB32(bool preserveContents = true);
-#endif
     QPixmap::ShareMode share_mode;
 
     QX11PaintEngine *pengine;

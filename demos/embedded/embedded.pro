@@ -4,6 +4,8 @@ SUBDIRS   = styledemo raycasting flickable digiflip
 contains(QT_CONFIG, svg) {
     SUBDIRS += embeddedsvgviewer \
                desktopservices
+    fluidlauncher.subdir = fluidlauncher
+    fluidlauncher.depends = styledemo desktopservices raycasting flickable digiflip lightmaps flightinfo
     !vxworks:!qnx:SUBDIRS += fluidlauncher
 }
 
@@ -15,6 +17,11 @@ contains(QT_CONFIG, svg) {
 
 contains(QT_CONFIG, webkit) {
     SUBDIRS += anomaly
+}
+
+contains(QT_CONFIG, declarative) {
+    # Qml demos require DEPLOYMENT support. Therefore, only symbian.
+    symbian:SUBDIRS += qmlcalculator qmlclocks qmldialcontrol qmleasing qmlflickr qmlphotoviewer qmltwitter
 }
 
 # install

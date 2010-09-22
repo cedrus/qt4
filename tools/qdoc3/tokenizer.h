@@ -46,10 +46,9 @@
 #ifndef TOKENIZER_H
 #define TOKENIZER_H
 
+#include <qfile.h>
 #include <qstack.h>
 #include <qstring.h>
-
-#include <stdio.h>
 
 #include "location.h"
 
@@ -76,7 +75,7 @@ enum { Tok_Eoi, Tok_Ampersand, Tok_Aster, Tok_Caret, Tok_LeftParen,
        Tok_static, Tok_struct, Tok_template, Tok_typedef, 
        Tok_typename, Tok_union, Tok_unsigned, Tok_using, Tok_virtual,
        Tok_void, Tok_volatile, Tok_int64, Tok_Q_OBJECT, Tok_Q_OVERRIDE, 
-       Tok_Q_PROPERTY, Tok_Q_DECLARE_SEQUENTIAL_ITERATOR,
+       Tok_Q_PROPERTY, Tok_Q_PRIVATE_PROPERTY, Tok_Q_DECLARE_SEQUENTIAL_ITERATOR,
        Tok_Q_DECLARE_MUTABLE_SEQUENTIAL_ITERATOR, 
        Tok_Q_DECLARE_ASSOCIATIVE_ITERATOR,
        Tok_Q_DECLARE_MUTABLE_ASSOCIATIVE_ITERATOR, 
@@ -99,7 +98,7 @@ class Tokenizer
 {
  public:
     Tokenizer(const Location& loc, const QByteArray &in);
-    Tokenizer(const Location& loc, FILE *in);
+    Tokenizer(const Location& loc, QFile &file);
 
     ~Tokenizer();
 
@@ -108,8 +107,8 @@ class Tokenizer
     bool parsingFnOrMacro() const { return parsingMacro; }
 
     const Location &location() const { return yyTokLoc; }
-    QString previousLexeme() const { return QString(yyPrevLex); }
-    QString lexeme() const { return QString(yyLex); }
+    QString previousLexeme() const;
+    QString lexeme() const;
     QString version() const { return yyVersion; }
     int braceDepth() const { return yyBraceDepth; }
     int parenDepth() const { return yyParenDepth; }

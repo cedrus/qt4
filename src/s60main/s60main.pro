@@ -17,7 +17,7 @@ symbian {
                     qts60main_mcrt0.cpp
 
     # s60main needs to be built in ARM mode for GCCE to work.
-    MMP_RULES+="ALWAYS_BUILD_AS_ARM"
+    CONFIG += do_not_build_as_thumb
 
     # staticlib should not have any lib depencies in s60
     # This seems not to work, some hard coded libs are still added as dependency
@@ -25,6 +25,11 @@ symbian {
 
     # Workaround for abld toolchain problem to make ARMV6 qtmain.lib link with GCCE apps
     symbian-abld: QMAKE_CXXFLAGS.ARMCC += --dllimport_runtime
+
+    # Having MMP_RULES_DONT_EXPORT_ALL_CLASS_IMPEDIMENTA will cause s60main.lib be unlinkable
+    # against GCCE apps, so remove it
+    MMP_RULES -= $$MMP_RULES_DONT_EXPORT_ALL_CLASS_IMPEDIMENTA
+    linux-armcc:QMAKE_CXXFLAGS *= --export_all_vtbl
 } else {
     error("$$_FILE_ is intended only for Symbian!")
 }

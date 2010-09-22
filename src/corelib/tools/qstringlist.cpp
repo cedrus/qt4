@@ -404,7 +404,19 @@ void QtPrivate::QStringList_replaceInStrings(QStringList *that, const QRegExp &r
 */
 QString QtPrivate::QStringList_join(const QStringList *that, const QString &sep)
 {
+    int totalLength = 0;
+    const int size = that->size();
+
+    for (int i = 0; i < size; ++i)
+        totalLength += that->at(i).size();
+
+    if(size > 0)
+        totalLength += sep.size() * (size - 1);
+
     QString res;
+    if (totalLength == 0)
+	return res;
+    res.reserve(totalLength);
     for (int i = 0; i < that->size(); ++i) {
         if (i)
             res += sep;
@@ -448,7 +460,7 @@ QString QtPrivate::QStringList_join(const QStringList *that, const QString &sep)
     Reads a string list from the given \a in stream into the specified
     \a list.
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 
 /*!
@@ -457,7 +469,7 @@ QString QtPrivate::QStringList_join(const QStringList *that, const QString &sep)
 
     Writes the given string \a list to the specified \a out stream.
 
-    \sa {Format of the QDataStream Operators}
+    \sa {Serializing Qt Data Types}
 */
 #endif // QT_NO_DATASTREAM
 

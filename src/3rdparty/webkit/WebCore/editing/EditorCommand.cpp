@@ -32,6 +32,7 @@
 #include "CSSMutableStyleDeclaration.h"
 #include "CSSPropertyNames.h"
 #include "CSSValueKeywords.h"
+#include "Chrome.h"
 #include "CreateLinkCommand.h"
 #include "DocumentFragment.h"
 #include "Editor.h"
@@ -256,10 +257,10 @@ static int verticalScrollDistance(Frame* frame)
     RenderStyle* style = renderer->style();
     if (!style)
         return 0;
-    if (!(style->overflowY() == OSCROLL || style->overflowY() == OAUTO || renderer->isTextArea()))
+    if (!(style->overflowY() == OSCROLL || style->overflowY() == OAUTO || focusedNode->isContentEditable()))
         return 0;
     int height = toRenderBox(renderer)->clientHeight();
-    return max((height + 1) / 2, height - cAmountToKeepWhenPaging);
+    return max(max<int>(height * Scrollbar::minFractionToStepWhenPaging(), height - Scrollbar::maxOverlapBetweenPages()), 1);
 }
 
 static RefPtr<Range> unionDOMRanges(Range* a, Range* b)
@@ -471,7 +472,7 @@ static bool executeInsertHorizontalRule(Frame* frame, Event*, EditorCommandSourc
 {
     RefPtr<HTMLHRElement> hr = new HTMLHRElement(hrTag, frame->document());
     if (!value.isEmpty())
-        hr->setAttribute(idAttr, value);
+        hr->setAttribute(hr->idAttributeName(), value);
     return executeInsertNode(frame, hr.release());
 }
 
@@ -1068,6 +1069,21 @@ static bool supportedFromMenuOrKeyBinding(Frame*, EditorCommandSource source)
     return source == CommandFromMenuOrKeyBinding;
 }
 
+static bool supportedCopyCut(Frame* frame, EditorCommandSource source)
+{
+    switch (source) {
+        case CommandFromMenuOrKeyBinding:
+            return true;
+        case CommandFromDOM:
+        case CommandFromDOMWithUserInterface: {
+            Settings* settings = frame ? frame->settings() : 0;
+            return settings && settings->javaScriptCanAccessClipboard();
+        }
+    }
+    ASSERT_NOT_REACHED();
+    return false;
+}
+
 static bool supportedPaste(Frame* frame, EditorCommandSource source)
 {
     switch (source) {
@@ -1076,7 +1092,7 @@ static bool supportedPaste(Frame* frame, EditorCommandSource source)
         case CommandFromDOM:
         case CommandFromDOMWithUserInterface: {
             Settings* settings = frame ? frame->settings() : 0;
-            return settings && settings->isDOMPasteAllowed();
+            return settings && (settings->javaScriptCanAccessClipboard() ? settings->isDOMPasteAllowed() : 0);
         }
     }
     ASSERT_NOT_REACHED();
@@ -1303,9 +1319,9 @@ static const CommandMap& createCommandMap()
         { "BackColor", { executeBackColor, supported, enabledInRichlyEditableText, stateNone, valueBackColor, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "BackwardDelete", { executeDeleteBackward, supportedFromMenuOrKeyBinding, enabledInEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } }, // FIXME: remove BackwardDelete when Safari for Windows stops using it.
         { "Bold", { executeToggleBold, supported, enabledInRichlyEditableText, stateBold, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
-        { "Copy", { executeCopy, supported, enabledCopy, stateNone, valueNull, notTextInsertion, allowExecutionWhenDisabled } },
+        { "Copy", { executeCopy, supportedCopyCut, enabledCopy, stateNone, valueNull, notTextInsertion, allowExecutionWhenDisabled } },
         { "CreateLink", { executeCreateLink, supported, enabledInRichlyEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
-        { "Cut", { executeCut, supported, enabledCut, stateNone, valueNull, notTextInsertion, allowExecutionWhenDisabled } },
+        { "Cut", { executeCut, supportedCopyCut, enabledCut, stateNone, valueNull, notTextInsertion, allowExecutionWhenDisabled } },
         { "Delete", { executeDelete, supported, enabledDelete, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "DeleteBackward", { executeDeleteBackward, supportedFromMenuOrKeyBinding, enabledInEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "DeleteBackwardByDecomposingPreviousCharacter", { executeDeleteBackwardByDecomposingPreviousCharacter, supportedFromMenuOrKeyBinding, enabledInEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },

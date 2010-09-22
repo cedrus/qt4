@@ -295,4 +295,10 @@ EXPORTS
 	_ZNK21QAbstractVideoSurface13nearestFormatERK19QVideoSurfaceFormat @ 294 NONAME
 	_ZNK21QAbstractVideoSurface17isFormatSupportedERK19QVideoSurfaceFormat @ 295 NONAME
 	_ZNK21QAbstractVideoSurface8isActiveEv @ 296 NONAME
+	_ZN12QAudioFormat13setSampleRateEi @ 297 NONAME
+	_ZN12QAudioFormat15setChannelCountEi @ 298 NONAME
+	_ZNK12QAudioFormat10sampleRateEv @ 299 NONAME
+	_ZNK12QAudioFormat12channelCountEv @ 300 NONAME
+	_ZNK16QAudioDeviceInfo20supportedSampleRatesEv @ 301 NONAME
+	_ZNK16QAudioDeviceInfo22supportedChannelCountsEv @ 302 NONAME
 

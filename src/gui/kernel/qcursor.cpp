@@ -141,6 +141,12 @@ QT_BEGIN_NAMESPACE
          \o Qt::WhatsThisCursor \o \c whats_this
          \o \inlineimage      cursor-closedhand.png
          \o Qt::ClosedHandCursor \o \c closedhand
+    \row \o
+         \o Qt::DragMoveCursor      \o \c dnd-move or \c move
+         \o
+         \o Qt::DragCopyCursor      \o \c dnd-copy or \c copy
+    \row \o
+         \o Qt::DragLinkCursor      \o \c dnd-link or \c link
     \endtable
 
     \sa QWidget, {fowler}{GUI Design Handbook: Cursors}
@@ -223,7 +229,7 @@ QT_BEGIN_NAMESPACE
 
     Writes the \a cursor to the \a stream.
 
-    \sa {Format of the QDataStream operators}
+    \sa {Serializing Qt Data Types}
 */
 
 QDataStream &operator<<(QDataStream &s, const QCursor &c)
@@ -250,7 +256,7 @@ QDataStream &operator<<(QDataStream &s, const QCursor &c)
 
     Reads the \a cursor from the \a stream.
 
-    \sa {Format of the QDataStream operators}
+    \sa {Serializing Qt Data Types}
 */
 
 QDataStream &operator>>(QDataStream &s, QCursor &c)

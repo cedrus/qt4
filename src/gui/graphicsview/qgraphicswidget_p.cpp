@@ -44,6 +44,7 @@
 #ifndef QT_NO_GRAPHICSVIEW
 
 #include <QtCore/qdebug.h>
+#include <QtCore/qnumeric.h>
 #include "qgraphicswidget_p.h"
 #include "qgraphicslayout.h"
 #include "qgraphicsscene_p.h"
@@ -70,14 +71,18 @@ void QGraphicsWidgetPrivate::init(QGraphicsItem *parentItem, Qt::WindowFlags wFl
     adjustWindowFlags(&wFlags);
     windowFlags = wFlags;
 
-    q->setParentItem(parentItem);
+    if (parentItem)
+        setParentItemHelper(parentItem, 0, 0);
+
     q->setSizePolicy(QSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred, QSizePolicy::DefaultType));
     q->setGraphicsItem(q);
 
     resolveLayoutDirection();
     q->unsetWindowFrameMargins();
-    q->setFlag(QGraphicsItem::ItemUsesExtendedStyleOption);
-    q->setFlag(QGraphicsItem::ItemSendsGeometryChanges);
+    flags |= QGraphicsItem::ItemUsesExtendedStyleOption;
+    flags |= QGraphicsItem::ItemSendsGeometryChanges;
+    if (windowFlags & Qt::Window)
+        flags |= QGraphicsItem::ItemIsPanel;
 }
 
 qreal QGraphicsWidgetPrivate::titleBarHeight(const QStyleOptionTitleBar &options) const
@@ -756,7 +761,7 @@ void QGraphicsWidgetPrivate::fixFocusChainBeforeReparenting(QGraphicsWidget *new
 
     QGraphicsWidget *firstOld = 0;
     bool wasPreviousNew = true;
-    
+
     while (w != q) {
         bool isCurrentNew = q->isAncestorOf(w);
         if (isCurrentNew) {
@@ -791,7 +796,7 @@ void QGraphicsWidgetPrivate::fixFocusChainBeforeReparenting(QGraphicsWidget *new
         newScene = newParent->scene();
 
     if (oldScene && newScene != oldScene)
-        oldScene->d_func()->tabFocusFirst = firstOld;
+        oldScene->d_func()->tabFocusFirst = (firstOld && firstOld->scene() == oldScene) ? firstOld : 0;
 
     QGraphicsItem *topLevelItem = newParent ? newParent->topLevelItem() : 0;
     QGraphicsWidget *topLevel = 0;
@@ -823,6 +828,56 @@ void QGraphicsWidgetPrivate::setLayout_helper(QGraphicsLayout *l)
         Q_Q(QGraphicsWidget);
         q->updateGeometry();
     }
+}
+
+qreal QGraphicsWidgetPrivate::width() const
+{
+    Q_Q(const QGraphicsWidget);
+    return q->geometry().width();
+}
+
+void QGraphicsWidgetPrivate::setWidth(qreal w)
+{
+    if (qIsNaN(w))
+        return;
+    Q_Q(QGraphicsWidget);
+    if (q->geometry().width() == w)
+        return;
+
+    QRectF oldGeom = q->geometry();
+
+    q->setGeometry(QRectF(q->x(), q->y(), w, height()));
+}
+
+void QGraphicsWidgetPrivate::resetWidth()
+{
+    Q_Q(QGraphicsWidget);
+    q->setGeometry(QRectF(q->x(), q->y(), 0, height()));
+}
+
+qreal QGraphicsWidgetPrivate::height() const
+{
+    Q_Q(const QGraphicsWidget);
+    return q->geometry().height();
+}
+
+void QGraphicsWidgetPrivate::setHeight(qreal h)
+{
+    if (qIsNaN(h))
+        return;
+    Q_Q(QGraphicsWidget);
+    if (q->geometry().height() == h)
+        return;
+
+    QRectF oldGeom = q->geometry();
+
+    q->setGeometry(QRectF(q->x(), q->y(), width(), h));
+}
+
+void QGraphicsWidgetPrivate::resetHeight()
+{
+    Q_Q(QGraphicsWidget);
+    q->setGeometry(QRectF(q->x(), q->y(), width(), 0));
 }
 
 void QGraphicsWidgetPrivate::setGeometryFromSetPos()

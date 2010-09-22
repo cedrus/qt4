@@ -4,9 +4,16 @@ DEFINES += QT_NO_CAST_TO_ASCII
 #DEFINES += QT_USE_FAST_OPERATOR_PLUS
 #DEFINES += QT_USE_FAST_CONCATENATION
 
-QT = core xml
-CONFIG += console
-CONFIG -= debug_and_release_target
+qdoc_bootstrapped {
+    include(../../src/tools/bootstrap/bootstrap.pri)
+    DEFINES -= QT_NO_CAST_FROM_ASCII
+    DEFINES += QT_NO_TRANSLATION
+} else {
+    QT = core xml
+    CONFIG += console
+    CONFIG -= debug_and_release_target
+}
+
 !isEmpty(QT_BUILD_TREE):DESTDIR = $$QT_BUILD_TREE/bin
 #CONFIG += debug
 build_all:!build_pass {
@@ -14,7 +21,8 @@ build_all:!build_pass {
     CONFIG += release
 #    CONFIG += debug
 }
-mac:CONFIG -= app_bundle
+
+CONFIG -= app_bundle
 HEADERS += apigenerator.h \
            archiveextractor.h \
 	   atom.h \
@@ -29,6 +37,7 @@ HEADERS += apigenerator.h \
 	   cppcodeparser.h \
 	   cpptoqsconverter.h \
 	   dcfsection.h \
+	   ditaxmlgenerator.h \
            doc.h \
 	   editdistance.h \
 	   generator.h \
@@ -73,6 +82,7 @@ SOURCES += apigenerator.cpp \
 	   cppcodeparser.cpp \
 	   cpptoqsconverter.cpp \
 	   dcfsection.cpp \
+	   ditaxmlgenerator.cpp \
            doc.cpp \
 	   editdistance.cpp \
 	   generator.cpp \
@@ -104,6 +114,14 @@ SOURCES += apigenerator.cpp \
 	   uncompressor.cpp \
            webxmlgenerator.cpp \
 	   yyindent.cpp
+
+### Documentation for qdoc3 ###
+
+qtPrepareTool(QDOC, qdoc3)
+
+docs.commands = $$QDOC qdoc-manual.qdocconf
+
+QMAKE_EXTRA_TARGETS += docs
 
 target.path = $$[QT_INSTALL_BINS]
 INSTALLS += target

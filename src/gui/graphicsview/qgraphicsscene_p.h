@@ -87,7 +87,9 @@ public:
 
     static QGraphicsScenePrivate *get(QGraphicsScene *q);
 
-    static int changedSignalIndex;
+    int changedSignalIndex;
+    int processDirtyItemsIndex;
+    int polishItemsIndex;
 
     QGraphicsScene::ItemIndexMethod indexMethod;
     QGraphicsSceneIndex *index;
@@ -95,24 +97,36 @@ public:
     int lastItemCount;
 
     QRectF sceneRect;
-    bool hasSceneRect;
-    bool dirtyGrowingItemsBoundingRect;
+
+    quint32 hasSceneRect : 1;
+    quint32 dirtyGrowingItemsBoundingRect : 1;
+    quint32 updateAll : 1;
+    quint32 calledEmitUpdated : 1;
+    quint32 processDirtyItemsEmitted : 1;
+    quint32 needSortTopLevelItems : 1;
+    quint32 holesInTopLevelSiblingIndex : 1;
+    quint32 topLevelSequentialOrdering : 1;
+    quint32 scenePosDescendantsUpdatePending : 1;
+    quint32 stickyFocus : 1;
+    quint32 hasFocus : 1;
+    quint32 lastMouseGrabberItemHasImplicitMouseGrab : 1;
+    quint32 allItemsIgnoreHoverEvents : 1;
+    quint32 allItemsUseDefaultCursor : 1;
+    quint32 painterStateProtection : 1;
+    quint32 sortCacheEnabled : 1; // for compatibility
+    quint32 allItemsIgnoreTouchEvents : 1;
+    quint32 padding : 15;
+
     QRectF growingItemsBoundingRect;
 
     void _q_emitUpdated();
     QList<QRectF> updatedRects;
-    bool updateAll;
-    bool calledEmitUpdated;
-    bool processDirtyItemsEmitted;
 
     QPainterPath selectionArea;
     int selectionChanging;
     QSet<QGraphicsItem *> selectedItems;
     QVector<QGraphicsItem *> unpolishedItems;
     QList<QGraphicsItem *> topLevelItems;
-    bool needSortTopLevelItems;
-    bool holesInTopLevelSiblingIndex;
-    bool topLevelSequentialOrdering;
 
     QMap<QGraphicsItem *, QPointF> movingItemsInitialPositions;
     void registerTopLevelItem(QGraphicsItem *item);
@@ -123,7 +137,6 @@ public:
     void _q_processDirtyItems();
 
     QSet<QGraphicsItem *> scenePosItems;
-    bool scenePosDescendantsUpdatePending;
     void setScenePosItemEnabled(QGraphicsItem *item, bool enabled);
     void registerScenePosItem(QGraphicsItem *item);
     void unregisterScenePosItem(QGraphicsItem *item);
@@ -134,8 +147,7 @@ public:
     QBrush backgroundBrush;
     QBrush foregroundBrush;
 
-    bool stickyFocus;
-    bool hasFocus;
+    quint32 rectAdjust;
     QGraphicsItem *focusItem;
     QGraphicsItem *lastFocusItem;
     QGraphicsWidget *tabFocusFirst;
@@ -151,7 +163,6 @@ public:
     void removePopup(QGraphicsWidget *widget, bool itemIsDying = false);
 
     QGraphicsItem *lastMouseGrabberItem;
-    bool lastMouseGrabberItemHasImplicitMouseGrab;
     QList<QGraphicsItem *> mouseGrabberItems;
     void grabMouse(QGraphicsItem *item, bool implicit = false);
     void ungrabMouse(QGraphicsItem *item, bool itemIsDying = false);
@@ -168,8 +179,6 @@ public:
     QList<QGraphicsItem *> cachedItemsUnderMouse;
     QList<QGraphicsItem *> hoverItems;
     QPointF lastSceneMousePos;
-    bool allItemsIgnoreHoverEvents;
-    bool allItemsUseDefaultCursor;
     void enableMouseTrackingOnViews();
     QMap<Qt::MouseButton, QPointF> mouseGrabberButtonDownPos;
     QMap<Qt::MouseButton, QPointF> mouseGrabberButtonDownScenePos;
@@ -182,8 +191,6 @@ public:
     QList<QGraphicsView *> views;
     void addView(QGraphicsView *view);
     void removeView(QGraphicsView *view);
-
-    bool painterStateProtection;
 
     QMultiMap<QGraphicsItem *, QGraphicsItem *> sceneEventFilters;
     void installSceneEventFilter(QGraphicsItem *watched, QGraphicsItem *filter);
@@ -205,8 +212,6 @@ public:
     void sendMouseEvent(QGraphicsSceneMouseEvent *mouseEvent);
     void mousePressEventHandler(QGraphicsSceneMouseEvent *mouseEvent);
     QGraphicsWidget *windowForItem(const QGraphicsItem *item) const;
-
-    bool sortCacheEnabled; // for compatibility
 
     void drawItemHelper(QGraphicsItem *item, QPainter *painter,
                         const QStyleOptionGraphicsItem *option, QWidget *widget,
@@ -291,16 +296,25 @@ public:
     int findClosestTouchPointId(const QPointF &scenePos);
     void touchEventHandler(QTouchEvent *touchEvent);
     bool sendTouchBeginEvent(QGraphicsItem *item, QTouchEvent *touchEvent);
-    bool allItemsIgnoreTouchEvents;
     void enableTouchEventsOnViews();
 
+    QList<QGraphicsObject *> cachedTargetItems;
+#ifndef QT_NO_GESTURES
+    QHash<QGraphicsObject *, QSet<QGesture *> > cachedItemGestures;
+    QHash<QGraphicsObject *, QSet<QGesture *> > cachedAlreadyDeliveredGestures;
     QHash<QGesture *, QGraphicsObject *> gestureTargets;
+    QHash<Qt::GestureType, int>  grabbedGestures;
     void gestureEventHandler(QGestureEvent *event);
-    void getGestureTargets(const QSet<QGesture *> &gestures, QWidget *viewport,
-                           QMap<Qt::GestureType, QGesture *> *conflictedGestures,
-                           QList<QList<QGraphicsObject *> > *conflictedItems,
-                           QHash<QGesture *, QGraphicsObject *> *normalGestures);
-    void cancelGesturesForChildren(QGesture *original, QWidget *viewport);
+    void gestureTargetsAtHotSpots(const QSet<QGesture *> &gestures,
+                           Qt::GestureFlag flag,
+                           QHash<QGraphicsObject *, QSet<QGesture *> > *targets,
+                           QSet<QGraphicsObject *> *itemsSet = 0,
+                           QSet<QGesture *> *normal = 0,
+                           QSet<QGesture *> *conflicts = 0);
+    void cancelGesturesForChildren(QGesture *original);
+    void grabGesture(QGraphicsItem *, Qt::GestureType gesture);
+    void ungrabGesture(QGraphicsItem *, Qt::GestureType gesture);
+#endif // QT_NO_GESTURES
 
     void updateInputMethodSensitivityInViews();
 

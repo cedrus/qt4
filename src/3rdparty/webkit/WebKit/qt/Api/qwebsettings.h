@@ -63,17 +63,25 @@ public:
         OfflineStorageDatabaseEnabled,
         OfflineWebApplicationCacheEnabled,
         LocalStorageEnabled,
-#ifdef QT_DEPRECATED
+#if defined(QT_DEPRECATED) || defined(qdoc)
         LocalStorageDatabaseEnabled = LocalStorageEnabled,
 #endif
         LocalContentCanAccessRemoteUrls,
-        DnsPrefetchEnabled
+        DnsPrefetchEnabled,
+        XSSAuditingEnabled,
+        AcceleratedCompositingEnabled,
+        SpatialNavigationEnabled,
+        LocalContentCanAccessFileUrls,
+        TiledBackingStoreEnabled,
+        FrameFlatteningEnabled,
+        SiteSpecificQuirksEnabled
     };
     enum WebGraphic {
         MissingImageGraphic,
         MissingPluginGraphic,
         DefaultFrameIconGraphic,
-        TextAreaSizeGripCornerGraphic
+        TextAreaSizeGripCornerGraphic,
+        DeleteButtonGraphic
     };
     enum FontSize {
         MinimumFontSize,

@@ -1,6 +1,4 @@
 /*
- * This file is part of the HTML rendering engine for KDE.
- *
  * Copyright (C) 2002 Lars Knoll (knoll@kde.org)
  *           (C) 2002 Dirk Mueller (mueller@kde.org)
  * Copyright (C) 2003, 2006 Apple Computer, Inc.
@@ -168,8 +166,7 @@ int FixedTableLayout::calcWidthArray(int)
                 
                 int usedSpan = 0;
                 int i = 0;
-                while (usedSpan < span) {
-                    ASSERT(cCol + i < nEffCols);
+                while (usedSpan < span && cCol + i < nEffCols) {
                     int eSpan = m_table->spanOfEffCol(cCol + i);
                     // Only set if no col element has already set it.
                     if (m_width[cCol + i].isAuto() && w.type() != Auto) {

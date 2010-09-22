@@ -80,6 +80,7 @@ public:
           inSetGeometry(0),
           polished(0),
           inSetPos(0),
+          autoFillBackground(0),
           focusPolicy(Qt::NoFocus),
           focusNext(0),
           focusPrev(0),
@@ -130,6 +131,14 @@ public:
     void windowFrameHoverLeaveEvent(QGraphicsSceneHoverEvent *event);
     bool hasDecoration() const;
 
+    // Private Properties
+    qreal width() const;
+    void setWidth(qreal);
+    void resetWidth();
+
+    qreal height() const;
+    void setHeight(qreal);
+    void resetHeight();
     void setGeometryFromSetPos();
 
     // State
@@ -174,6 +183,7 @@ public:
     quint32 inSetGeometry : 1;
     quint32 polished: 1;
     quint32 inSetPos : 1;
+    quint32 autoFillBackground : 1;
 
     // Focus
     Qt::FocusPolicy focusPolicy;

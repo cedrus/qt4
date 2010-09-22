@@ -91,7 +91,7 @@
 QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_CONTEXTMENU
-#if defined(Q_WS_WIN)
+#if defined(Q_WS_WIN) || defined(Q_WS_X11)
 extern bool qt_use_rtl_extensions;
 #endif
 #endif
@@ -441,7 +441,6 @@ void QTextControlPrivate::setContent(Qt::TextFormat format, const QString &text,
         QObject::connect(doc, SIGNAL(documentLayoutChanged()), q, SLOT(_q_documentLayoutChanged()));
 
         // convenience signal forwards
-        QObject::connect(doc, SIGNAL(contentsChanged()), q, SIGNAL(textChanged()));
         QObject::connect(doc, SIGNAL(undoAvailable(bool)), q, SIGNAL(undoAvailable(bool)));
         QObject::connect(doc, SIGNAL(redoAvailable(bool)), q, SIGNAL(redoAvailable(bool)));
         QObject::connect(doc, SIGNAL(modificationChanged(bool)), q, SIGNAL(modificationChanged(bool)));
@@ -452,8 +451,11 @@ void QTextControlPrivate::setContent(Qt::TextFormat format, const QString &text,
     if (!document)
         doc->setUndoRedoEnabled(false);
 
+    //Saving the index save some time.
+    static int contentsChangedIndex = QTextDocument::staticMetaObject.indexOfSignal("contentsChanged()");
+    static int textChangedIndex = QTextControl::staticMetaObject.indexOfSignal("textChanged()");
     // avoid multiple textChanged() signals being emitted
-    QObject::disconnect(doc, SIGNAL(contentsChanged()), q, SIGNAL(textChanged()));
+    QMetaObject::disconnect(doc, contentsChangedIndex, q, textChangedIndex);
 
     if (!text.isEmpty()) {
         // clear 'our' cursor for insertion to prevent
@@ -488,7 +490,7 @@ void QTextControlPrivate::setContent(Qt::TextFormat format, const QString &text,
     }
     cursor.setCharFormat(charFormatForInsertion);
 
-    QObject::connect(doc, SIGNAL(contentsChanged()), q, SIGNAL(textChanged()));
+    QMetaObject::connect(doc, contentsChangedIndex, q, textChangedIndex);
     emit q->textChanged();
     if (!document)
         doc->setUndoRedoEnabled(previousUndoRedoState);
@@ -745,7 +747,11 @@ void QTextControl::undo()
 {
     Q_D(QTextControl);
     d->repaintSelection();
+    const int oldCursorPos = d->cursor.position();
     d->doc->undo(&d->cursor);
+    if (d->cursor.position() != oldCursorPos)
+        emit cursorPositionChanged();
+    emit microFocusChanged();
     ensureCursorVisible();
 }
 
@@ -753,7 +759,11 @@ void QTextControl::redo()
 {
     Q_D(QTextControl);
     d->repaintSelection();
+    const int oldCursorPos = d->cursor.position();
     d->doc->redo(&d->cursor);
+        if (d->cursor.position() != oldCursorPos)
+        emit cursorPositionChanged();
+    emit microFocusChanged();
     ensureCursorVisible();
 }
 
@@ -846,9 +856,9 @@ void QTextControl::copy()
     QApplication::clipboard()->setMimeData(data);
 }
 
-void QTextControl::paste()
+void QTextControl::paste(QClipboard::Mode mode)
 {
-    const QMimeData *md = QApplication::clipboard()->mimeData();
+    const QMimeData *md = QApplication::clipboard()->mimeData(mode);
     if (md)
         insertFromMimeData(md);
 }
@@ -883,8 +893,10 @@ void QTextControl::processEvent(QEvent *e, const QPointF &coordinateOffset, QWid
 void QTextControl::processEvent(QEvent *e, const QMatrix &matrix, QWidget *contextWidget)
 {
     Q_D(QTextControl);
-    if (d->interactionFlags & Qt::NoTextInteraction)
+    if (d->interactionFlags == Qt::NoTextInteraction) {
+        e->ignore();
         return;
+    }
 
     d->contextWidget = contextWidget;
 
@@ -1229,7 +1241,12 @@ void QTextControlPrivate::keyPressEvent(QKeyEvent *e)
            q->cut();
     }
     else if (e == QKeySequence::Paste) {
-           q->paste();
+        QClipboard::Mode mode = QClipboard::Clipboard;
+#ifdef Q_WS_X11
+        if (e->modifiers() == (Qt::CTRL | Qt::SHIFT) && e->key() == Qt::Key_Insert)
+            mode = QClipboard::Selection;
+#endif
+        q->paste(mode);
     }
 #endif
     else if (e == QKeySequence::Delete) {
@@ -1764,8 +1781,8 @@ void QTextControlPrivate::contextMenuEvent(const QPoint &screenPos, const QPoint
     QMenu *menu = q->createStandardContextMenu(docPos, contextWidget);
     if (!menu)
         return;
-    menu->exec(screenPos);
-    delete menu;
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->popup(screenPos);
 #endif
 }
 
@@ -2075,7 +2092,7 @@ QMenu *QTextControl::createStandardContextMenu(const QPointF &pos, QWidget *pare
     }
 #endif
 
-#if defined(Q_WS_WIN)
+#if defined(Q_WS_WIN) || defined(Q_WS_X11)
     if ((d->interactionFlags & Qt::TextEditable) && qt_use_rtl_extensions) {
 #else
     if (d->interactionFlags & Qt::TextEditable) {

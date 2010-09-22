@@ -62,7 +62,7 @@ class QWinEventNotifier;
 class QEventDispatcherWin32Private;
 
 // forward declaration
-LRESULT CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
+LRESULT QT_WIN_CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
 
 class Q_CORE_EXPORT QEventDispatcherWin32 : public QAbstractEventDispatcher
 {
@@ -76,7 +76,7 @@ public:
     explicit QEventDispatcherWin32(QObject *parent = 0);
     ~QEventDispatcherWin32();
 
-    bool processEvents(QEventLoop::ProcessEventsFlags flags);
+    bool QT_ENSURE_STACK_ALIGNED_FOR_SSE processEvents(QEventLoop::ProcessEventsFlags flags);
     bool hasPendingEvents();
 
     void registerSocketNotifier(QSocketNotifier *notifier);
@@ -101,8 +101,8 @@ public:
     bool event(QEvent *e);
 
 private:
-    friend LRESULT CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
-    friend LRESULT CALLBACK qt_GetMessageHook(int, WPARAM, LPARAM);
+    friend LRESULT QT_WIN_CALLBACK qt_internal_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp);
+    friend LRESULT QT_WIN_CALLBACK qt_GetMessageHook(int, WPARAM, LPARAM);
 };
 
 QT_END_NAMESPACE

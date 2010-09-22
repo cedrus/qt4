@@ -42,6 +42,8 @@
 #include "qgesture.h"
 #include "private/qgesture_p.h"
 
+#ifndef QT_NO_GESTURES
+
 QT_BEGIN_NAMESPACE
 
  /*!
@@ -303,10 +305,10 @@ void QPanGesture::setAcceleration(qreal value)
     \class QPinchGesture
     \since 4.6
     \brief The QPinchGesture class describes a pinch gesture made my the user.
-    \ingroup multitouch
+    \ingroup touch
     \ingroup gestures
 
-    A pinch gesture is a form of multitouch user input in which the user typically
+    A pinch gesture is a form of touch user input in which the user typically
     touches two points on the input device with a thumb and finger, before moving
     them closer together or further apart to change the scale factor, zoom, or level
     of detail of the user interface.
@@ -386,7 +388,7 @@ void QPanGesture::setAcceleration(qreal value)
     \brief the current scale factor
 
     The scale factor measures the scale factor associated with the distance
-    between two of the user's inputs on a multitouch device.
+    between two of the user's inputs on a touch device.
 
     \sa totalScaleFactor, lastScaleFactor
 */
@@ -612,7 +614,7 @@ void QPinchGesture::setRotationAngle(qreal value)
     If the gesture has either a horizontal or vertical component, the
     swipe angle describes the angle between the direction of motion and the
     x-axis as defined using the standard widget
-    \l{The Coordinate System}{coordinate system}.
+    \l{Coordinate System}{coordinate system}.
 
     \sa horizontalDirection, verticalDirection
 */
@@ -725,3 +727,5 @@ void QTapAndHoldGesture::setPosition(const QPointF &value)
 }
 
 QT_END_NAMESPACE
+
+#endif // QT_NO_GESTURES

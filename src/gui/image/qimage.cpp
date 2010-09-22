@@ -272,6 +272,8 @@ bool QImageData::checkForAlphaPixels() const
 
     switch (format) {
 
+    case QImage::Format_Mono:
+    case QImage::Format_MonoLSB:
     case QImage::Format_Indexed8:
         has_alpha_pixels = has_alpha_clut;
         break;
@@ -480,9 +482,12 @@ bool QImageData::checkForAlphaPixels() const
     \row
     \o Low-level information
     \o
+
     The depth() function returns the depth of the image. The supported
-    depths are 1 (monochrome), 8 and 32 (for more information see the
-    \l {QImage#Image Formats}{Image Formats} section).
+    depths are 1 (monochrome), 8, 16, 24 and 32 bits. The
+    bitPlaneCount() function tells how many of those bits that are
+    used. For more information see the
+    \l {QImage#Image Formats}{Image Formats} section.
 
     The format(), bytesPerLine(), and byteCount() functions provide
     low-level information about the data stored in the image.
@@ -707,7 +712,7 @@ bool QImageData::checkForAlphaPixels() const
                             packed with the less significant bit (LSB) first.
 
     \value Format_Indexed8  The image is stored using 8-bit indexes
-                            into a colormap. 
+                            into a colormap.
 
     \value Format_RGB32     The image is stored using a 32-bit RGB format (0xffRRGGBB).
 
@@ -1580,12 +1585,12 @@ QRect QImage::rect() const
 /*!
     Returns the depth of the image.
 
-    The image depth is the number of bits used to encode a single
+    The image depth is the number of bits used to store a single
     pixel, also called bits per pixel (bpp).
 
     The supported depths are 1, 8, 16, 24 and 32.
 
-    \sa convertToFormat(), {QImage#Image Formats}{Image Formats},
+    \sa bitPlaneCount(), convertToFormat(), {QImage#Image Formats}{Image Formats},
     {QImage#Image Information}{Image Information}
 
 */
@@ -1835,7 +1840,7 @@ void QImage::setColor(int i, QRgb c)
     qAlpha() to access the pixels.
 
     \sa bytesPerLine(), bits(), {QImage#Pixel Manipulation}{Pixel
-    Manipulation}
+    Manipulation}, constScanLine()
 */
 uchar *QImage::scanLine(int i)
 {
@@ -1865,6 +1870,28 @@ const uchar *QImage::scanLine(int i) const
 
 
 /*!
+    Returns a pointer to the pixel data at the scanline with index \a
+    i. The first scanline is at index 0.
+
+    The scanline data is aligned on a 32-bit boundary.
+
+    Note that QImage uses \l{Implicit Data Sharing} {implicit data
+    sharing}, but this function does \e not perform a deep copy of the
+    shared pixel data, because the returned data is const.
+
+    \sa scanLine(), constBits()
+    \since 4.7
+*/
+const uchar *QImage::constScanLine(int i) const
+{
+    if (!d)
+        return 0;
+
+    Q_ASSERT(i >= 0 && i < height());
+    return d->data + i * d->bytes_per_line;
+}
+
+/*!
     Returns a pointer to the first pixel data. This is equivalent to
     scanLine(0).
 
@@ -1873,7 +1900,7 @@ const uchar *QImage::scanLine(int i) const
     data, thus ensuring that this QImage is the only one using the
     current return value.
 
-    \sa scanLine(), byteCount()
+    \sa scanLine(), byteCount(), constBits()
 */
 uchar *QImage::bits()
 {
@@ -1901,6 +1928,20 @@ const uchar *QImage::bits() const
 }
 
 
+/*!
+    Returns a pointer to the first pixel data.
+
+    Note that QImage uses \l{Implicit Data Sharing} {implicit data
+    sharing}, but this function does \e not perform a deep copy of the
+    shared pixel data, because the returned data is const.
+
+    \sa bits(), constScanLine()
+    \since 4.7
+*/
+const uchar *QImage::constBits() const
+{
+    return d ? d->data : 0;
+}
 
 /*!
     \fn void QImage::reset()
@@ -2233,6 +2274,8 @@ bool QImage::create(const QSize& size, int depth, int numColors, QImage::Endian 
 
 typedef void (*Image_Converter)(QImageData *dest, const QImageData *src, Qt::ImageConversionFlags);
 
+typedef bool (*InPlace_Image_Converter)(QImageData *data, Qt::ImageConversionFlags);
+
 static void convert_ARGB_to_ARGB_PM(QImageData *dest, const QImageData *src, Qt::ImageConversionFlags)
 {
     Q_ASSERT(src->format == QImage::Format_ARGB32);
@@ -2254,6 +2297,187 @@ static void convert_ARGB_to_ARGB_PM(QImageData *dest, const QImageData *src, Qt:
         }
         src_data += src_pad;
         dest_data += dest_pad;
+    }
+}
+
+static bool convert_ARGB_to_ARGB_PM_inplace(QImageData *data, Qt::ImageConversionFlags)
+{
+    Q_ASSERT(data->format == QImage::Format_ARGB32);
+
+    const int pad = (data->bytes_per_line >> 2) - data->width;
+    QRgb *rgb_data = (QRgb *) data->data;
+
+    for (int i = 0; i < data->height; ++i) {
+        const QRgb *end = rgb_data + data->width;
+        while (rgb_data < end) {
+            *rgb_data = PREMUL(*rgb_data);
+            ++rgb_data;
+        }
+        rgb_data += pad;
+    }
+    data->format = QImage::Format_ARGB32_Premultiplied;
+    return true;
+}
+
+static bool convert_indexed8_to_ARGB_PM_inplace(QImageData *data, Qt::ImageConversionFlags)
+{
+    Q_ASSERT(data->format == QImage::Format_Indexed8);
+    const int depth = 32;
+
+    const int dst_bytes_per_line = ((data->width * depth + 31) >> 5) << 2;
+    const int nbytes = dst_bytes_per_line * data->height;
+    uchar *const newData = (uchar *)realloc(data->data, nbytes);
+    if (!newData)
+        return false;
+
+    data->data = newData;
+
+    // start converting from the end because the end image is bigger than the source
+    uchar *src_data = newData + data->nbytes; // end of src
+    quint32 *dest_data = (quint32 *) (newData + nbytes); // end of dest > end of src
+    const int width = data->width;
+    const int src_pad = data->bytes_per_line - width;
+    const int dest_pad = (dst_bytes_per_line >> 2) - width;
+    if (data->colortable.size() == 0) {
+        data->colortable.resize(256);
+        for (int i = 0; i < 256; ++i)
+            data->colortable[i] = qRgb(i, i, i);
+    }
+    const int tableSize = data->colortable.size() - 1;
+
+    for (int i = 0; i < data->height; ++i) {
+        src_data -= src_pad;
+        dest_data -= dest_pad;
+        for (int pixI = 0; pixI < width; ++pixI) {
+            --src_data;
+            --dest_data;
+            const uint pixel = data->colortable[qMin<int>(tableSize, *src_data)];
+            *dest_data = (quint32) PREMUL(pixel);
+        }
+    }
+
+    data->format = QImage::Format_ARGB32_Premultiplied;
+    data->bytes_per_line = dst_bytes_per_line;
+    data->depth = depth;
+    data->nbytes = nbytes;
+
+    return true;
+}
+
+static bool convert_indexed8_to_RGB_inplace(QImageData *data, Qt::ImageConversionFlags)
+{
+    Q_ASSERT(data->format == QImage::Format_Indexed8);
+    const int depth = 32;
+
+    const int dst_bytes_per_line = ((data->width * depth + 31) >> 5) << 2;
+    const int nbytes = dst_bytes_per_line * data->height;
+    uchar *const newData = (uchar *)realloc(data->data, nbytes);
+    if (!newData)
+        return false;
+
+    data->data = newData;
+
+    // start converting from the end because the end image is bigger than the source
+    uchar *src_data = newData + data->nbytes;
+    quint32 *dest_data = (quint32 *) (newData + nbytes);
+    const int width = data->width;
+    const int src_pad = data->bytes_per_line - width;
+    const int dest_pad = (dst_bytes_per_line >> 2) - width;
+    if (data->colortable.size() == 0) {
+        data->colortable.resize(256);
+        for (int i = 0; i < 256; ++i)
+            data->colortable[i] = qRgb(i, i, i);
+    }
+    const int tableSize = data->colortable.size() - 1;
+
+    for (int i = 0; i < data->height; ++i) {
+        src_data -= src_pad;
+        dest_data -= dest_pad;
+        for (int pixI = 0; pixI < width; ++pixI) {
+            --src_data;
+            --dest_data;
+            *dest_data = (quint32) data->colortable[qMin<int>(tableSize, *src_data)];
+        }
+    }
+
+    data->format = QImage::Format_RGB32;
+    data->bytes_per_line = dst_bytes_per_line;
+    data->depth = depth;
+    data->nbytes = nbytes;
+
+    return true;
+}
+
+static bool convert_indexed8_to_RGB16_inplace(QImageData *data, Qt::ImageConversionFlags)
+{
+    Q_ASSERT(data->format == QImage::Format_Indexed8);
+    const int depth = 16;
+
+    const int dst_bytes_per_line = ((data->width * depth + 31) >> 5) << 2;
+    const int nbytes = dst_bytes_per_line * data->height;
+    uchar *const newData = (uchar *)realloc(data->data, nbytes);
+    if (!newData)
+        return false;
+
+    data->data = newData;
+
+    // start converting from the end because the end image is bigger than the source
+    uchar *src_data = newData + data->nbytes;
+    quint16 *dest_data = (quint16 *) (newData + nbytes);
+    const int width = data->width;
+    const int src_pad = data->bytes_per_line - width;
+    const int dest_pad = (dst_bytes_per_line >> 1) - width;
+    if (data->colortable.size() == 0) {
+        data->colortable.resize(256);
+        for (int i = 0; i < 256; ++i)
+            data->colortable[i] = qRgb(i, i, i);
+    }
+    const int tableSize = data->colortable.size() - 1;
+
+    for (int i = 0; i < data->height; ++i) {
+        src_data -= src_pad;
+        dest_data -= dest_pad;
+        for (int pixI = 0; pixI < width; ++pixI) {
+            --src_data;
+            --dest_data;
+            const uint pixel = data->colortable[qMin<int>(tableSize, *src_data)];
+            *dest_data = qt_colorConvert<quint16, quint32>(pixel, 0);
+        }
+    }
+
+    data->format = QImage::Format_RGB16;
+    data->bytes_per_line = dst_bytes_per_line;
+    data->depth = depth;
+    data->nbytes = nbytes;
+
+    return true;
+}
+
+static bool convert_RGB_to_RGB16_inplace(QImageData *data, Qt::ImageConversionFlags)
+{
+    Q_ASSERT(data->format == QImage::Format_RGB32);
+    const int depth = 16;
+
+    const int dst_bytes_per_line = ((data->width * depth + 31) >> 5) << 2;
+    const int src_bytes_per_line = data->bytes_per_line;
+    quint32 *src_data = (quint32 *) data->data;
+    quint16 *dst_data = (quint16 *) data->data;
+
+    for (int i = 0; i < data->height; ++i) {
+        qt_memconvert(dst_data, src_data, data->width);
+        src_data = (quint32 *) (((char*)src_data) + src_bytes_per_line);
+        dst_data = (quint16 *) (((char*)dst_data) + dst_bytes_per_line);
+    }
+    data->format = QImage::Format_RGB16;
+    data->bytes_per_line = dst_bytes_per_line;
+    data->depth = depth;
+    data->nbytes = dst_bytes_per_line * data->height;
+    uchar *const newData = (uchar *)realloc(data->data, data->nbytes);
+    if (newData) {
+        data->data = newData;
+        return true;
+    } else {
+        return false;
     }
 }
 
@@ -2949,19 +3173,19 @@ static void convert_Indexed8_to_X32(QImageData *dest, const QImageData *src, Qt:
         colorTable.resize(256);
         for (int i=0; i<256; ++i)
             colorTable[i] = qRgb(i, i, i);
-
     }
 
     int w = src->width;
     const uchar *src_data = src->data;
     uchar *dest_data = dest->data;
+    int tableSize = colorTable.size() - 1;
     for (int y = 0; y < src->height; y++) {
         uint *p = (uint *)dest_data;
         const uchar *b = src_data;
         uint *end = p + w;
 
         while (p < end)
-            *p++ = colorTable.at(*b++);
+            *p++ = colorTable.at(qMin<int>(tableSize, *b++));
 
         src_data += src->bytes_per_line;
         dest_data += dest->bytes_per_line;
@@ -3406,6 +3630,103 @@ static const Image_Converter converter_map[QImage::NImageFormats][QImage::NImage
     } // Format_ARGB4444_Premultiplied
 };
 
+static const InPlace_Image_Converter inplace_converter_map[QImage::NImageFormats][QImage::NImageFormats] =
+{
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    },
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_Mono
+    {
+       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_MonoLSB
+    {
+        0,
+        0,
+        0,
+        0,
+        0,
+        convert_indexed8_to_RGB_inplace,
+        convert_indexed8_to_ARGB_PM_inplace,
+        convert_indexed8_to_RGB16_inplace,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    }, // Format_Indexed8
+    {
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        convert_RGB_to_RGB16_inplace,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    }, // Format_ARGB32
+    {
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        convert_ARGB_to_ARGB_PM_inplace,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    }, // Format_ARGB32
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    },  // Format_ARGB32_Premultiplied
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_RGB16
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_ARGB8565_Premultiplied
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_RGB666
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_ARGB6666_Premultiplied
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_RGB555
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_ARGB8555_Premultiplied
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_RGB888
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    }, // Format_RGB444
+    {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    } // Format_ARGB4444_Premultiplied
+};
+
 /*!
     Returns a copy of the image in the given \a format.
 
@@ -3758,7 +4079,7 @@ void QImage::setPixel(int x, int y, uint index_or_rgb)
         }
         break;
     case Format_Indexed8:
-        if (index_or_rgb > (uint)d->colortable.size()) {
+        if (index_or_rgb >= (uint)d->colortable.size()) {
             qWarning("QImage::setPixel: Index %d out of range", index_or_rgb);
             return;
         }
@@ -4169,6 +4490,7 @@ QImage QImage::createHeuristicMask(bool clipTight) const
     int w = width();
     int h = height();
     QImage m(w, h, Format_MonoLSB);
+    QIMAGE_SANITYCHECK_MEMORY(m);
     m.setColorCount(2);
     m.setColor(0, QColor(Qt::color0).rgba());
     m.setColor(1, QColor(Qt::color1).rgba());
@@ -4261,6 +4583,7 @@ QImage QImage::createMaskFromColor(QRgb color, Qt::MaskMode mode) const
     if (!d)
         return QImage();
     QImage maskImage(size(), QImage::Format_MonoLSB);
+    QIMAGE_SANITYCHECK_MEMORY(maskImage);
     maskImage.fill(0);
     uchar *s = maskImage.bits();
 
@@ -4321,6 +4644,7 @@ QImage QImage::mirrored(bool horizontal, bool vertical) const
     int h = d->height;
     // Create result image, copy colormap
     QImage result(d->width, d->height, d->format);
+    QIMAGE_SANITYCHECK_MEMORY(result);
 
     // check if we ran out of of memory..
     if (!result.d)
@@ -4458,6 +4782,7 @@ QImage QImage::rgbSwapped() const
     case Format_ARGB32:
     case Format_ARGB32_Premultiplied:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             uint *q = (uint*)res.scanLine(i);
             uint *p = (uint*)scanLine(i);
@@ -4471,6 +4796,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_RGB16:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             ushort *q = (ushort*)res.scanLine(i);
             const ushort *p = (const ushort*)scanLine(i);
@@ -4484,6 +4810,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_ARGB8565_Premultiplied:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             quint8 *p = (quint8*)scanLine(i);
             const quint8 *end = p + d->width * sizeof(qargb8565);
@@ -4496,6 +4823,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_RGB666:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             qrgb666 *q = reinterpret_cast<qrgb666*>(res.scanLine(i));
             const qrgb666 *p = reinterpret_cast<const qrgb666*>(scanLine(i));
@@ -4508,6 +4836,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_ARGB6666_Premultiplied:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             qargb6666 *q = reinterpret_cast<qargb6666*>(res.scanLine(i));
             const qargb6666 *p = reinterpret_cast<const qargb6666*>(scanLine(i));
@@ -4520,6 +4849,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_RGB555:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             ushort *q = (ushort*)res.scanLine(i);
             const ushort *p = (const ushort*)scanLine(i);
@@ -4533,6 +4863,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_ARGB8555_Premultiplied:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             quint8 *p = (quint8*)scanLine(i);
             const quint8 *end = p + d->width * sizeof(qargb8555);
@@ -4545,6 +4876,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_RGB888:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             quint8 *q = reinterpret_cast<quint8*>(res.scanLine(i));
             const quint8 *p = reinterpret_cast<const quint8*>(scanLine(i));
@@ -4560,6 +4892,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_RGB444:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             quint8 *q = reinterpret_cast<quint8*>(res.scanLine(i));
             const quint8 *p = reinterpret_cast<const quint8*>(scanLine(i));
@@ -4574,6 +4907,7 @@ QImage QImage::rgbSwapped() const
         break;
     case Format_ARGB4444_Premultiplied:
         res = QImage(d->width, d->height, d->format);
+        QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             quint8 *q = reinterpret_cast<quint8*>(res.scanLine(i));
             const quint8 *p = reinterpret_cast<const quint8*>(scanLine(i));
@@ -4773,7 +5107,7 @@ bool QImageData::doImageIO(const QImage *image, QImageWriter *writer, int qualit
     or as a BMP image if the stream's version is 1. Note that writing
     the stream to a file will not produce a valid image file.
 
-    \sa QImage::save(), {Format of the QDataStream Operators}
+    \sa QImage::save(), {Serializing Qt Data Types}
 */
 
 QDataStream &operator<<(QDataStream &s, const QImage &image)
@@ -4799,7 +5133,7 @@ QDataStream &operator<<(QDataStream &s, const QImage &image)
     Reads an image from the given \a stream and stores it in the given
     \a image.
 
-    \sa QImage::load(), {Format of the QDataStream Operators}
+    \sa QImage::load(), {Serializing Qt Data Types}
 */
 
 QDataStream &operator>>(QDataStream &s, QImage &image)
@@ -5665,12 +5999,12 @@ void QImage::setAlphaChannel(const QImage &alphaChannel)
         return;
     }
 
-    detach();
-
-    QImage converted = convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    if (!converted.isNull())
-        *this = converted;
+    if (d->format == QImage::Format_ARGB32_Premultiplied)
+        detach();
     else
+        *this = convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+    if (isNull())
         return;
 
     // Slight optimization since alphachannels are returned as 8-bit grays.
@@ -5813,6 +6147,48 @@ bool QImage::hasAlphaChannel() const
                  || (d->has_alpha_clut && (d->format == Format_Indexed8
                                            || d->format == Format_Mono
                                            || d->format == Format_MonoLSB)));
+}
+
+
+/*!
+    \since 4.7
+    Returns the number of bit planes in the image.
+
+    The number of bit planes is the number of bits of color and
+    transparency information for each pixel. This is different from
+    (i.e. smaller than) the depth when the image format contains
+    unused bits.
+
+    \sa depth(), format(), {QImage#Image Formats}{Image Formats}
+*/
+int QImage::bitPlaneCount() const
+{
+    if (!d)
+        return 0;
+    int bpc = 0;
+    switch (d->format) {
+    case QImage::Format_Invalid:
+        break;
+    case QImage::Format_RGB32:
+        bpc = 24;
+        break;
+    case QImage::Format_RGB666:
+        bpc = 18;
+        break;
+    case QImage::Format_RGB555:
+        bpc = 15;
+        break;
+    case QImage::Format_ARGB8555_Premultiplied:
+        bpc = 23;
+        break;
+    case QImage::Format_RGB444:
+        bpc = 12;
+        break;
+    default:
+        bpc = depthForFormat(d->format);
+        break;
+    }
+    return bpc;
 }
 
 
@@ -6180,6 +6556,18 @@ QTransform QImage::trueMatrix(const QTransform &matrix, int w, int h)
     return matrix * QTransform().translate(-delta.x(), -delta.y());
 }
 
+bool QImageData::convertInPlace(QImage::Format newFormat, Qt::ImageConversionFlags flags)
+{
+    if (format == newFormat)
+        return true;
+
+    const InPlace_Image_Converter *const converterPtr = &inplace_converter_map[format][newFormat];
+    InPlace_Image_Converter converter = *converterPtr;
+    if (converter)
+        return converter(this, flags);
+    else
+        return false;
+}
 
 /*!
     \typedef QImage::DataPtr

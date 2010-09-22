@@ -97,6 +97,7 @@ public:
     bool initSslContext();
     SSL *ssl;
     SSL_CTX *ctx;
+    EVP_PKEY *pkey;
     BIO *readBio;
     BIO *writeBio;
     SSL_SESSION *session;
@@ -115,7 +116,62 @@ public:
 
     static QSslCipher QSslCipher_from_SSL_CIPHER(SSL_CIPHER *cipher);
     static QList<QSslCertificate> STACKOFX509_to_QSslCertificates(STACK_OF(X509) *x509);
+    Q_AUTOTEST_EXPORT static bool isMatchingHostname(const QString &cn, const QString &hostname);
 };
+
+#if defined(Q_OS_SYMBIAN)
+
+#include <QByteArray>
+#include <e32base.h>
+#include <f32file.h>
+#include <unifiedcertstore.h>     // link against certstore.lib
+#include <ccertattributefilter.h> // link against ctframework.lib
+
+// The purpose of this class is to wrap the asynchronous API of Symbian certificate store to one
+// synchronizable call. The user of this class needs to provide a TRequestStatus object which can
+// be used with User::WaitForRequest() unlike with the calls of the certificate store API.
+// A thread is used instead of a CActiveSchedulerWait scheme, because that would make the call
+// asynchronous (other events might be processed during the call even though the call would be seemingly
+// synchronous).
+
+class CSymbianCertificateRetriever : public CActive
+{
+public:
+    static CSymbianCertificateRetriever* NewL();
+    ~CSymbianCertificateRetriever();
+
+    int GetCertificates(QList<QByteArray> &aCertificates);
+
+private:
+    void ConstructL();
+    CSymbianCertificateRetriever();
+    static TInt ThreadEntryPoint(TAny* aParams);
+    void doThreadEntryL();
+    void GetCertificateL();
+    void DoCancel();
+    void RunL();
+    TInt RunError(TInt aError);
+
+private:
+    enum {
+        Initializing,
+        Listing,
+        RetrievingCertificates
+    } iState;
+
+    RThread iThread;
+    CUnifiedCertStore* iCertStore;
+    RMPointerArray<CCTCertInfo> iCertInfos;
+    CCertAttributeFilter* iCertFilter;
+    TInt iCurrentCertIndex;
+    QByteArray iCertificateData;
+    QList<QByteArray>* iCertificates;
+    TInt iSequenceError;
+};
+
+
+#endif
+
 
 QT_END_NAMESPACE
 

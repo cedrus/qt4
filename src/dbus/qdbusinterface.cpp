@@ -49,6 +49,8 @@
 #include "qdbusinterface_p.h"
 #include "qdbusconnection_p.h"
 
+#ifndef QT_NO_DBUS
+
 QT_BEGIN_NAMESPACE
 
 static void copyArgument(void *to, int id, const QVariant &arg)
@@ -275,7 +277,7 @@ int QDBusInterfacePrivate::metacall(QMetaObject::Call c, int id, void **argv)
             // signal relay from D-Bus world to Qt world
             QMetaObject::activate(q, metaObject, id, argv);
 
-        } else if (mm.methodType() == QMetaMethod::Slot) {
+        } else if (mm.methodType() == QMetaMethod::Slot || mm.methodType() == QMetaMethod::Method) {
             // method call relay from Qt world to D-Bus world
             // get D-Bus equivalent signature
             QString methodName = QLatin1String(metaObject->dbusNameForMethod(id));
@@ -322,3 +324,5 @@ int QDBusInterfacePrivate::metacall(QMetaObject::Call c, int id, void **argv)
 }
 
 QT_END_NAMESPACE
+
+#endif // QT_NO_DBUS

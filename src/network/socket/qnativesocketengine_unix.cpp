@@ -44,8 +44,8 @@
 #include "private/qnet_unix_p.h"
 #include "qiodevice.h"
 #include "qhostaddress.h"
+#include "qelapsedtimer.h"
 #include "qvarlengtharray.h"
-#include "qdatetime.h"
 #include <time.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -425,6 +425,9 @@ bool QNativeSocketEnginePrivate::nativeConnect(const QHostAddress &addr, quint16
         case EBADF:
         case EFAULT:
         case ENOTSOCK:
+#ifdef Q_OS_SYMBIAN
+        case EPIPE:
+#endif
             socketState = QAbstractSocket::UnconnectedState;
         default:
             break;
@@ -559,7 +562,7 @@ int QNativeSocketEnginePrivate::nativeAccept()
 #else
     int acceptedDescriptor = qt_safe_accept(socketDescriptor, 0, 0);
 #endif
-    //check if we have vaild descriptor at all
+    //check if we have valid descriptor at all
     if(acceptedDescriptor > 0) {
         // Ensure that the socket is closed on exec*()
         ::fcntl(acceptedDescriptor, F_SETFD, FD_CLOEXEC);
@@ -1008,7 +1011,7 @@ int QNativeSocketEnginePrivate::nativeSelect(int timeout, bool checkRead, bool c
 #ifndef Q_OS_SYMBIAN
     ret = qt_safe_select(socketDescriptor + 1, &fdread, &fdwrite, 0, timeout < 0 ? 0 : &tv);
 #else
-    QTime timer;
+    QElapsedTimer timer;
     timer.start();
 
     do {

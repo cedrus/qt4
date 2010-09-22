@@ -45,6 +45,8 @@
 #include <QtDBus/qdbusmacros.h>
 #include <QtCore/qstring.h>
 
+#ifndef QT_NO_DBUS
+
 QT_BEGIN_HEADER
 
 QT_BEGIN_NAMESPACE
@@ -83,16 +85,19 @@ public:
         ExportScriptableSlots = 0x10,
         ExportScriptableSignals = 0x20,
         ExportScriptableProperties = 0x40,
+        ExportScriptableInvokables = 0x80,
         ExportScriptableContents = 0xf0,
 
         ExportNonScriptableSlots = 0x100,
         ExportNonScriptableSignals = 0x200,
         ExportNonScriptableProperties = 0x400,
+        ExportNonScriptableInvokables = 0x800,
         ExportNonScriptableContents = 0xf00,
 
         ExportAllSlots = ExportScriptableSlots|ExportNonScriptableSlots,
         ExportAllSignals = ExportScriptableSignals|ExportNonScriptableSignals,
         ExportAllProperties = ExportScriptableProperties|ExportNonScriptableProperties,
+        ExportAllInvokables = ExportScriptableInvokables|ExportNonScriptableInvokables,
         ExportAllContents = ExportScriptableContents|ExportNonScriptableContents,
 
 #ifndef Q_QDOC
@@ -181,4 +186,5 @@ QT_END_NAMESPACE
 
 QT_END_HEADER
 
+#endif // QT_NO_DBUS
 #endif

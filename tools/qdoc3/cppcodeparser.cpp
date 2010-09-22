@@ -43,11 +43,11 @@
   cppcodeparser.cpp
 */
 
-#include <QtCore>
 #include <qfile.h>
 
 #include <stdio.h>
 #include <errno.h>
+#include <qdebug.h>
 
 #include "codechunk.h"
 #include "config.h"
@@ -95,6 +95,7 @@ QT_BEGIN_NAMESPACE
 #define COMMAND_QMLMETHOD               Doc::alias("qmlmethod")
 #define COMMAND_QMLATTACHEDMETHOD       Doc::alias("qmlattachedmethod")
 #define COMMAND_QMLDEFAULT              Doc::alias("default")
+#define COMMAND_QMLBASICTYPE            Doc::alias("qmlbasictype")
 #endif
 
 QStringList CppCodeParser::exampleFiles;
@@ -280,8 +281,8 @@ void CppCodeParser::parseHeaderFile(const Location& location,
                                     const QString& filePath,
                                     Tree *tree)
 {
-    FILE *in = fopen(QFile::encodeName(filePath), "r");
-    if (!in) {
+    QFile in(filePath);
+    if (!in.open(QIODevice::ReadOnly)) {
         location.error(tr("Cannot open C++ header file '%1'").arg(filePath));
         return;
     }
@@ -294,7 +295,7 @@ void CppCodeParser::parseHeaderFile(const Location& location,
     matchDeclList(tree->root());
     if (!fileTokenizer.version().isEmpty())
         tree->setVersion(fileTokenizer.version());
-    fclose(in);
+    in.close();
 
     if (fileLocation.fileName() == "qiterator.h")
         parseQiteratorDotH(location, filePath);
@@ -311,8 +312,8 @@ void CppCodeParser::parseSourceFile(const Location& location,
                                     const QString& filePath,
                                     Tree *tree)
 {
-    FILE *in = fopen(QFile::encodeName(filePath), "r");
-    if (!in) {
+    QFile in(filePath);
+    if (!in.open(QIODevice::ReadOnly)) {
         location.error(tr("Cannot open C++ source file '%1' (%2)").arg(filePath).arg(strerror(errno)));
         return;
     }
@@ -324,7 +325,7 @@ void CppCodeParser::parseSourceFile(const Location& location,
     readToken();
     usedNamespaces.clear();
     matchDocsAndStuff();
-    fclose(in);
+    in.close();
 }
 
 /*!
@@ -491,7 +492,7 @@ const FunctionNode *CppCodeParser::findFunctionNode(const QString& synopsis,
                         candidates << overload;
                 }
 
-                
+
                 /*
                     There are several functions with the correct
                     parameter count, but only one has the correct
@@ -536,14 +537,15 @@ QSet<QString> CppCodeParser::topicCommands()
                            << COMMAND_QMLSIGNAL
                            << COMMAND_QMLATTACHEDSIGNAL
                            << COMMAND_QMLMETHOD
-                           << COMMAND_QMLATTACHEDMETHOD;
+                           << COMMAND_QMLATTACHEDMETHOD
+                           << COMMAND_QMLBASICTYPE;
 #else
                            << COMMAND_VARIABLE;
 #endif
 }
 
 /*!
-  Process the topic \a command in context \a doc with argument \a arg.  
+  Process the topic \a command in context \a doc with argument \a arg.
  */
 Node *CppCodeParser::processTopicCommand(const Doc& doc,
                                          const QString& command,
@@ -726,7 +728,13 @@ Node *CppCodeParser::processTopicCommand(const Doc& doc,
             if (n)
                 classNode = static_cast<const ClassNode*>(n);
         }
-        return new QmlClassNode(tre->root(), names[0], classNode);
+        if (names[0].startsWith("Qt"))
+            return new QmlClassNode(tre->root(), QLatin1String("QML:")+names[0], classNode);
+        else
+            return new QmlClassNode(tre->root(), names[0], classNode);
+    }
+    else if (command == COMMAND_QMLBASICTYPE) {
+        return new QmlBasicTypeNode(tre->root(), arg);
     }
     else if ((command == COMMAND_QMLSIGNAL) ||
              (command == COMMAND_QMLMETHOD) ||
@@ -736,6 +744,8 @@ Node *CppCodeParser::processTopicCommand(const Doc& doc,
         QString type;
         QmlClassNode* qmlClass = 0;
         if (splitQmlMethodArg(doc,arg,type,element)) {
+            if (element.startsWith(QLatin1String("Qt")))
+                element = QLatin1String("QML:") + element;
             Node* n = tre->findNode(QStringList(element),Node::Fake);
             if (n && n->subType() == Node::QmlClass) {
                 qmlClass = static_cast<QmlClassNode*>(n);
@@ -896,13 +906,13 @@ QSet<QString> CppCodeParser::otherMetaCommands()
                                 << COMMAND_NEXTPAGE
                                 << COMMAND_PREVIOUSPAGE
                                 << COMMAND_INDEXPAGE
-#ifdef QDOC_QML        
+#ifdef QDOC_QML
                                 << COMMAND_STARTPAGE
                                 << COMMAND_QMLINHERITS
                                 << COMMAND_QMLDEFAULT;
-#else    
+#else
                                 << COMMAND_STARTPAGE;
-#endif    
+#endif
 }
 
 /*!
@@ -1017,7 +1027,10 @@ void CppCodeParser::processOtherMetaCommand(const Doc& doc,
 #ifdef QDOC_QML
     else if (command == COMMAND_QMLINHERITS) {
         setLink(node, Node::InheritsLink, arg);
-    }
+        if (node->subType() == Node::QmlClass) {
+            QmlClassNode::addInheritedBy(arg,node);
+        }
+   }
     else if (command == COMMAND_QMLDEFAULT) {
         QmlPropGroupNode* qpgn = static_cast<QmlPropGroupNode*>(node);
         qpgn->setDefault();
@@ -1104,6 +1117,17 @@ bool CppCodeParser::match(int target)
     }
     else
         return false;
+}
+
+/*!
+  Skip to \a target. If \a target is found before the end
+  of input, return true. Otherwise return false.
+ */
+bool CppCodeParser::skipTo(int target)
+{
+    while ((tok != Tok_Eoi) && (tok != target))
+        readToken();
+    return (tok == target ? true : false);
 }
 
 /*!
@@ -1349,7 +1373,9 @@ bool CppCodeParser::matchFunctionDecl(InnerNode *parent,
 
     if (!matchDataType(&returnType)) {
         if (tokenizer->parsingFnOrMacro()
-                && (match(Tok_Q_DECLARE_FLAGS) || match(Tok_Q_PROPERTY)))
+                && (match(Tok_Q_DECLARE_FLAGS) ||
+                    match(Tok_Q_PROPERTY) ||
+                    match(Tok_Q_PRIVATE_PROPERTY)))
             returnType = CodeChunk(previousLexeme());
         else {
             return false;
@@ -1632,8 +1658,9 @@ bool CppCodeParser::matchNamespaceDecl(InnerNode *parent)
     */
     QString namespaceName = previousLexeme();
     NamespaceNode *namespasse = 0;
-    if (parent)
+    if (parent) {
         namespasse = static_cast<NamespaceNode*>(parent->findNode(namespaceName, Node::Namespace));
+    }
     if (!namespasse) {
         namespasse = new NamespaceNode(parent, namespaceName);
         namespasse->setAccess(access);
@@ -1782,11 +1809,19 @@ bool CppCodeParser::matchTypedefDecl(InnerNode *parent)
 
 bool CppCodeParser::matchProperty(InnerNode *parent)
 {
-    if (!match(Tok_Q_PROPERTY) &&
-        !match(Tok_Q_OVERRIDE) &&
-        !match(Tok_QDOC_PROPERTY))
+    int expected_tok = Tok_LeftParen;
+    if (match(Tok_Q_PRIVATE_PROPERTY)) {
+        expected_tok = Tok_Comma;
+        if (!skipTo(Tok_Comma))
+            return false;
+    }
+    else if (!match(Tok_Q_PROPERTY) &&
+             !match(Tok_Q_OVERRIDE) &&
+             !match(Tok_QDOC_PROPERTY)) {
         return false;
-    if (!match(Tok_LeftParen))
+    }
+    
+    if (!match(expected_tok))
         return false;
 
     QString name;
@@ -1830,16 +1865,40 @@ bool CppCodeParser::matchProperty(InnerNode *parent)
         else if (key == "WRITE") {
             tre->addPropertyFunction(property, value, PropertyNode::Setter);
             property->setWritable(true);
-        } else if (key == "STORED")
+        }
+        else if (key == "STORED")
             property->setStored(value.toLower() == "true");
-        else if (key == "DESIGNABLE")
-            property->setDesignable(value.toLower() == "true");
+        else if (key == "DESIGNABLE") {
+            QString v = value.toLower();
+            if (v == "true")
+                property->setDesignable(true);
+            else if (v == "false")
+                property->setDesignable(false);
+            else {
+                property->setDesignable(false);
+                property->setRuntimeDesFunc(value);
+            }
+        }
         else if (key == "RESET")
             tre->addPropertyFunction(property, value, PropertyNode::Resetter);
         else if (key == "NOTIFY") {
             tre->addPropertyFunction(property, value, PropertyNode::Notifier);
         }
-
+        else if (key == "SCRIPTABLE") {
+            QString v = value.toLower();
+            if (v == "true")
+                property->setScriptable(true);
+            else if (v == "false")
+                property->setScriptable(false);
+            else {
+                property->setScriptable(false);
+                property->setRuntimeScrFunc(value);
+            }
+        }
+        else if (key == "COSTANT") 
+            property->setConstant();
+        else if (key == "FINAL") 
+            property->setFinal();
     }
     match(Tok_RightParen);
     return true;
@@ -1911,6 +1970,7 @@ bool CppCodeParser::matchDeclList(InnerNode *parent)
             break;
         case Tok_Q_OVERRIDE:
         case Tok_Q_PROPERTY:
+        case Tok_Q_PRIVATE_PROPERTY:
         case Tok_QDOC_PROPERTY:
             matchProperty(parent);
             break;
@@ -2099,7 +2159,7 @@ bool CppCodeParser::matchDocsAndStuff()
                     }
                     ++a;
                 }
-#endif                
+#endif
             }
 
             NodeList::Iterator n = nodes.begin();
@@ -2248,18 +2308,15 @@ void CppCodeParser::instantiateIteratorMacro(const QString &container,
 void CppCodeParser::createExampleFileNodes(FakeNode *fake)
 {
     QString examplePath = fake->name();
-
-    // we can assume that this file always exists
-    QString proFileName = examplePath + "/" +
-        examplePath.split("/").last() + ".pro";
-
+    QString proFileName = examplePath + "/" + examplePath.split("/").last() + ".pro";
     QString userFriendlyFilePath;
+
     QString fullPath = Config::findFile(fake->doc().location(),
                                         exampleFiles,
                                         exampleDirs,
                                         proFileName,
                                         userFriendlyFilePath);
-    
+
     if (fullPath.isEmpty()) {
         QString tmp = proFileName;
         proFileName = examplePath + "/" + "qbuild.pro";
@@ -2270,9 +2327,18 @@ void CppCodeParser::createExampleFileNodes(FakeNode *fake)
                                     proFileName,
                                     userFriendlyFilePath);
         if (fullPath.isEmpty()) {
-            fake->doc().location().warning(
-               tr("Cannot find file '%1' or '%2'").arg(tmp).arg(proFileName));
-            return;
+            proFileName = examplePath + "/" + examplePath.split("/").last() + ".qmlproject";
+            userFriendlyFilePath.clear();
+            fullPath = Config::findFile(fake->doc().location(),
+                                        exampleFiles,
+                                        exampleDirs,
+                                        proFileName,
+                                        userFriendlyFilePath);
+            if (fullPath.isEmpty()) {
+                fake->doc().location().warning(
+                    tr("Cannot find file '%1' or '%2'").arg(tmp).arg(proFileName));
+                return;
+            }
         }
     }
 
@@ -2282,14 +2348,6 @@ void CppCodeParser::createExampleFileNodes(FakeNode *fake)
     QStringList exampleFiles = Config::getFilesHere(fullPath,exampleNameFilter);
     QString imagesPath = fullPath + "/images";
     QStringList imageFiles = Config::getFilesHere(imagesPath,exampleImageFilter);
-
-#if 0    
-    qDebug() << "examplePath:" << examplePath;
-    qDebug() << " exampleFiles" <<  exampleFiles;
-    qDebug() << "imagesPath:" << imagesPath;
-    qDebug() << "fullPath:" << fullPath;
-    qDebug() << " imageFiles" <<  imageFiles;
-#endif    
 
     if (!exampleFiles.isEmpty()) {
         // move main.cpp and to the end, if it exists
@@ -2303,14 +2361,14 @@ void CppCodeParser::createExampleFileNodes(FakeNode *fake)
                 i.remove();
             }
             else if (fileName.contains("/qrc_") || fileName.contains("/moc_")
-                    || fileName.contains("/ui_"))
+                || fileName.contains("/ui_"))
                 i.remove();
         }
         if (!mainCpp.isEmpty())
             exampleFiles.append(mainCpp);
 
         // add any qmake Qt resource files and qmake project files
-        exampleFiles += Config::getFilesHere(fullPath, "*.qrc *.pro");
+        exampleFiles += Config::getFilesHere(fullPath, "*.qrc *.pro qmldir");
     }
 
     foreach (const QString &exampleFile, exampleFiles)

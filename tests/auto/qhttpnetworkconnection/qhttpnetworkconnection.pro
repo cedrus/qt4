@@ -5,6 +5,7 @@ requires(contains(QT_CONFIG,private_tests))
 
 QT = core network
 
+symbian: TARGET.CAPABILITY = NetworkServices
 symbian: {
   INCLUDEPATH += $$MW_LAYER_SYSTEMINCLUDE
 }

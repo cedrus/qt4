@@ -248,7 +248,7 @@ QFileSystemWatcherEngine *QFileSystemWatcherPrivate::createNativeEngine()
         eng = QDnotifyFileSystemWatcherEngine::create();
     return eng;
 #elif defined(Q_OS_FREEBSD) || defined(Q_OS_MAC)
-#  if 0 && (defined Q_OS_MAC) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
+#  if 0 && defined(Q_OS_MAC) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_5)
         return QFSEventsFileSystemWatcherEngine::create();
     else
@@ -426,6 +426,11 @@ QFileSystemWatcher::QFileSystemWatcher(const QStringList &paths, QObject *parent
 
 /*!
     Destroys the file system watcher.
+
+    \note To avoid deadlocks on shutdown, all instances of QFileSystemWatcher
+    need to be destroyed before QCoreApplication. Note that passing
+    QCoreApplication::instance() as the parent object when creating
+    QFileSystemWatcher is not sufficient.
 */
 QFileSystemWatcher::~QFileSystemWatcher()
 {

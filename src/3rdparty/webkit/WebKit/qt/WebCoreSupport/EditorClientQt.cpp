@@ -384,18 +384,6 @@ void EditorClientQt::handleKeyboardEvent(KeyboardEvent* event)
         } else
 #endif // QT_NO_SHORTCUT
         switch (kevent->windowsVirtualKeyCode()) {
-#if QT_VERSION < 0x040500
-            case VK_RETURN:
-#ifdef QT_WS_MAC
-                if (kevent->shiftKey() || kevent->metaKey())
-#else
-                if (kevent->shiftKey())
-#endif
-                    frame->editor()->command("InsertLineBreak").execute();
-                else
-                    frame->editor()->command("InsertNewline").execute();
-                break;
-#endif
             case VK_BACK:
                 frame->editor()->deleteWithDirection(SelectionController::BACKWARD,
                         CharacterGranularity, false, true);
@@ -407,28 +395,38 @@ void EditorClientQt::handleKeyboardEvent(KeyboardEvent* event)
             case VK_LEFT:
                 if (kevent->shiftKey())
                     frame->editor()->command("MoveLeftAndModifySelection").execute();
-                else frame->editor()->command("MoveLeft").execute();
+                else
+                    frame->editor()->command("MoveLeft").execute();
                 break;
             case VK_RIGHT:
                 if (kevent->shiftKey())
                     frame->editor()->command("MoveRightAndModifySelection").execute();
-                else frame->editor()->command("MoveRight").execute();
+                else
+                    frame->editor()->command("MoveRight").execute();
                 break;
             case VK_UP:
                 if (kevent->shiftKey())
                     frame->editor()->command("MoveUpAndModifySelection").execute();
-                else frame->editor()->command("MoveUp").execute();
+                else
+                    frame->editor()->command("MoveUp").execute();
                 break;
             case VK_DOWN:
                 if (kevent->shiftKey())
                     frame->editor()->command("MoveDownAndModifySelection").execute();
-                else frame->editor()->command("MoveDown").execute();
+                else
+                    frame->editor()->command("MoveDown").execute();
                 break;
             case VK_PRIOR:  // PageUp
-                frame->editor()->command("MovePageUp").execute();
+                if (kevent->shiftKey())
+                    frame->editor()->command("MovePageUpAndModifySelection").execute();
+                else
+                    frame->editor()->command("MovePageUp").execute();
                 break;
             case VK_NEXT:  // PageDown
-                frame->editor()->command("MovePageDown").execute();
+                if (kevent->shiftKey())
+                    frame->editor()->command("MovePageDownAndModifySelection").execute();
+                else
+                    frame->editor()->command("MovePageDown").execute();
                 break;
             case VK_TAB:
                 return;
@@ -601,20 +599,34 @@ void EditorClientQt::setInputMethodState(bool active)
     QWebPageClient* webPageClient = m_page->d->client;
     if (webPageClient) {
 #if QT_VERSION >= 0x040600
-        bool isPasswordField = false;
-        if (!active) {
+        // Make sure to reset input method hint
+        webPageClient->setInputMethodHint(Qt::ImhDialableCharactersOnly, false);
+        webPageClient->setInputMethodHint(Qt::ImhDigitsOnly, false);
+        webPageClient->setInputMethodHint(Qt::ImhEmailCharactersOnly, false);
+        webPageClient->setInputMethodHint(Qt::ImhUrlCharactersOnly, false);
+        webPageClient->setInputMethodHint(Qt::ImhHiddenText, false);
+
+        HTMLInputElement* inputElement = 0;
+        Frame* frame = m_page->d->page->focusController()->focusedOrMainFrame();
+        if (frame && frame->document() && frame->document()->focusedNode())
+            if (frame->document()->focusedNode()->hasTagName(HTMLNames::inputTag))
+                inputElement = static_cast<HTMLInputElement*>(frame->document()->focusedNode());
+
+        if (inputElement) {
+            // Set input method hints for "number", "tel", "email", "url" and "password" input elements.
+            webPageClient->setInputMethodHint(Qt::ImhDialableCharactersOnly, inputElement->isTelephoneField());
+            webPageClient->setInputMethodHint(Qt::ImhDigitsOnly, inputElement->isNumberField());
+            webPageClient->setInputMethodHint(Qt::ImhEmailCharactersOnly, inputElement->isEmailField());
+            webPageClient->setInputMethodHint(Qt::ImhUrlCharactersOnly, inputElement->isUrlField());
             // Setting the Qt::WA_InputMethodEnabled attribute true and Qt::ImhHiddenText flag
-            // for password fields. The Qt platform is responsible for determining which widget 
+            // for password fields. The Qt platform is responsible for determining which widget
             // will receive input method events for password fields.
-            Frame* frame = m_page->d->page->focusController()->focusedOrMainFrame();
-            if (frame && frame->document() && frame->document()->focusedNode()) {
-                if (frame->document()->focusedNode()->hasTagName(HTMLNames::inputTag)) {
-                    HTMLInputElement* inputElement = static_cast<HTMLInputElement*>(frame->document()->focusedNode());
-                    active = isPasswordField = inputElement->isPasswordField();
-              }
-            }
+            bool isPasswordField = inputElement->isPasswordField();
+            webPageClient->setInputMethodHint(Qt::ImhHiddenText, isPasswordField);
+            if (isPasswordField)
+                active = true;
         }
-        webPageClient->setInputMethodHint(Qt::ImhHiddenText, isPasswordField);
+
 #if defined(Q_WS_MAEMO_5) || defined(Q_OS_SYMBIAN)
         // disables auto-uppercase and predictive text for mobile devices
         webPageClient->setInputMethodHint(Qt::ImhNoAutoUppercase, true);

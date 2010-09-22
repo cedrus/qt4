@@ -24,17 +24,17 @@
 #include "Font.h"
 
 #include "CharacterNames.h"
+#include "FloatRect.h"
 #include "FontCache.h"
 #include "FontFallbackList.h"
-#include "FloatRect.h"
 #include "GlyphBuffer.h"
 #include "GlyphPageTreeNode.h"
 #include "IntPoint.h"
 #include "SimpleFontData.h"
 #include "WidthIterator.h"
 
-#include <wtf/unicode/Unicode.h>
 #include <wtf/MathExtras.h>
+#include <wtf/unicode/Unicode.h>
 
 using namespace WTF;
 using namespace Unicode;
@@ -135,13 +135,7 @@ GlyphData Font::glyphDataForCharacter(UChar32 c, bool mirror, bool forceSmallCap
     UChar codeUnits[2];
     int codeUnitsLength;
     if (c <= 0xFFFF) {
-        UChar c16 = c;
-        if (Font::treatAsSpace(c16))
-            codeUnits[0] = ' ';
-        else if (Font::treatAsZeroWidthSpace(c16))
-            codeUnits[0] = zeroWidthSpace;
-        else
-            codeUnits[0] = c16;
+        codeUnits[0] = Font::normalizeSpaces(c);
         codeUnitsLength = 1;
     } else {
         codeUnits[0] = U16_LEAD(c);
@@ -157,7 +151,7 @@ GlyphData Font::glyphDataForCharacter(UChar32 c, bool mirror, bool forceSmallCap
         GlyphData data = fallbackPage && fallbackPage->fontDataForCharacter(c) ? fallbackPage->glyphDataForCharacter(c) : characterFontData->missingGlyphData();
         // Cache it so we don't have to do system fallback again next time.
         if (!useSmallCapsFont) {
-#if PLATFORM(WINCE)
+#if OS(WINCE)
             // missingGlyphData returns a null character, which is not suitable for GDI to display.
             // Also, sometimes we cannot map a font for the character on WINCE, but GDI can still
             // display the character, probably because the font package is not installed correctly.
@@ -175,7 +169,7 @@ GlyphData Font::glyphDataForCharacter(UChar32 c, bool mirror, bool forceSmallCap
     // FIXME: It would be nicer to use the missing glyph from the last resort font instead.
     GlyphData data = primaryFont()->missingGlyphData();
     if (!useSmallCapsFont) {
-#if PLATFORM(WINCE)
+#if OS(WINCE)
         // See comment about WINCE GDI handling near setGlyphDataForCharacter above.
         page->setGlyphDataForCharacter(c, c, data.fontData);
         return page->glyphDataForCharacter(c);
@@ -184,79 +178,6 @@ GlyphData Font::glyphDataForCharacter(UChar32 c, bool mirror, bool forceSmallCap
 #endif
     }
     return data;
-}
-
-void Font::setCodePath(CodePath p)
-{
-    s_codePath = p;
-}
-
-Font::CodePath Font::codePath()
-{
-    return s_codePath;
-}
-
-bool Font::canUseGlyphCache(const TextRun& run) const
-{
-    switch (s_codePath) {
-        case Auto:
-            break;
-        case Simple:
-            return true;
-        case Complex:
-            return false;
-    }
-    
-    // Start from 0 since drawing and highlighting also measure the characters before run->from
-    for (int i = 0; i < run.length(); i++) {
-        const UChar c = run[i];
-        if (c < 0x300)      // U+0300 through U+036F Combining diacritical marks
-            continue;
-        if (c <= 0x36F)
-            return false;
-
-        if (c < 0x0591 || c == 0x05BE)     // U+0591 through U+05CF excluding U+05BE Hebrew combining marks, Hebrew punctuation Paseq, Sof Pasuq and Nun Hafukha
-            continue;
-        if (c <= 0x05CF)
-            return false;
-
-        if (c < 0x0600)     // U+0600 through U+1059 Arabic, Syriac, Thaana, Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam, Sinhala, Thai, Lao, Tibetan, Myanmar
-            continue;
-        if (c <= 0x1059)
-            return false;
-
-        if (c < 0x1100)     // U+1100 through U+11FF Hangul Jamo (only Ancient Korean should be left here if you precompose; Modern Korean will be precomposed as a result of step A)
-            continue;
-        if (c <= 0x11FF)
-            return false;
-
-        if (c < 0x1780)     // U+1780 through U+18AF Khmer, Mongolian
-            continue;
-        if (c <= 0x18AF)
-            return false;
-
-        if (c < 0x1900)     // U+1900 through U+194F Limbu (Unicode 4.0)
-            continue;
-        if (c <= 0x194F)
-            return false;
-
-        if (c < 0x20D0)     // U+20D0 through U+20FF Combining marks for symbols
-            continue;
-        if (c <= 0x20FF)
-            return false;
-
-        if (c < 0xFE20)     // U+FE20 through U+FE2F Combining half marks
-            continue;
-        if (c <= 0xFE2F)
-            return false;
-    }
-
-    TextRenderingMode textMode = m_fontDescription.textRenderingMode();
-    if (textMode == OptimizeLegibility || textMode == GeometricPrecision)
-        return false;
-
-    return true;
-
 }
 
 void Font::drawSimpleText(GraphicsContext* context, const TextRun& run, const FloatPoint& point, int from, int to) const
@@ -321,10 +242,18 @@ void Font::drawGlyphBuffer(GraphicsContext* context, const GlyphBuffer& glyphBuf
     drawGlyphs(context, fontData, glyphBuffer, lastFrom, nextGlyph - lastFrom, startPoint);
 }
 
-float Font::floatWidthForSimpleText(const TextRun& run, GlyphBuffer* glyphBuffer, HashSet<const SimpleFontData*>* fallbackFonts) const
+float Font::floatWidthForSimpleText(const TextRun& run, GlyphBuffer* glyphBuffer, HashSet<const SimpleFontData*>* fallbackFonts, GlyphOverflow* glyphOverflow) const
 {
-    WidthIterator it(this, run, fallbackFonts);
+    WidthIterator it(this, run, fallbackFonts, glyphOverflow);
     it.advance(run.length(), glyphBuffer);
+
+    if (glyphOverflow) {
+        glyphOverflow->top = max<int>(glyphOverflow->top, ceilf(-it.minGlyphBoundingBoxY()) - ascent());
+        glyphOverflow->bottom = max<int>(glyphOverflow->bottom, ceilf(it.maxGlyphBoundingBoxY()) - descent());
+        glyphOverflow->left = ceilf(it.firstGlyphOverflow());
+        glyphOverflow->right = ceilf(it.lastGlyphOverflow());
+    }
+
     return it.m_runWidthSoFar;
 }
 

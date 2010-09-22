@@ -885,7 +885,7 @@ void QTextEngine::shapeText(int item) const
     QFixed letterSpacing = font.d->letterSpacing;
     QFixed wordSpacing = font.d->wordSpacing;
 
-    if (letterSpacingIsAbsolute)
+    if (letterSpacingIsAbsolute && letterSpacing.value())
         letterSpacing *= font.d->dpi / qt_defaultDpiY();
 
     if (letterSpacing != 0) {
@@ -921,6 +921,13 @@ void QTextEngine::shapeText(int item) const
 
     for (int i = 0; i < si.num_glyphs; ++i)
         si.width += glyphs.advances_x[i];
+}
+
+static inline bool hasCaseChange(const QScriptItem &si)
+{
+    return si.analysis.flags == QScriptAnalysis::SmallCaps ||
+           si.analysis.flags == QScriptAnalysis::Uppercase ||
+           si.analysis.flags == QScriptAnalysis::Lowercase;
 }
 
 #if defined(Q_WS_WINCE) //TODO
@@ -1050,14 +1057,15 @@ void QTextEngine::shapeTextWithCE(int item) const
     if (option.useDesignMetrics())
 	flags |= DesignMetrics;
 
-    attributes(); // pre-initialize char attributes
+    // pre-initialize char attributes
+    if (! attributes())
+        return;
 
     const int len = length(item);
     int num_glyphs = length(item);
     const QChar *str = layoutData->string.unicode() + si.position;
     ushort upperCased[256];
-    if (si.analysis.flags == QScriptAnalysis::SmallCaps || si.analysis.flags == QScriptAnalysis::Uppercase
-            || si.analysis.flags == QScriptAnalysis::Lowercase) {
+    if (hasCaseChange(si)) {
         ushort *uc = upperCased;
         if (len > 256)
             uc = new ushort[len];
@@ -1071,7 +1079,14 @@ void QTextEngine::shapeTextWithCE(int item) const
     }
 
     while (true) {
-        ensureSpace(num_glyphs);
+        if (! ensureSpace(num_glyphs)) {
+            // If str is converted to uppercase/lowercase form with a new buffer,
+            // we need to delete that buffer before return for error
+            const ushort *uc = reinterpret_cast<const ushort *>(str);
+            if (hasCaseChange(si) && uc != upperCased)
+                delete [] uc;
+            return;
+        }
         num_glyphs = layoutData->glyphLayout.numGlyphs - layoutData->used;
 
         QGlyphLayout g = availableGlyphs(&si);
@@ -1092,9 +1107,7 @@ void QTextEngine::shapeTextWithCE(int item) const
     layoutData->used += si.num_glyphs;
 
     const ushort *uc = reinterpret_cast<const ushort *>(str);
-    if ((si.analysis.flags == QScriptAnalysis::SmallCaps || si.analysis.flags == QScriptAnalysis::Uppercase
-         || si.analysis.flags == QScriptAnalysis::Lowercase)
-        && uc != upperCased)
+    if (hasCaseChange(si) && uc != upperCased)
         delete [] uc;
 }
 #endif
@@ -1124,18 +1137,16 @@ void QTextEngine::shapeTextWithHarfbuzz(int item) const
     bool kerningEnabled = this->font(si).d->kerning;
 
     HB_ShaperItem entire_shaper_item;
-    entire_shaper_item.kerning_applied = false;
+    qMemSet(&entire_shaper_item, 0, sizeof(entire_shaper_item));
     entire_shaper_item.string = reinterpret_cast<const HB_UChar16 *>(layoutData->string.constData());
     entire_shaper_item.stringLength = layoutData->string.length();
     entire_shaper_item.item.script = (HB_Script)si.analysis.script;
     entire_shaper_item.item.pos = si.position;
     entire_shaper_item.item.length = length(item);
     entire_shaper_item.item.bidiLevel = si.analysis.bidiLevel;
-    entire_shaper_item.glyphIndicesPresent = false;
 
     HB_UChar16 upperCased[256]; // XXX what about making this 4096, so we don't have to extend it ever.
-    if (si.analysis.flags == QScriptAnalysis::SmallCaps || si.analysis.flags == QScriptAnalysis::Uppercase
-            || si.analysis.flags == QScriptAnalysis::Lowercase) {
+    if (hasCaseChange(si)) {
         HB_UChar16 *uc = upperCased;
         if (entire_shaper_item.item.length > 256)
             uc = new HB_UChar16[entire_shaper_item.item.length];
@@ -1157,17 +1168,24 @@ void QTextEngine::shapeTextWithHarfbuzz(int item) const
         entire_shaper_item.shaperFlags |= HB_ShaperFlag_UseDesignMetrics;
 
     entire_shaper_item.num_glyphs = qMax(layoutData->glyphLayout.numGlyphs - layoutData->used, int(entire_shaper_item.item.length));
-    ensureSpace(entire_shaper_item.num_glyphs);
+    if (! ensureSpace(entire_shaper_item.num_glyphs)) {
+        if (hasCaseChange(si))
+            delete [] const_cast<HB_UChar16 *>(entire_shaper_item.string);
+        return;
+    }
     QGlyphLayout initialGlyphs = availableGlyphs(&si).mid(0, entire_shaper_item.num_glyphs);
 
     if (!stringToGlyphs(&entire_shaper_item, &initialGlyphs, font)) {
-        ensureSpace(entire_shaper_item.num_glyphs);
+        if (! ensureSpace(entire_shaper_item.num_glyphs)) {
+            if (hasCaseChange(si))
+                delete [] const_cast<HB_UChar16 *>(entire_shaper_item.string);
+            return;
+        }
         initialGlyphs = availableGlyphs(&si).mid(0, entire_shaper_item.num_glyphs);
 
         if (!stringToGlyphs(&entire_shaper_item, &initialGlyphs, font)) {
             // ############ if this happens there's a bug in the fontengine
-            if ((si.analysis.flags == QScriptAnalysis::SmallCaps || si.analysis.flags == QScriptAnalysis::Uppercase
-                    || si.analysis.flags == QScriptAnalysis::Lowercase) && entire_shaper_item.string != upperCased)
+            if (hasCaseChange(si) && entire_shaper_item.string != upperCased)
                 delete [] const_cast<HB_UChar16 *>(entire_shaper_item.string);
             return;
         }
@@ -1232,7 +1250,11 @@ void QTextEngine::shapeTextWithHarfbuzz(int item) const
         remaining_glyphs -= shaper_item.initialGlyphCount;
 
         do {
-            ensureSpace(glyph_pos + shaper_item.num_glyphs + remaining_glyphs);
+            if (! ensureSpace(glyph_pos + shaper_item.num_glyphs + remaining_glyphs)) {
+                if (hasCaseChange(si))
+                    delete [] const_cast<HB_UChar16 *>(entire_shaper_item.string);
+                return;
+            }
 
             const QGlyphLayout g = availableGlyphs(&si).mid(glyph_pos);
             moveGlyphData(g.mid(shaper_item.num_glyphs), g.mid(shaper_item.initialGlyphCount), remaining_glyphs);
@@ -1272,8 +1294,7 @@ void QTextEngine::shapeTextWithHarfbuzz(int item) const
 
     layoutData->used += si.num_glyphs;
 
-    if ((si.analysis.flags == QScriptAnalysis::SmallCaps || si.analysis.flags == QScriptAnalysis::Uppercase)
-        && entire_shaper_item.string != upperCased)
+    if (hasCaseChange(si) && entire_shaper_item.string != upperCased)
         delete [] const_cast<HB_UChar16 *>(entire_shaper_item.string);
 }
 
@@ -1299,10 +1320,10 @@ QTextEngine::QTextEngine()
 }
 
 QTextEngine::QTextEngine(const QString &str, const QFont &f)
-    : fnt(f)
+    : text(str),
+      fnt(f)
 {
     init(this);
-    text = str;
 }
 
 QTextEngine::~QTextEngine()
@@ -1318,7 +1339,8 @@ const HB_CharAttributes *QTextEngine::attributes() const
         return (HB_CharAttributes *) layoutData->memory;
 
     itemize();
-    ensureSpace(layoutData->string.length());
+    if (! ensureSpace(layoutData->string.length()))
+        return NULL;
 
     QVarLengthArray<HB_ScriptItem> hbScriptItems(layoutData->items.size());
 
@@ -1405,7 +1427,10 @@ void QTextEngine::itemize() const
 #else
     bool ignore = ignoreBidi;
 #endif
-    if (!ignore && option.textDirection() == Qt::LeftToRight) {
+
+    bool rtl = isRightToLeft();
+
+    if (!ignore && !rtl) {
         ignore = true;
         const QChar *start = layoutData->string.unicode();
         const QChar * const end = start + length;
@@ -1421,7 +1446,7 @@ void QTextEngine::itemize() const
     QVarLengthArray<QScriptAnalysis, 4096> scriptAnalysis(length);
     QScriptAnalysis *analysis = scriptAnalysis.data();
 
-    QBidiControl control(option.textDirection() == Qt::RightToLeft);
+    QBidiControl control(rtl);
 
     if (ignore) {
         memset(analysis, 0, length*sizeof(QScriptAnalysis));
@@ -1515,6 +1540,23 @@ void QTextEngine::itemize() const
     addRequiredBoundaries();
     resolveAdditionalFormats();
 }
+
+bool QTextEngine::isRightToLeft() const
+{
+    switch (option.textDirection()) {
+    case Qt::LeftToRight:
+        return false;
+    case Qt::RightToLeft:
+        return true;
+    default:
+        break;
+    }
+    // this places the cursor in the right position depending on the keyboard layout
+    if (layoutData->string.isEmpty())
+        return QApplication::keyboardInputDirection() == Qt::RightToLeft;
+    return layoutData->string.isRightToLeft();
+}
+
 
 int QTextEngine::findItem(int strPos) const
 {
@@ -1845,7 +1887,10 @@ void QTextEngine::justify(const QScriptLine &line)
 
     // don't include trailing white spaces when doing justification
     int line_length = line.length;
-    const HB_CharAttributes *a = attributes()+line.from;
+    const HB_CharAttributes *a = attributes();
+    if (! a)
+        return;
+    a += line.from;
     while (line_length && a[line_length-1].whiteSpace)
         --line_length;
     // subtract one char more, as we can't justfy after the last character
@@ -2026,7 +2071,7 @@ QTextEngine::LayoutData::LayoutData()
     memory_on_stack = false;
     used = 0;
     hasBidi = false;
-    inLayout = false;
+    layoutState = LayoutEmpty;
     haveCharAttributes = false;
     logClustersPtr = 0;
     available_glyphs = 0;
@@ -2060,7 +2105,7 @@ QTextEngine::LayoutData::LayoutData(const QString &str, void **stack_memory, int
     }
     used = 0;
     hasBidi = false;
-    inLayout = false;
+    layoutState = LayoutEmpty;
     haveCharAttributes = false;
 }
 
@@ -2071,12 +2116,12 @@ QTextEngine::LayoutData::~LayoutData()
     memory = 0;
 }
 
-void QTextEngine::LayoutData::reallocate(int totalGlyphs)
+bool QTextEngine::LayoutData::reallocate(int totalGlyphs)
 {
     Q_ASSERT(totalGlyphs >= glyphLayout.numGlyphs);
     if (memory_on_stack && available_glyphs >= totalGlyphs) {
         glyphLayout.grow(glyphLayout.data(), totalGlyphs);
-        return;
+        return true;
     }
 
     int space_charAttributes = sizeof(HB_CharAttributes)*string.length()/sizeof(void*) + 1;
@@ -2084,7 +2129,14 @@ void QTextEngine::LayoutData::reallocate(int totalGlyphs)
     int space_glyphs = QGlyphLayout::spaceNeededForGlyphLayout(totalGlyphs)/sizeof(void*) + 2;
 
     int newAllocated = space_charAttributes + space_glyphs + space_logClusters;
-    Q_ASSERT(newAllocated >= allocated);
+    // These values can be negative if the length of string/glyphs causes overflow,
+    // we can't layout such a long string all at once, so return false here to
+    // indicate there is a failure
+    if (space_charAttributes < 0 || space_logClusters < 0 || space_glyphs < 0 || newAllocated < allocated) {
+        layoutState = LayoutFailed;
+        return false;
+    }
+
     void **newMem = memory;
     newMem = (void **)::realloc(memory_on_stack ? 0 : memory, newAllocated*sizeof(void *));
     Q_CHECK_PTR(newMem);
@@ -2105,6 +2157,7 @@ void QTextEngine::LayoutData::reallocate(int totalGlyphs)
     glyphLayout.grow(reinterpret_cast<char *>(m), totalGlyphs);
 
     allocated = newAllocated;
+    return true;
 }
 
 // grow to the new size, copying the existing data to the new layout
@@ -2136,7 +2189,7 @@ void QTextEngine::freeMemory()
     } else {
         layoutData->used = 0;
         layoutData->hasBidi = false;
-        layoutData->inLayout = false;
+        layoutData->layoutState = LayoutEmpty;
         layoutData->haveCharAttributes = false;
     }
     for (int i = 0; i < lines.size(); ++i) {
@@ -2295,6 +2348,9 @@ QString QTextEngine::elidedText(Qt::TextElideMode mode, const QFixed &width, int
                 shape(i);
 
             HB_CharAttributes *attributes = const_cast<HB_CharAttributes *>(this->attributes());
+            if (!attributes)
+                return QString();
+
             unsigned short *logClusters = this->logClusters(&si);
             QGlyphLayout glyphs = shapedGlyphs(&si);
 
@@ -2366,6 +2422,8 @@ QString QTextEngine::elidedText(Qt::TextElideMode mode, const QFixed &width, int
         return QString();
 
     const HB_CharAttributes *attributes = this->attributes();
+    if (!attributes)
+        return QString();
 
     if (mode == Qt::ElideRight) {
         QFixed currentWidth;
@@ -2467,7 +2525,7 @@ void QTextEngine::splitItem(int item, int pos) const
     if (pos <= 0)
         return;
 
-    layoutData->items.insert(item + 1, QScriptItem(layoutData->items[item]));
+    layoutData->items.insert(item + 1, layoutData->items[item]);
     QScriptItem &oldItem = layoutData->items[item];
     QScriptItem &newItem = layoutData->items[item+1];
     newItem.position += pos;
@@ -2512,7 +2570,7 @@ QFixed QTextEngine::calculateTabWidth(int item, QFixed x) const
 
     QList<QTextOption::Tab> tabArray = option.tabs();
     if (!tabArray.isEmpty()) {
-        if (option.textDirection() == Qt::RightToLeft) { // rebase the tabArray positions.
+        if (isRightToLeft()) { // rebase the tabArray positions.
             QList<QTextOption::Tab> newTabs;
             QList<QTextOption::Tab>::Iterator iter = tabArray.begin();
             while(iter != tabArray.end()) {
@@ -2610,10 +2668,9 @@ void QTextEngine::resolveAdditionalFormats() const
 }
 
 QStackTextEngine::QStackTextEngine(const QString &string, const QFont &f)
-    : _layoutData(string, _memory, MemSize)
+    : QTextEngine(string, f),
+      _layoutData(string, _memory, MemSize)
 {
-    fnt = f;
-    text = string;
     stackEngine = true;
     layoutData = &_layoutData;
 }
@@ -2648,6 +2705,12 @@ QTextItemInt::QTextItemInt(const QScriptItem &si, QFont *font, const QTextCharFo
         flags |= QTextItem::Overline;
     if (f->d->strikeOut || format.fontStrikeOut())
         flags |= QTextItem::StrikeOut;
+}
+
+QTextItemInt::QTextItemInt(const QGlyphLayout &g, QFont *font, const QChar *chars_, int numChars, QFontEngine *fe)
+    : flags(0), justified(false), underlineStyle(QTextCharFormat::NoUnderline),
+      num_chars(numChars), chars(chars_), logClusters(0), f(font),  glyphs(g), fontEngine(fe)
+{
 }
 
 QTextItemInt QTextItemInt::midItem(QFontEngine *fontEngine, int firstGlyphIndex, int numGlyphs) const

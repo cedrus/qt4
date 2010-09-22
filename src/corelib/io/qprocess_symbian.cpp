@@ -66,7 +66,7 @@
 #include "qstring.h"
 #include "qprocess.h"
 #include "qprocess_p.h"
-#include "qeventdispatcher_symbian_p.h"
+#include "private/qeventdispatcher_symbian_p.h"
 
 #include <private/qthread_p.h>
 #include <qmutex.h>
@@ -219,7 +219,8 @@ static bool qt_rprocess_running(RProcess *proc)
     return false;
 }
 
-static void qt_create_symbian_commandline(const QStringList &arguments, QString &commandLine)
+static void qt_create_symbian_commandline(
+    const QStringList &arguments, const QString &nativeArguments, QString &commandLine)
 {
     for (int i = 0; i < arguments.size(); ++i) {
         QString tmp = arguments.at(i);
@@ -243,12 +244,14 @@ static void qt_create_symbian_commandline(const QStringList &arguments, QString 
         }
     }
 
-    // Chop the extra trailing space if any arguments were appended
-    if (arguments.size())
+    if (!nativeArguments.isEmpty())
+        commandLine += nativeArguments;
+    else if (!commandLine.isEmpty()) // Chop the extra trailing space if any arguments were appended
         commandLine.chop(1);
 }
 
-static TInt qt_create_symbian_process(RProcess **proc, const QString &programName, const QStringList &arguments)
+static TInt qt_create_symbian_process(RProcess **proc,
+    const QString &programName, const QStringList &arguments, const QString &nativeArguments)
 {
     RProcess *newProc = NULL;
     newProc = new RProcess();
@@ -257,7 +260,7 @@ static TInt qt_create_symbian_process(RProcess **proc, const QString &programNam
         return KErrNoMemory;
 
     QString commandLine;
-    qt_create_symbian_commandline(arguments, commandLine);
+    qt_create_symbian_commandline(arguments, nativeArguments, commandLine);
 
     TPtrC program_ptr(reinterpret_cast<const TText*>(programName.constData()));
     TPtrC cmdline_ptr(reinterpret_cast<const TText*>(commandLine.constData()));
@@ -372,10 +375,9 @@ QProcessActive::QProcessActive()
     // Nothing to do
 }
 
-// Called from ProcessManagerThread
+// Called from main thread
 QProcessActive::~QProcessActive()
 {
-    Cancel();
     process = NULL;
     pproc = NULL;
 }
@@ -479,10 +481,9 @@ QProcessManagerMediator::QProcessManagerMediator()
     // Nothing to do
 }
 
-// Called from ProcessManagerThread
+// Called from main thread
 QProcessManagerMediator::~QProcessManagerMediator()
 {
-    Cancel();
     processManagerThread.Close();
     currentCommand = ENoCommand;
     currentObserver = NULL;
@@ -645,25 +646,36 @@ QProcessManager::QProcessManager()
 QProcessManager::~QProcessManager()
 {
     QPROCESS_DEBUG_PRINT("QProcessManager::~QProcessManager()");
-    // Cancel death listening for all child processes
-    if (mediator) {
-        QMap<int, QProcessActive *>::Iterator it = children.begin();
-        while (it != children.end()) {
-            // Remove all monitors
-            QProcessActive *active = it.value();
-            mediator->remove(active);
 
-            QPROCESS_DEBUG_PRINT("QProcessManager::~QProcessManager() removed listening for a process");
-            ++it;
+    // Check if manager thread is still alive. If this destructor is ran as part of global
+    // static cleanup, manager thread will most likely be terminated by kernel at this point,
+    // so trying to delete QProcessActives and QProcessMediators will panic as they
+    // will still be active. They can also no longer be canceled as the thread is already gone.
+    // In case manager thread has already died, we simply do nothing and let the deletion of
+    // the main heap at process exit take care of stray objects.
+
+    if (managerThread.Handle() && managerThread.ExitType() == EExitPending) {
+        // Cancel death listening for all child processes
+        if (mediator) {
+            QMap<int, QProcessActive *>::Iterator it = children.begin();
+            while (it != children.end()) {
+                // Remove all monitors
+                QProcessActive *active = it.value();
+                mediator->remove(active);
+
+                QPROCESS_DEBUG_PRINT("QProcessManager::~QProcessManager() removed listening for a process");
+                ++it;
+            }
+
+            // Terminate process manager thread.
+            mediator->terminate();
+            delete mediator;
         }
 
-        // Terminate process manager thread.
-        mediator->terminate();
-        delete mediator;
+        qDeleteAll(children.values());
+        children.clear();
     }
 
-    qDeleteAll(children.values());
-    children.clear();
     managerThread.Close();
     managerMutex.Close();
 }
@@ -794,7 +806,7 @@ void QProcessPrivate::startProcess()
                          q, SLOT(_q_processDied()));
     }
 
-    TInt err = qt_create_symbian_process(&symbianProcess, program, arguments);
+    TInt err = qt_create_symbian_process(&symbianProcess, program, arguments, nativeArguments);
 
     if (err == KErrNone) {
         pid = symbianProcess->Id().Id();
@@ -1008,7 +1020,7 @@ bool QProcessPrivate::waitForDeadChild()
             TExitCategoryName catName = symbianProcess->ExitCategory();
             qDebug() << "QProcessPrivate::waitForDeadChild() dead with exitCode"
                      << exitCode << ", crashed:" << crashed
-                     << ", category:" << QString::fromUtf16(catName.Ptr());
+                     << ", category:" << QString((const QChar *)catName.Ptr());
 #endif
         } else {
             QPROCESS_DEBUG_PRINT("QProcessPrivate::waitForDeadChild() not dead!");
@@ -1030,7 +1042,7 @@ bool QProcessPrivate::startDetached(const QString &program, const QStringList &a
 
     RProcess *newProc = NULL;
 
-    TInt err = qt_create_symbian_process(&newProc, program, arguments);
+    TInt err = qt_create_symbian_process(&newProc, program, arguments, QString());
 
     if (err == KErrNone) {
         if (pid)

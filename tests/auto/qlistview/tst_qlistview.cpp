@@ -45,6 +45,7 @@
 #include <qabstractitemmodel.h>
 #include <qapplication.h>
 #include <qlistview.h>
+#include <qlistwidget.h>
 #include <qitemdelegate.h>
 #include <qstandarditemmodel.h>
 #include <qstringlistmodel.h>
@@ -123,6 +124,10 @@ private slots:
     void taskQTBUG_435_deselectOnViewportClick();
     void taskQTBUG_2678_spacingAndWrappedText();
     void taskQTBUG_5877_skippingItemInPageDownUp();
+    void taskQTBUG_9455_wrongScrollbarRanges();
+    void styleOptionViewItem();
+    void taskQTBUG_12308_artihmeticException();
+    void taskQTBUG_12308_wrongFlowLayout();
 };
 
 // Testing get/set functions
@@ -1651,8 +1656,8 @@ void tst_QListView::task254449_draggingItemToNegativeCoordinates()
     //we'll make sure the item is repainted
     delegate.numPaints = 0;
     QApplication::processEvents();
+    QTRY_COMPARE(delegate.numPaints, 1);
     QCOMPARE(list.visualRect(index).topLeft(), topLeft);
-    QCOMPARE(delegate.numPaints, 1);
 }
 
 
@@ -1939,6 +1944,113 @@ void tst_QListView::taskQTBUG_5877_skippingItemInPageDownUp()
         newCurrent = qMax(currentItemIndexes[i] - scrolledRowCount, 0);
         QCOMPARE(idx, model.index(newCurrent, 0));
     }
+}
+
+class ListView_9455 : public QListView
+{
+public:
+    QSize contentsSize() const
+    {
+        return QListView::contentsSize();
+    }
+};
+
+void tst_QListView::taskQTBUG_9455_wrongScrollbarRanges()
+{
+    QStringList list;
+    const int nrItems = 8;
+    for (int i = 0; i < nrItems; i++)
+        list << QString().sprintf("item %d", i);
+
+    QStringListModel model(list);
+    ListView_9455 w;
+    w.setModel(&model);
+    w.setViewMode(QListView::IconMode);
+    w.resize(116, 132);
+    w.setMovement(QListView::Static);
+    const int spacing = 40;
+    w.setSpacing(spacing);
+    w.show();
+    QTest::qWaitForWindowShown(&w);
+    QCOMPARE(w.verticalScrollBar()->maximum(), w.contentsSize().height() - w.viewport()->geometry().height());
+}
+
+void tst_QListView::styleOptionViewItem()
+{
+    class MyDelegate : public QStyledItemDelegate
+    {
+        public:
+            void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+            {
+                QVERIFY(qstyleoption_cast<const QStyleOptionViewItemV4 *>(&option));
+                QStyleOptionViewItemV4 opt(option);
+                initStyleOption(&opt, index);
+
+                QCOMPARE(opt.index, index);
+
+                QStyledItemDelegate::paint(painter, option, index);
+            }
+    };
+
+    QListView view;
+    QStandardItemModel model;
+    view.setModel(&model);
+    MyDelegate delegate;
+    view.setItemDelegate(&delegate);
+    model.appendRow(QList<QStandardItem*>()
+        << new QStandardItem("Beginning") <<  new QStandardItem("Middle") << new QStandardItem("Middle") << new QStandardItem("End") );
+
+    // Run test
+    view.showMaximized();
+    QApplication::processEvents();
+}
+
+void tst_QListView::taskQTBUG_12308_artihmeticException()
+{
+    QListWidget lw;
+    lw.setLayoutMode(QListView::Batched);
+    lw.setViewMode(QListView::IconMode);
+    for (int i = 0; i < lw.batchSize() + 1; i++) {
+        QListWidgetItem *item = new QListWidgetItem();
+        item->setText(QString("Item %L1").arg(i));
+        lw.addItem(item);
+        item->setHidden(true);
+    }
+    lw.show();
+    QTest::qWaitForWindowShown(&lw);
+    // No crash, it's all right.
+}
+
+class Delegate12308 : public QStyledItemDelegate
+{
+    Q_OBJECT
+public:
+    Delegate12308(QObject *parent = 0) : QStyledItemDelegate(parent)
+    { }
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+    {
+        QVERIFY(option.rect.topLeft() != QPoint(-1, -1));
+        QStyledItemDelegate::paint(painter, option, index);
+    }
+};
+
+void tst_QListView::taskQTBUG_12308_wrongFlowLayout()
+{
+    QListWidget lw;
+    Delegate12308 delegate;
+    lw.setLayoutMode(QListView::Batched);
+    lw.setViewMode(QListView::IconMode);
+    lw.setItemDelegate(&delegate);
+    for (int i = 0; i < lw.batchSize() + 1; i++) {
+        QListWidgetItem *item = new QListWidgetItem();
+        item->setText(QString("Item %L1").arg(i));
+        lw.addItem(item);
+        if (!item->text().contains(QString::fromAscii("1")))
+            item->setHidden(true);
+    }
+    lw.show();
+    QTest::qWaitForWindowShown(&lw);
 }
 
 QTEST_MAIN(tst_QListView)

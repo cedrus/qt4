@@ -1,6 +1,4 @@
 /*
- * This file is part of the DOM implementation for KDE.
- *
  * Copyright (C) 2006 Lars Knoll <lars@trolltech.com>
  *
  * This library is free software; you can redistribute it and/or
@@ -23,7 +21,6 @@
 #include "config.h"
 #include "TextBreakIterator.h"
 
-#if QT_VERSION >= 0x040400
 #include <QtCore/qtextboundaryfinder.h>
 #include <qdebug.h>
 
@@ -36,31 +33,49 @@
 
 namespace WebCore {
 
-    class TextBreakIterator : public QTextBoundaryFinder {
-    };
-    static QTextBoundaryFinder* iterator = 0;
     static unsigned char buffer[1024];
+
+    class TextBreakIterator : public QTextBoundaryFinder {
+    public:
+        TextBreakIterator(QTextBoundaryFinder::BoundaryType type, const UChar* string, int length)
+            : QTextBoundaryFinder(type, (const QChar*)string, length, buffer, sizeof(buffer))
+            , length(length)
+            , string(string) {}
+        TextBreakIterator()
+            : QTextBoundaryFinder()
+            , length(0)
+            , string(0) {}
+
+        int length;
+        const UChar* string;
+    };
+
+    TextBreakIterator* setUpIterator(TextBreakIterator& iterator, QTextBoundaryFinder::BoundaryType type, const UChar* string, int length)
+    {
+        if (!string || !length)
+            return 0;
+
+        if (iterator.isValid() && type == iterator.type() && length == iterator.length
+            && memcmp(string, iterator.string, length) == 0) {
+            iterator.toStart();
+            return &iterator;
+        }
+
+        iterator = TextBreakIterator(type, string, length);
+
+        return &iterator;
+    }
 
     TextBreakIterator* wordBreakIterator(const UChar* string, int length)
     {
-        if (!string)
-            return 0;
-        if (!iterator)
-            iterator = new QTextBoundaryFinder;
-
-        *iterator = QTextBoundaryFinder(QTextBoundaryFinder::Word, (const QChar *)string, length, buffer, sizeof(buffer));
-        return static_cast<TextBreakIterator*>(iterator);
+        static TextBreakIterator staticWordBreakIterator;
+        return setUpIterator(staticWordBreakIterator, QTextBoundaryFinder::Word, string, length);
     }
 
     TextBreakIterator* characterBreakIterator(const UChar* string, int length)
     {
-        if (!string)
-            return 0;
-        if (!iterator)
-            iterator = new QTextBoundaryFinder;
-
-        *iterator = QTextBoundaryFinder(QTextBoundaryFinder::Grapheme, (const QChar *)string, length, buffer, sizeof(buffer));
-        return static_cast<TextBreakIterator*>(iterator);
+        static TextBreakIterator staticCharacterBreakIterator;
+        return setUpIterator(staticCharacterBreakIterator, QTextBoundaryFinder::Grapheme, string, length);
     }
 
     TextBreakIterator* cursorMovementIterator(const UChar* string, int length)
@@ -70,25 +85,15 @@ namespace WebCore {
 
     TextBreakIterator* lineBreakIterator(const UChar* string, int length)
     {
-        static QTextBoundaryFinder *iterator = 0;
-        if (!string)
-            return 0;
-        if (!iterator)
-            iterator = new QTextBoundaryFinder;
-
-        *iterator = QTextBoundaryFinder(QTextBoundaryFinder::Line, (const QChar *)string, length, buffer, sizeof(buffer));
-        return static_cast<TextBreakIterator*>(iterator);
+        static TextBreakIterator staticLineBreakIterator;
+        return setUpIterator(staticLineBreakIterator, QTextBoundaryFinder::Line, string, length);
     }
 
     TextBreakIterator* sentenceBreakIterator(const UChar* string, int length)
     {
-        if (!string)
-            return 0;
-        if (!iterator)
-            iterator = new QTextBoundaryFinder;
+        static TextBreakIterator staticSentenceBreakIterator;
+        return setUpIterator(staticSentenceBreakIterator, QTextBoundaryFinder::Sentence, string, length);
 
-        *iterator = QTextBoundaryFinder(QTextBoundaryFinder::Sentence, (const QChar *)string, length, buffer, sizeof(buffer));
-        return static_cast<TextBreakIterator*>(iterator);
     }
 
     int textBreakFirst(TextBreakIterator* bi)
@@ -132,183 +137,3 @@ namespace WebCore {
     }
 
 }
-#else
-#include <qtextlayout.h>
-
-namespace WebCore {
-
-    class TextBreakIterator {
-    public:
-        virtual int first() = 0;
-        virtual int next() = 0;
-        virtual int previous() = 0;
-        inline int following(int pos)
-        {
-            currentPos = pos;
-            return next();
-        }
-        inline int preceding(int pos)
-        {
-            currentPos = pos;
-            return previous();
-        }
-        int currentPos;
-        const UChar *string;
-        int length;
-    };
-
-    class WordBreakIteratorQt : public TextBreakIterator {
-    public:
-        virtual int first();
-        virtual int next();
-        virtual int previous();
-    };
-
-    class CharBreakIteratorQt : public TextBreakIterator {
-    public:
-        virtual int first();
-        virtual int next();
-        virtual int previous();
-        QTextLayout layout;
-    };
-
-    int WordBreakIteratorQt::first()
-    {
-        currentPos = 0;
-        return currentPos;
-    }
-
-    int WordBreakIteratorQt::next()
-    {
-        if (currentPos >= length) {
-            currentPos = -1;
-            return currentPos;
-        }
-        bool haveSpace = false;
-        while (currentPos < length) {
-            if (haveSpace && !QChar(string[currentPos]).isSpace())
-                break;
-            if (QChar(string[currentPos]).isSpace())
-                haveSpace = true;
-            ++currentPos;
-        }
-        return currentPos;
-    }
-
-    int WordBreakIteratorQt::previous()
-    {
-        if (currentPos <= 0) {
-            currentPos = -1;
-            return currentPos;
-        }
-        bool haveSpace = false;
-        while (currentPos > 0) {
-            if (haveSpace && !QChar(string[currentPos]).isSpace())
-                break;
-            if (QChar(string[currentPos]).isSpace())
-                haveSpace = true;
-            --currentPos;
-        }
-        return currentPos;
-    }
-
-    int CharBreakIteratorQt::first()
-    {
-        currentPos = 0;
-        return currentPos;
-    }
-
-    int CharBreakIteratorQt::next()
-    {
-        if (currentPos >= length)
-            return -1;
-        currentPos = layout.nextCursorPosition(currentPos);
-        return currentPos;
-    }
-
-    int CharBreakIteratorQt::previous()
-    {
-        if (currentPos <= 0)
-            return -1;
-        currentPos = layout.previousCursorPosition(currentPos);
-        return currentPos;
-    }
-
-
-TextBreakIterator* wordBreakIterator(const UChar* string, int length)
-{
-    static WordBreakIteratorQt *iterator = 0;
-    if (!iterator)
-        iterator = new WordBreakIteratorQt;
-
-    iterator->string = string;
-    iterator->length = length;
-    iterator->currentPos = 0;
-
-    return iterator;
-}
-
-TextBreakIterator* characterBreakIterator(const UChar* string, int length)
-{
-    static CharBreakIteratorQt *iterator = 0;
-    if (!iterator)
-        iterator = new CharBreakIteratorQt;
-
-    iterator->string = string;
-    iterator->length = length;
-    iterator->currentPos = 0;
-    iterator->layout.setText(QString(reinterpret_cast<const QChar*>(string), length));
-
-    return iterator;
-}
-
-TextBreakIterator* cursorMovementIterator(const UChar* string, int length)
-{
-    return characterBreakIterator(string, length);
-}
-
-TextBreakIterator* lineBreakIterator(const UChar*, int)
-{
-    // not yet implemented
-    return 0;
-}
-
-TextBreakIterator* sentenceBreakIterator(const UChar*, int)
-{
-    // not yet implemented
-    return 0;
-}
-
-int textBreakFirst(TextBreakIterator* bi)
-{
-    return bi->first();
-}
-
-int textBreakNext(TextBreakIterator* bi)
-{
-    return bi->next();
-}
-
-int textBreakPreceding(TextBreakIterator* bi, int pos)
-{
-    return bi->preceding(pos);
-}
-
-int textBreakFollowing(TextBreakIterator* bi, int pos)
-{
-    return bi->following(pos);
-}
-
-int textBreakCurrent(TextBreakIterator* bi)
-{
-    return bi->currentPos;
-}
-
-bool isTextBreak(TextBreakIterator*, int)
-{
-    return true;
-}
-
-}
-
-#endif

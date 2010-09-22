@@ -42,9 +42,4 @@ INCLUDEPATH += ../3rdparty/harfbuzz/src
 
 symbian:TARGET.UID3=0x2001B2E2
 
-#zlib support
-contains(QT_CONFIG, zlib) {
-   INCLUDEPATH += ../3rdparty/zlib
-} else:!contains(QT_CONFIG, no-zlib) {
-   unix:LIBS_PRIVATE += -lz
-}
+include(../3rdparty/zlib_dependency.pri)

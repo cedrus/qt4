@@ -100,7 +100,8 @@ static void init(QTextBoundaryFinder::BoundaryType type, const QChar *chars, int
         HB_GetSentenceBoundaries(string, length, scriptItems.data(), scriptItems.count(), attributes);
 }
 
-/*! \class QTextBoundaryFinder
+/*! 
+    \class QTextBoundaryFinder
 
     \brief The QTextBoundaryFinder class provides a way of finding Unicode text boundaries in a string.
 
@@ -130,6 +131,11 @@ static void init(QTextBoundaryFinder::BoundaryType type, const QChar *chars, int
     Line break boundaries give possible places where a line break
     might happen and sentence boundaries will show the beginning and
     end of whole sentences.
+
+    The first position in a string is always a valid boundary and
+    refers to the position before the first character. The last
+    position at the length of the string is also valid and refers
+    to the position after the last character.
 */
 
 /*!
@@ -238,7 +244,7 @@ QTextBoundaryFinder::QTextBoundaryFinder(BoundaryType type, const QString &strin
   data required, it will use this instead of allocating its own buffer.
 
   \warning QTextBoundaryFinder does not create a copy of \a chars. It is the
-  application programmer's responsability to ensure the array is allocated for
+  application programmer's responsibility to ensure the array is allocated for
   as long as the QTextBoundaryFinder object stays alive. The same applies to
   \a buffer.
 */
@@ -331,7 +337,7 @@ QString QTextBoundaryFinder::string() const
 /*!
   Moves the QTextBoundaryFinder to the next boundary position and returns that position.
 
-  Returns -1 is there is no next boundary.
+  Returns -1 if there is no next boundary.
 */
 int QTextBoundaryFinder::toNextBoundary()
 {
@@ -362,7 +368,8 @@ int QTextBoundaryFinder::toNextBoundary()
             ++pos;
         break;
     case Line:
-        while (pos < length && d->attributes[pos].lineBreakType < HB_Break)
+        Q_ASSERT(pos);
+        while (pos < length && d->attributes[pos-1].lineBreakType < HB_Break)
             ++pos;
         break;
     }
@@ -373,7 +380,7 @@ int QTextBoundaryFinder::toNextBoundary()
 /*!
   Moves the QTextBoundaryFinder to the previous boundary position and returns that position.
 
-  Returns -1 is there is no previous boundary.
+  Returns -1 if there is no previous boundary.
 */
 int QTextBoundaryFinder::toPreviousBoundary()
 {
@@ -404,7 +411,7 @@ int QTextBoundaryFinder::toPreviousBoundary()
             --pos;
         break;
     case Line:
-        while (pos > 0 && d->attributes[pos].lineBreakType < HB_Break)
+        while (pos > 0 && d->attributes[pos-1].lineBreakType < HB_Break)
             --pos;
         break;
     }
@@ -429,7 +436,7 @@ bool QTextBoundaryFinder::isAtBoundary() const
     case Word:
         return d->attributes[pos].wordBoundary;
     case Line:
-        return d->attributes[pos].lineBreakType >= HB_Break;
+        return (pos > 0) ? d->attributes[pos-1].lineBreakType >= HB_Break : true;
     case Sentence:
         return d->attributes[pos].sentenceBoundary;
     }

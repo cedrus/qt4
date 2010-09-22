@@ -77,10 +77,11 @@ public:
     ~QNetworkReplyImpl();
     virtual void abort();
 
-    // reimplemented from QNetworkReply
+    // reimplemented from QNetworkReply / QIODevice
     virtual void close();
     virtual qint64 bytesAvailable() const;
     virtual void setReadBufferSize(qint64 size);
+    virtual bool canReadLine () const;
 
     virtual qint64 readData(char *data, qint64 maxlen);
     virtual bool event(QEvent *);
@@ -98,6 +99,10 @@ public:
     Q_PRIVATE_SLOT(d_func(), void _q_copyReadChannelFinished())
     Q_PRIVATE_SLOT(d_func(), void _q_bufferOutgoingData())
     Q_PRIVATE_SLOT(d_func(), void _q_bufferOutgoingDataFinished())
+#ifndef QT_NO_BEARERMANAGEMENT
+    Q_PRIVATE_SLOT(d_func(), void _q_networkSessionConnected())
+    Q_PRIVATE_SLOT(d_func(), void _q_networkSessionFailed())
+#endif
 };
 
 class QNetworkReplyImplPrivate: public QNetworkReplyPrivate
@@ -110,11 +115,13 @@ public:
     };
 
     enum State {
-        Idle,
-        Buffering,
-        Working,
-        Finished,
-        Aborted
+        Idle,               // The reply is idle.
+        Buffering,          // The reply is buffering outgoing data.
+        Working,            // The reply is uploading/downloading data.
+        Finished,           // The reply has finished.
+        Aborted,            // The reply has been aborted.
+        WaitingForSession,  // The reply is waiting for the session to open before connecting.
+        Reconnecting        // The reply will reconnect to once roaming has completed.
     };
 
     typedef QQueue<InternalNotifications> NotificationQueue;
@@ -128,6 +135,10 @@ public:
     void _q_copyReadChannelFinished();
     void _q_bufferOutgoingData();
     void _q_bufferOutgoingDataFinished();
+#ifndef QT_NO_BEARERMANAGEMENT
+    void _q_networkSessionConnected();
+    void _q_networkSessionFailed();
+#endif
 
     void setup(QNetworkAccessManager::Operation op, const QNetworkRequest &request,
                QIODevice *outgoingData);
@@ -166,6 +177,8 @@ public:
     QIODevice *copyDevice;
     QAbstractNetworkCache *networkCache() const;
 
+    bool migrateBackend();
+
     bool cacheEnabled;
     QIODevice *cacheSaveDevice;
 
@@ -182,6 +195,7 @@ public:
     qint64 bytesDownloaded;
     qint64 lastBytesDownloaded;
     qint64 bytesUploaded;
+    qint64 preMigrationDownloaded;
 
     QString httpReasonPhrase;
     int httpStatusCode;
@@ -190,6 +204,22 @@ public:
 
     Q_DECLARE_PUBLIC(QNetworkReplyImpl)
 };
+
+#ifndef QT_NO_BEARERMANAGEMENT
+class QDisabledNetworkReply : public QNetworkReply
+{
+    Q_OBJECT
+
+public:
+    QDisabledNetworkReply(QObject *parent, const QNetworkRequest &req,
+                          QNetworkAccessManager::Operation op);
+    ~QDisabledNetworkReply();
+
+    void abort() { }
+protected:
+    qint64 readData(char *, qint64) { return -1; }
+};
+#endif
 
 QT_END_NAMESPACE
 

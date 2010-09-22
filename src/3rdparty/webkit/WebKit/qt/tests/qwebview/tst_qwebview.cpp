@@ -46,8 +46,24 @@ private slots:
 
     void reusePage_data();
     void reusePage();
+    void microFocusCoordinates();
+    void focusInputTypes();
 
     void crashTests();
+};
+
+class WebView : public QWebView
+{
+    Q_OBJECT
+
+public:
+    void fireMouseClick(QPoint point) {
+        QMouseEvent presEv(QEvent::MouseButtonPress, point, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QMouseEvent relEv(QEvent::MouseButtonRelease, point, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QWebView::mousePressEvent(&presEv);
+        QWebView::mousePressEvent(&relEv);
+    }
+
 };
 
 // This will be called before the first test function is executed.
@@ -121,7 +137,10 @@ void tst_QWebView::reusePage_data()
 
 void tst_QWebView::reusePage()
 {
-    QDir::setCurrent(SRCDIR);
+    if (!QDir(TESTS_SOURCE_DIR).exists())
+        QSKIP(QString("This test requires access to resources found in '%1'").arg(TESTS_SOURCE_DIR).toLatin1().constData(), SkipAll);
+
+    QDir::setCurrent(TESTS_SOURCE_DIR);
 
     QFETCH(QString, html);
     QWebView* view1 = new QWebView;
@@ -129,21 +148,29 @@ void tst_QWebView::reusePage()
     view1->setPage(page);
     page->settings()->setAttribute(QWebSettings::PluginsEnabled, true);
     QWebFrame* mainFrame = page->mainFrame();
-    mainFrame->setHtml(html, QUrl::fromLocalFile(QDir::currentPath()));
+    mainFrame->setHtml(html, QUrl::fromLocalFile(TESTS_SOURCE_DIR));
     if (html.contains("</embed>")) {
         // some reasonable time for the PluginStream to feed test.swf to flash and start painting
-        QTest::qWait(2000);
+        waitForSignal(view1, SIGNAL(loadFinished(bool)), 2000);
     }
 
     view1->show();
-    QTest::qWait(2000);
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+    QTest::qWaitForWindowShown(view1);
+#else
+    QTest::qWait(2000); 
+#endif
     delete view1;
     QVERIFY(page != 0); // deleting view must not have deleted the page, since it's not a child of view
 
     QWebView *view2 = new QWebView;
     view2->setPage(page);
     view2->show(); // in Windowless mode, you should still be able to see the plugin here
-    QTest::qWait(2000);
+#if QT_VERSION >= QT_VERSION_CHECK(4, 6, 0)
+    QTest::qWaitForWindowShown(view2);
+#else
+    QTest::qWait(2000); 
+#endif
     delete view2;
 
     delete page; // must not crash
@@ -185,11 +212,114 @@ void tst_QWebView::crashTests()
     // Test page should have frames.
     QWebView view;
     WebViewCrashTest tester(&view);
-    QUrl url("qrc:///data/index.html");
+    QUrl url("qrc:///resources/index.html");
     view.load(url);
     QTRY_VERIFY(tester.m_executed); // If fail it means that the test wasn't executed.
 }
 
+void tst_QWebView::microFocusCoordinates()
+{
+    QWebPage* page = new QWebPage;
+    QWebView* webView = new QWebView;
+    webView->setPage( page );
+
+    page->mainFrame()->setHtml("<html><body>" \
+        "<input type='text' id='input1' style='font--family: serif' value='' maxlength='20'/><br>" \
+        "<canvas id='canvas1' width='500' height='500'/>" \
+        "<input type='password'/><br>" \
+        "<canvas id='canvas2' width='500' height='500'/>" \
+        "</body></html>");
+
+    page->mainFrame()->setFocus();
+
+    QVariant initialMicroFocus = page->inputMethodQuery(Qt::ImMicroFocus);
+    QVERIFY(initialMicroFocus.isValid());
+
+    page->mainFrame()->scroll(0,50);
+
+    QVariant currentMicroFocus = page->inputMethodQuery(Qt::ImMicroFocus);
+    QVERIFY(currentMicroFocus.isValid());
+
+    QCOMPARE(initialMicroFocus.toRect().translated(QPoint(0,-50)), currentMicroFocus.toRect());
+}
+
+void tst_QWebView::focusInputTypes()
+{
+    QWebPage* page = new QWebPage;
+    WebView* webView = new WebView;
+    webView->setPage( page );
+
+    QCoreApplication::processEvents();
+    QUrl url("qrc:///resources/input_types.html");
+    page->mainFrame()->load(url);
+    page->mainFrame()->setFocus();
+
+    QVERIFY(waitForSignal(page, SIGNAL(loadFinished(bool))));
+
+    // 'text' type
+    webView->fireMouseClick(QPoint(20, 10));
+#if defined(Q_WS_MAEMO_5) || defined(Q_WS_MAEMO_6) || defined(Q_OS_SYMBIAN)
+    QVERIFY(webView->inputMethodHints() & Qt::ImhNoAutoUppercase);
+    QVERIFY(webView->inputMethodHints() & Qt::ImhNoPredictiveText);
+#else
+    QVERIFY(webView->inputMethodHints() == Qt::ImhNone);
+#endif
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'password' field
+    webView->fireMouseClick(QPoint(20, 60));
+    QVERIFY(webView->inputMethodHints() == Qt::ImhHiddenText);
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'tel' field
+    webView->fireMouseClick(QPoint(20, 110));
+    QVERIFY(webView->inputMethodHints() == Qt::ImhDialableCharactersOnly);
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'number' field
+    webView->fireMouseClick(QPoint(20, 160));
+    QVERIFY(webView->inputMethodHints() == Qt::ImhDigitsOnly);
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'email' field
+    webView->fireMouseClick(QPoint(20, 210));
+    QVERIFY(webView->inputMethodHints() == Qt::ImhEmailCharactersOnly);
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'url' field
+    webView->fireMouseClick(QPoint(20, 260));
+    QVERIFY(webView->inputMethodHints() == Qt::ImhUrlCharactersOnly);
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'password' field
+    webView->fireMouseClick(QPoint(20, 60));
+    QVERIFY(webView->inputMethodHints() == Qt::ImhHiddenText);
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'text' type
+    webView->fireMouseClick(QPoint(20, 10));
+#if defined(Q_WS_MAEMO_5) || defined(Q_WS_MAEMO_6) || defined(Q_OS_SYMBIAN)
+    QVERIFY(webView->inputMethodHints() & Qt::ImhNoAutoUppercase);
+    QVERIFY(webView->inputMethodHints() & Qt::ImhNoPredictiveText);
+#else
+    QVERIFY(webView->inputMethodHints() == Qt::ImhNone);
+#endif
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    // 'password' field
+    webView->fireMouseClick(QPoint(20, 60));
+    QVERIFY(webView->inputMethodHints() == Qt::ImhHiddenText);
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    qWarning("clicking on text area");
+    // 'text area' field
+    webView->fireMouseClick(QPoint(20, 320));
+    QVERIFY(webView->inputMethodHints() == Qt::ImhNone);
+    QVERIFY(webView->testAttribute(Qt::WA_InputMethodEnabled));
+
+    delete webView;
+
+}
 
 QTEST_MAIN(tst_QWebView)
 #include "tst_qwebview.moc"
