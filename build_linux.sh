@@ -12,7 +12,7 @@ fi
 echo "We may need to get some build dependencies from the debian archive."
 echo "The following commands requires sudo access to install the necessary files"
 sudo apt-get build-dep qt4-x11
-sudo apt-get install libphonon-dev libgstreamer0.10-dev libgstreamer-plugins-base0.10-dev
+sudo apt-get install libphonon-dev libgstreamer0.10-dev libgstreamer-plugins-base0.10-dev libglu1-mesa-dev freeglut3-dev
 
 ./configure -opensource -debug-and-release -prefix $DEST_DIR -buildkey Cedrus-Qt-4.7.0 -nomake demos -nomake examples -I/usr/include/gstreamer-0.10 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/libxml2
 
