@@ -51,15 +51,19 @@ QT_BEGIN_HEADER
 #if defined(QT_NO_MAC_XARCH) || (defined(Q_OS_DARWIN) && (defined(__ppc__) || defined(__ppc64__)))
 // Disable MMX and SSE on Mac/PPC builds, or if the compiler
 // does not support -Xarch argument passing
-#undef QT_HAVE_SSE2
 #undef QT_HAVE_SSE
+#undef QT_HAVE_SSE2
+#undef QT_HAVE_SSE3
+#undef QT_HAVE_SSSE3
+#undef QT_HAVE_SSE4_1
+#undef QT_HAVE_SSE4_2
+#undef QT_HAVE_AVX
 #undef QT_HAVE_3DNOW
 #undef QT_HAVE_MMX
 #endif
 
 // SSE intrinsics
-#if defined(QT_HAVE_SSE2) && !defined(QT_BOOTSTRAPPED) && (defined(__SSE2__) \
-    || (defined(Q_CC_MSVC) && (defined(_M_X64) || _M_IX86_FP == 2)))
+#if defined(QT_HAVE_SSE2) && (defined(__SSE2__) || defined(Q_CC_MSVC))
 #if defined(QT_LINUXBASE)
 /// this is an evil hack - the posix_memalign declaration in LSB
 /// is wrong - see http://bugs.linuxbase.org/show_bug.cgi?id=2431
@@ -73,8 +77,32 @@ QT_BEGIN_HEADER
 #  include <emmintrin.h>
 #endif
 
+// SSE3 intrinsics
+#if defined(QT_HAVE_SSE3) && (defined(__SSE3__) || defined(Q_CC_MSVC))
+#include <pmmintrin.h>
+#endif
+
+// SSSE3 intrinsics
+#if defined(QT_HAVE_SSSE3) && (defined(__SSSE3__) || defined(Q_CC_MSVC))
+#include <tmmintrin.h>
+#endif
+
+// SSE4.1 and SSE4.2 intrinsics
+#if (defined(QT_HAVE_SSE4_1) || defined(QT_HAVE_SSE4_2)) && (defined(__SSE4_1__) || defined(Q_CC_MSVC))
+#include <smmintrin.h>
+#include <nmmintrin.h>
+#endif
+
+// AVX intrinsics
+#if defined(QT_HAVE_AVX) && (defined(__AVX__) || defined(Q_CC_MSVC))
+#include <immintrin.h>
+#endif
+
+
+#if !defined(QT_BOOTSTRAPPED) && (!defined(Q_CC_MSVC) || (defined(_M_X64) || _M_IX86_FP == 2))
 #define QT_ALWAYS_HAVE_SSE2
 #endif
+#endif // defined(QT_HAVE_SSE2) && (defined(__SSE2__) || defined(Q_CC_MSVC))
 
 // NEON intrinsics
 #if defined(QT_HAVE_NEON)
@@ -118,12 +146,19 @@ enum CPUFeatures {
     SSE2        = 0x20,
     CMOV        = 0x40,
     IWMMXT      = 0x80,
-    NEON        = 0x100
+    NEON        = 0x100,
+    SSE3        = 0x200,
+    SSSE3       = 0x400,
+    SSE4_1      = 0x800,
+    SSE4_2      = 0x1000,
+    AVX         = 0x2000
 };
 
 Q_CORE_EXPORT uint qDetectCPUFeatures();
 
-Q_CORE_EXPORT uint qDetectCPUFeatures();
+
+#define ALIGNMENT_PROLOGUE_16BYTES(ptr, i, length) \
+    for (; i < static_cast<int>(qMin(static_cast<quintptr>(length), ((4 - ((reinterpret_cast<quintptr>(ptr) >> 2) & 0x3)) & 0x3))); ++i)
 
 QT_END_NAMESPACE
 

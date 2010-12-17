@@ -402,6 +402,8 @@ private slots:
 #endif // QT_MAC_USE_COCOA
 #endif
 
+    void nativeChildFocus();
+
 private:
     bool ensureScreenSize(int width, int height);
     QWidget *testWidget;
@@ -9742,7 +9744,6 @@ void tst_QWidget::destroyBackingStoreWhenHidden()
     QVERIFY(0 != backingStore(child));
 
     // Parent is obscured, therefore its backing store should be destroyed
-    QEXPECT_FAIL("", "QTBUG-12406", Continue);
     QVERIFY(0 == backingStore(parent));
 
     // Disable full screen
@@ -10531,6 +10532,29 @@ void tst_QWidget::taskQTBUG_11373()
 }
 #endif // QT_MAC_USE_COCOA
 #endif
+
+void tst_QWidget::nativeChildFocus()
+{
+    QWidget w;
+    QLayout *layout = new QVBoxLayout;
+    w.setLayout(layout);
+    QLineEdit *p1 = new QLineEdit;
+    QLineEdit *p2 = new QLineEdit;
+    layout->addWidget(p1);
+    layout->addWidget(p2);
+    p1->setObjectName("p1");
+    p2->setObjectName("p2");
+    w.show();
+    w.activateWindow();
+    p1->setFocus();
+    p1->setAttribute(Qt::WA_NativeWindow);
+    p2->setAttribute(Qt::WA_NativeWindow);
+    QApplication::processEvents();
+    QTest::qWaitForWindowShown(&w);
+
+    QCOMPARE(QApplication::activeWindow(), &w);
+    QCOMPARE(QApplication::focusWidget(), p1);
+}
 
 QTEST_MAIN(tst_QWidget)
 #include "tst_qwidget.moc"

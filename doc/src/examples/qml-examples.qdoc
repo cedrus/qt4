@@ -137,6 +137,7 @@
     \o \l {declarative/cppextensions/referenceexamples/grouped}{Grouped Properties}
     \o \l {declarative/cppextensions/referenceexamples/attached}{Attached Properties}
     \o \l {declarative/cppextensions/referenceexamples/signal}{Signal Support}
+    \o \l {declarative/cppextensions/referenceexamples/methods}{Methods Support}
     \o \l {declarative/cppextensions/referenceexamples/valuesource}{Property Value Source}
     \o \l {declarative/cppextensions/referenceexamples/binding}{Binding}
     \endlist
@@ -196,6 +197,9 @@
     \o \l{declarative/cppextensions/qgraphicslayouts/qgraphicsgridlayout}{QGraphicsGridLayout}
     \o \l{declarative/cppextensions/qgraphicslayouts/qgraphicslinearlayout}{QGraphicsLinearLayout}
     \endlist
+
+    Also see \l {Integrating QML with existing Qt UI code} for information on using QML 
+    in Qt applications that use the Graphics View framework or ordinary QWidget-based views.
 */
 
 /*!
@@ -226,7 +230,7 @@
 */
 
 /*!
-    \title Internationlization Example
+    \title Internationalization Example
     \example declarative/i18n
 
     This example shows how to enable text translation in QML.
@@ -371,7 +375,7 @@
     \title Models and Views: WebView Example
     \example declarative/modelviews/webview
 
-    These examples shows how to use the WebView element.
+    These examples show how to use the WebView element.
 
     \table
     \row
@@ -627,7 +631,9 @@
     \title UI Components: Tab Widget Example
     \example declarative/ui-components/tabwidget
 
-    This example shows how to create a tab widget.
+    This example shows how to create a tab widget. It also demonstrates how
+    \l {Setting default properties}{default properties} can be used to collect and 
+    assemble the child items declared within an \l Item.
 
     \image qml-tabwidget-example.png
 */

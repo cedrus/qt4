@@ -1363,7 +1363,7 @@ bool QAbstractItemView::dragEnabled() const
 
     Note that the model used needs to provide support for drag and drop operations.
 
-    \sa setDragDropMode() {Using Drag and Drop with Item Views}
+    \sa setDragDropMode() {Using drag & drop with item views}
 */
 
 /*!
@@ -2270,9 +2270,11 @@ void QAbstractItemView::keyPressEvent(QKeyEvent *event)
             } else {
                 d->selectionModel->setCurrentIndex(newCurrent, command);
                 d->pressedPosition = visualRect(newCurrent).center() + d->offset();
-                // We copy the same behaviour as for mousePressEvent().
-                QRect rect(d->pressedPosition - d->offset(), QSize(1, 1));
-                setSelection(rect, command);
+                if (newCurrent.isValid()) {
+                    // We copy the same behaviour as for mousePressEvent().
+                    QRect rect(d->pressedPosition - d->offset(), QSize(1, 1));
+                    setSelection(rect, command);
+                }
             }
             event->accept();
             return;

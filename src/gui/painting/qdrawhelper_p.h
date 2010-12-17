@@ -62,19 +62,13 @@
 #define QT_FT_END_HEADER
 #endif
 #include "private/qrasterdefs_p.h"
+#include <private/qsimd_p.h>
 
 #ifdef Q_WS_QWS
 #include "QtGui/qscreen_qws.h"
 #endif
 
 QT_BEGIN_NAMESPACE
-
-#if defined(Q_OS_MAC) && (defined(__ppc__) || defined(__ppc64__))
-#undef QT_HAVE_MMX
-#undef QT_HAVE_SSE
-#undef QT_HAVE_SSE2
-#undef QT_HAVE_3DNOW
-#endif
 
 #if defined(Q_CC_MSVC) && _MSCVER <= 1300 && !defined(Q_CC_INTEL)
 #define Q_STATIC_TEMPLATE_SPECIALIZATION static
@@ -90,6 +84,11 @@ QT_BEGIN_NAMESPACE
 #  define Q_STATIC_TEMPLATE_FUNCTION static
 #  define Q_STATIC_INLINE_FUNCTION static inline
 #endif
+
+static const uint AMASK = 0xff000000;
+static const uint RMASK = 0x00ff0000;
+static const uint GMASK = 0x0000ff00;
+static const uint BMASK = 0x000000ff;
 
 /*******************************************************************************
  * QSpan
@@ -309,18 +308,61 @@ struct QSpanData
     void adjustSpanMethods();
 };
 
+#if defined(Q_CC_RVCT)
+#  pragma push
+#  pragma arm
+#endif
+Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_255(uint x, uint a, uint y, uint b) {
+    uint t = (x & 0xff00ff) * a + (y & 0xff00ff) * b;
+    t = (t + ((t >> 8) & 0xff00ff) + 0x800080) >> 8;
+    t &= 0xff00ff;
 
-Q_STATIC_INLINE_FUNCTION uint BYTE_MUL_RGB16(uint x, uint a) {
-    a += 1;
-    uint t = (((x & 0x07e0)*a) >> 8) & 0x07e0;
-    t |= (((x & 0xf81f)*(a>>2)) >> 6) & 0xf81f;
-    return t;
+    x = ((x >> 8) & 0xff00ff) * a + ((y >> 8) & 0xff00ff) * b;
+    x = (x + ((x >> 8) & 0xff00ff) + 0x800080);
+    x &= 0xff00ff00;
+    x |= t;
+    return x;
+}
+#if defined(Q_CC_RVCT)
+#  pragma pop
+#endif
+
+#if QT_POINTER_SIZE == 8 // 64-bit versions
+
+Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint b) {
+    quint64 t = (((quint64(x)) | ((quint64(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
+    t += (((quint64(y)) | ((quint64(y)) << 24)) & 0x00ff00ff00ff00ff) * b;
+    t >>= 8;
+    t &= 0x00ff00ff00ff00ff;
+    return (uint(t)) | (uint(t >> 24));
 }
 
-Q_STATIC_INLINE_FUNCTION uint BYTE_MUL_RGB16_32(uint x, uint a) {
-    uint t = (((x & 0xf81f07e0) >> 5)*a) & 0xf81f07e0;
-    t |= (((x & 0x07e0f81f)*a) >> 5) & 0x07e0f81f;
-    return t;
+Q_STATIC_INLINE_FUNCTION uint BYTE_MUL(uint x, uint a) {
+    quint64 t = (((quint64(x)) | ((quint64(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
+    t = (t + ((t >> 8) & 0xff00ff00ff00ff) + 0x80008000800080) >> 8;
+    t &= 0x00ff00ff00ff00ff;
+    return (uint(t)) | (uint(t >> 24));
+}
+
+Q_STATIC_INLINE_FUNCTION uint PREMUL(uint x) {
+    uint a = x >> 24;
+    quint64 t = (((quint64(x)) | ((quint64(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
+    t = (t + ((t >> 8) & 0xff00ff00ff00ff) + 0x80008000800080) >> 8;
+    t &= 0x000000ff00ff00ff;
+    return (uint(t)) | (uint(t >> 24)) | (a << 24);
+}
+
+#else // 32-bit versions
+
+Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint b) {
+    uint t = (x & 0xff00ff) * a + (y & 0xff00ff) * b;
+    t >>= 8;
+    t &= 0xff00ff;
+
+    x = ((x >> 8) & 0xff00ff) * a + ((y >> 8) & 0xff00ff) * b;
+    x &= 0xff00ff00;
+    x |= t;
+    return x;
 }
 
 #if defined(Q_CC_RVCT)
@@ -353,6 +395,21 @@ Q_STATIC_INLINE_FUNCTION uint PREMUL(uint x) {
     x &= 0xff00;
     x |= t | (a << 24);
     return x;
+}
+#endif
+
+
+Q_STATIC_INLINE_FUNCTION uint BYTE_MUL_RGB16(uint x, uint a) {
+    a += 1;
+    uint t = (((x & 0x07e0)*a) >> 8) & 0x07e0;
+    t |= (((x & 0xf81f)*(a>>2)) >> 6) & 0xf81f;
+    return t;
+}
+
+Q_STATIC_INLINE_FUNCTION uint BYTE_MUL_RGB16_32(uint x, uint a) {
+    uint t = (((x & 0xf81f07e0) >> 5)*a) & 0xf81f07e0;
+    t |= (((x & 0x07e0f81f)*a) >> 5) & 0x07e0f81f;
+    return t;
 }
 
 #define INV_PREMUL(p)                                   \
@@ -1842,70 +1899,6 @@ inline int qBlue565(quint16 rgb) {
     return (b << 3) | (b >> 2);
 }
 
-#if 1
-Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint b) {
-    uint t = (x & 0xff00ff) * a + (y & 0xff00ff) * b;
-    t >>= 8;
-    t &= 0xff00ff;
-
-    x = ((x >> 8) & 0xff00ff) * a + ((y >> 8) & 0xff00ff) * b;
-    x &= 0xff00ff00;
-    x |= t;
-    return x;
-}
-
-#if defined(Q_CC_RVCT)
-#  pragma push
-#  pragma arm
-#endif
-Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_255(uint x, uint a, uint y, uint b) {
-    uint t = (x & 0xff00ff) * a + (y & 0xff00ff) * b;
-    t = (t + ((t >> 8) & 0xff00ff) + 0x800080) >> 8;
-    t &= 0xff00ff;
-
-    x = ((x >> 8) & 0xff00ff) * a + ((y >> 8) & 0xff00ff) * b;
-    x = (x + ((x >> 8) & 0xff00ff) + 0x800080);
-    x &= 0xff00ff00;
-    x |= t;
-    return x;
-}
-#if defined(Q_CC_RVCT)
-#  pragma pop
-#endif
-#else
-// possible implementation for 64 bit
-Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_256(uint x, uint a, uint y, uint b) {
-    ulong t = (((ulong(x)) | ((ulong(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
-    t += (((ulong(y)) | ((ulong(y)) << 24)) & 0x00ff00ff00ff00ff) * b;
-    t >>= 8;
-    t &= 0x00ff00ff00ff00ff;
-    return (uint(t)) | (uint(t >> 24));
-}
-
-Q_STATIC_INLINE_FUNCTION uint INTERPOLATE_PIXEL_255(uint x, uint a, uint y, uint b) {
-    ulong t = (((ulong(x)) | ((ulong(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
-    t += (((ulong(y)) | ((ulong(y)) << 24)) & 0x00ff00ff00ff00ff) * b;
-    t = (t + ((t >> 8) & 0xff00ff00ff00ff) + 0x80008000800080);
-    t &= 0x00ff00ff00ff00ff;
-    return (uint(t)) | (uint(t >> 24));
-}
-
-Q_STATIC_INLINE_FUNCTION uint BYTE_MUL(uint x, uint a) {
-    ulong t = (((ulong(x)) | ((ulong(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
-    t = (t + ((t >> 8) & 0xff00ff00ff00ff) + 0x80008000800080);
-    t &= 0x00ff00ff00ff00ff;
-    return (uint(t)) | (uint(t >> 24));
-}
-
-Q_STATIC_INLINE_FUNCTION uint PREMUL(uint x) {
-    uint a = x >> 24;
-    ulong t = (((ulong(x)) | ((ulong(x)) << 24)) & 0x00ff00ff00ff00ff) * a;
-    t = (t + ((t >> 8) & 0xff00ff00ff00ff) + 0x80008000800080);
-    t &= 0x00ff00ff00ff00ff;
-    return (uint(t)) | (uint(t >> 24)) | 0xff000000;
-}
-#endif
-
 const uint qt_bayer_matrix[16][16] = {
     { 0x1, 0xc0, 0x30, 0xf0, 0xc, 0xcc, 0x3c, 0xfc,
       0x3, 0xc3, 0x33, 0xf3, 0xf, 0xcf, 0x3f, 0xff},
@@ -1944,6 +1937,100 @@ const uint qt_bayer_matrix[16][16] = {
 #define ARGB_COMBINE_ALPHA(argb, alpha) \
     ((((argb >> 24) * alpha) >> 8) << 24) | (argb & 0x00ffffff)
 
+
+#if QT_POINTER_SIZE == 8 // 64-bit versions
+#define AMIX(mask) (qMin(((qint64(s)&mask) + (qint64(d)&mask)), qint64(mask)))
+#define MIX(mask) (qMin(((qint64(s)&mask) + (qint64(d)&mask)), qint64(mask)))
+#else // 32 bits
+// The mask for alpha can overflow over 32 bits
+#define AMIX(mask) quint32(qMin(((qint64(s)&mask) + (qint64(d)&mask)), qint64(mask)))
+#define MIX(mask) (qMin(((quint32(s)&mask) + (quint32(d)&mask)), quint32(mask)))
+#endif
+
+inline int comp_func_Plus_one_pixel_const_alpha(uint d, const uint s, const uint const_alpha, const uint one_minus_const_alpha)
+{
+    const int result = (AMIX(AMASK) | MIX(RMASK) | MIX(GMASK) | MIX(BMASK));
+    return INTERPOLATE_PIXEL_255(result, const_alpha, d, one_minus_const_alpha);
+}
+
+inline int comp_func_Plus_one_pixel(uint d, const uint s)
+{
+    const int result = (AMIX(AMASK) | MIX(RMASK) | MIX(GMASK) | MIX(BMASK));
+    return result;
+}
+
+#undef MIX
+#undef AMIX
+
+// prototypes of all the composition functions
+void QT_FASTCALL comp_func_SourceOver(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_DestinationOver(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Clear(uint *dest, const uint *, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Source(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Destination(uint *, const uint *, int, uint);
+void QT_FASTCALL comp_func_SourceIn(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_DestinationIn(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_SourceOut(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_DestinationOut(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_SourceAtop(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_DestinationAtop(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_XOR(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Plus(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Multiply(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Screen(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Overlay(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Darken(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Lighten(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_ColorDodge(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_ColorBurn(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_HardLight(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_SoftLight(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Difference(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL comp_func_Exclusion(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_SourceOrDestination(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_SourceAndDestination(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_SourceXorDestination(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_NotSourceAndNotDestination(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_NotSourceOrNotDestination(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_NotSourceXorDestination(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_NotSource(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_NotSourceAndDestination(uint *dest, const uint *src, int length, uint const_alpha);
+void QT_FASTCALL rasterop_SourceAndNotDestination(uint *dest, const uint *src, int length, uint const_alpha);
+
+// prototypes of all the solid composition functions
+void QT_FASTCALL comp_func_solid_SourceOver(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_DestinationOver(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Clear(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Source(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Destination(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_SourceIn(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_DestinationIn(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_SourceOut(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_DestinationOut(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_SourceAtop(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_DestinationAtop(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_XOR(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Plus(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Multiply(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Screen(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Overlay(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Darken(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Lighten(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_ColorDodge(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_ColorBurn(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_HardLight(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_SoftLight(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Difference(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL comp_func_solid_Exclusion(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_SourceOrDestination(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_SourceAndDestination(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_SourceXorDestination(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_NotSourceAndNotDestination(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_NotSourceOrNotDestination(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_NotSourceXorDestination(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_NotSource(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_NotSourceAndDestination(uint *dest, int length, uint color, uint const_alpha);
+void QT_FASTCALL rasterop_solid_SourceAndNotDestination(uint *dest, int length, uint color, uint const_alpha);
 
 QT_END_NAMESPACE
 

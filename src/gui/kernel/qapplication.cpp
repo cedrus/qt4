@@ -65,6 +65,7 @@
 #include "qcolormap.h"
 #include "qdebug.h"
 #include "private/qgraphicssystemfactory_p.h"
+#include "private/qgraphicssystem_p.h"
 #include "private/qstylesheetstyle_p.h"
 #include "private/qstyle_p.h"
 #include "qmessagebox.h"
@@ -93,6 +94,10 @@
 #include <private/qfont_p.h>
 
 #include <stdlib.h>
+
+#if defined(Q_WS_X11) && !defined(QT_NO_EGL)
+#include <link.h>
+#endif
 
 #include "qapplication_p.h"
 #include "qevent_p.h"
@@ -489,6 +494,7 @@ bool QApplicationPrivate::fade_tooltip = false;
 bool QApplicationPrivate::animate_toolbox = false;
 bool QApplicationPrivate::widgetCount = false;
 bool QApplicationPrivate::load_testability = false;
+QString QApplicationPrivate::qmljs_debug_arguments;
 #ifdef QT_KEYPAD_NAVIGATION
 #  ifdef Q_OS_SYMBIAN
 Qt::NavigationMode QApplicationPrivate::navigationMode = Qt::NavigationModeKeypadDirectional;
@@ -560,6 +566,8 @@ void QApplicationPrivate::process_cmdline()
         QString s;
         if (arg == "-qdevel" || arg == "-qdebug") {
             // obsolete argument
+        } else if (arg.indexOf("-qmljsdebugger=", 0) != -1) {
+            qmljs_debug_arguments = QString::fromLocal8Bit(arg.right(arg.length() - 15));
         } else if (arg.indexOf("-style=", 0) != -1) {
             s = QString::fromLocal8Bit(arg.right(arg.length() - 7).toLower());
         } else if (arg == "-style" && i < argc-1) {
@@ -665,6 +673,9 @@ void QApplicationPrivate::process_cmdline()
             Qt::RightToLeft
         \o  -graphicssystem, sets the backend to be used for on-screen widgets
             and QPixmaps. Available options are \c{raster} and \c{opengl}.
+        \o  -qmljsdebugger=, activates the QML/JS debugger with a specified port.
+            The value must be of format port:1234[,block], where block is optional
+            and will make the application wait until a debugger connects to it.
     \endlist
 
     The X11 version of Qt supports some traditional X11 command line options:
@@ -768,6 +779,13 @@ QApplication::QApplication(int &argc, char **argv, Type type , int _internal)
     : QCoreApplication(*new QApplicationPrivate(argc, argv, type))
 { Q_D(QApplication); d->construct();  QApplicationPrivate::app_compile_version = _internal;}
 
+#if defined(Q_WS_X11) && !defined(QT_NO_EGL)
+static int qt_matchLibraryName(dl_phdr_info *info, size_t, void *data)
+{
+    const char *name = static_cast<const char *>(data);
+    return strstr(info->dlpi_name, name) != 0;
+}
+#endif
 
 /*!
     \internal
@@ -785,6 +803,19 @@ void QApplicationPrivate::construct(
     // the environment variable has the lowest precedence of runtime graphicssystem switches
     if (graphics_system_name.isEmpty())
         graphics_system_name = QString::fromLocal8Bit(qgetenv("QT_GRAPHICSSYSTEM"));
+
+#if defined(Q_WS_X11) && !defined(QT_NO_EGL)
+    if (graphics_system_name.isEmpty()) {
+        bool linksWithMeeGoTouch = dl_iterate_phdr(qt_matchLibraryName, const_cast<char *>("libmeegotouchcore"));
+        bool linksWithMeeGoGraphicsSystemHelper = dl_iterate_phdr(qt_matchLibraryName, const_cast<char *>("libQtMeeGoGraphicsSystemHelper"));
+
+        if (linksWithMeeGoTouch && !linksWithMeeGoGraphicsSystemHelper) {
+            qWarning("Running non-meego graphics system enabled  MeeGo touch, forcing native graphicssystem\n");
+            graphics_system_name = QLatin1String("native");
+        }
+    }
+#endif
+
     // Must be called before initialize()
     qt_init(this, qt_appType
 #ifdef Q_WS_X11
@@ -809,6 +840,12 @@ void QApplicationPrivate::construct(
         if (testLib.load()) {
             typedef void (*TasInitialize)(void);
             TasInitialize initFunction = (TasInitialize)testLib.resolve("qt_testability_init");
+#ifdef Q_OS_SYMBIAN
+            // resolving method by name does not work on Symbian OS so need to use ordinal
+            if(!initFunction) {
+                initFunction = (TasInitialize)testLib.resolve("1");            
+            }
+#endif
             if (initFunction) {
                 initFunction();
             } else {
@@ -902,6 +939,7 @@ QApplication::QApplication(Display *dpy, int &argc, char **argv,
 #endif // Q_WS_X11
 
 extern void qInitDrawhelperAsm();
+extern void qInitImageConversions();
 extern int qRegisterGuiVariant();
 extern int qUnregisterGuiVariant();
 #ifndef QT_NO_STATEMACHINE
@@ -959,6 +997,8 @@ void QApplicationPrivate::initialize()
 
     // Set up which span functions should be used in raster engine...
     qInitDrawhelperAsm();
+    // and QImage conversion functions
+    qInitImageConversions();
 
 #ifndef QT_NO_WHEELEVENT
     QApplicationPrivate::wheel_scroll_lines = 3;
@@ -1052,6 +1092,18 @@ QApplication::~QApplication()
     QApplicationPrivate::is_app_closing = true;
     QApplicationPrivate::is_app_running = false;
 
+    // delete all widgets
+    if (QWidgetPrivate::allWidgets) {
+        QWidgetSet *mySet = QWidgetPrivate::allWidgets;
+        QWidgetPrivate::allWidgets = 0;
+        for (QWidgetSet::ConstIterator it = mySet->constBegin(); it != mySet->constEnd(); ++it) {
+            register QWidget *w = *it;
+            if (!w->parent())                        // window
+                w->destroy(true, true);
+        }
+        delete mySet;
+    }
+
     delete qt_desktopWidget;
     qt_desktopWidget = 0;
 
@@ -1071,18 +1123,6 @@ QApplication::~QApplication()
 
     delete QWidgetPrivate::mapper;
     QWidgetPrivate::mapper = 0;
-
-    // delete all widgets
-    if (QWidgetPrivate::allWidgets) {
-        QWidgetSet *mySet = QWidgetPrivate::allWidgets;
-        QWidgetPrivate::allWidgets = 0;
-        for (QWidgetSet::ConstIterator it = mySet->constBegin(); it != mySet->constEnd(); ++it) {
-            register QWidget *w = *it;
-            if (!w->parent())                        // window
-                w->destroy(true, true);
-        }
-        delete mySet;
-    }
 
     delete QApplicationPrivate::app_pal;
     QApplicationPrivate::app_pal = 0;
@@ -1107,6 +1147,8 @@ QApplication::~QApplication()
     QApplicationPrivate::app_style = 0;
     delete QApplicationPrivate::app_icon;
     QApplicationPrivate::app_icon = 0;
+    delete QApplicationPrivate::graphics_system;
+    QApplicationPrivate::graphics_system = 0;
 #ifndef QT_NO_CURSOR
     d->cursor_list.clear();
 #endif
@@ -2355,8 +2397,13 @@ static const char *application_menu_strings[] = {
     };
 QString qt_mac_applicationmenu_string(int type)
 {
-    return qApp->translate("MAC_APPLICATION_MENU",
-                           application_menu_strings[type]);
+    QString menuString = QString::fromLatin1(application_menu_strings[type]);
+    QString translated = qApp->translate("QMenuBar", application_menu_strings[type]);
+    if (translated != menuString)
+        return translated;
+    else
+        return qApp->translate("MAC_APPLICATION_MENU",
+                               application_menu_strings[type]);
 }
 #endif
 #endif
@@ -4331,11 +4378,13 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
                     eventAccepted = ge.isAccepted();
                     for (int i = 0; i < gestures.size(); ++i) {
                         QGesture *g = gestures.at(i);
-                        if ((res && eventAccepted) || (!eventAccepted && ge.isAccepted(g))) {
+                        // Ignore res [event return value] because handling of multiple gestures
+                        // packed into a single QEvent depends on not consuming the event
+                        if (eventAccepted || ge.isAccepted(g)) {
                             // if the gesture was accepted, mark the target widget for it
                             gestureEvent->d_func()->targetWidgets[g->gestureType()] = w;
                             gestureEvent->setAccepted(g, true);
-                        } else if (!eventAccepted && !ge.isAccepted(g)) {
+                        } else {
                             // if the gesture was explicitly ignored by the application,
                             // put it back so a parent can get it
                             allGestures.append(g);
@@ -5298,6 +5347,7 @@ bool QApplication::keypadNavigationEnabled()
     \sa QCoreApplication::instance()
 */
 
+#ifndef QT_NO_IM
 // ************************************************************************
 // Input Method support
 // ************************************************************************
@@ -5363,6 +5413,7 @@ QInputContext *QApplication::inputContext() const
 #endif
     return d->inputContext;
 }
+#endif // QT_NO_IM
 
 //Returns the current platform used by keyBindings
 uint QApplicationPrivate::currentPlatform(){
@@ -6024,6 +6075,11 @@ QPixmap QApplicationPrivate::getPixmapCursor(Qt::CursorShape cshape)
     }
 #endif
     return QPixmap();
+}
+
+QString QApplicationPrivate::qmljsDebugArgumentsString()
+{
+    return qmljs_debug_arguments;
 }
 
 QT_END_NAMESPACE

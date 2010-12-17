@@ -114,6 +114,7 @@ QT_BEGIN_NAMESPACE
 
 /*!
   \qmlclass QtObject QObject
+  \ingroup qml-utility-elements
   \since 4.7
   \brief The QtObject element is the most basic element in QML.
 
@@ -140,7 +141,7 @@ QT_BEGIN_NAMESPACE
     \qml
     // MyRect.qml
 
-    import Qt 4.7
+    import QtQuick 1.0
 
     Item {
         width: 200; height: 200
@@ -173,18 +174,26 @@ struct StaticQtMetaObject : public QObject
 };
 
 static bool qt_QmlQtModule_registered = false;
+bool QDeclarativeEnginePrivate::qml_debugging_enabled = false;
 
 void QDeclarativeEnginePrivate::defineModule()
 {
+    qmlRegisterType<QDeclarativeComponent>("QtQuick",1,0,"Component");
+    qmlRegisterType<QObject>("QtQuick",1,0,"QtObject");
+    qmlRegisterType<QDeclarativeWorkerScript>("QtQuick",1,0,"WorkerScript");
+
+#ifndef QT_NO_IMPORT_QT47_QML
     qmlRegisterType<QDeclarativeComponent>("Qt",4,7,"Component");
     qmlRegisterType<QObject>("Qt",4,7,"QtObject");
     qmlRegisterType<QDeclarativeWorkerScript>("Qt",4,7,"WorkerScript");
+#endif
 
     qmlRegisterType<QDeclarativeBinding>();
 }
 
 /*!
 \qmlclass QML:Qt QDeclarativeEnginePrivate
+  \ingroup qml-utility-elements
 \brief The QML global Qt object provides useful enums and functions from Qt.
 
 \keyword QmlGlobalQtObject
@@ -196,7 +205,7 @@ with enums and functions.  To use it, call the members of the global \c Qt objec
 For example:
 
 \qml
-import Qt 4.7
+import QtQuick 1.0
 
 Text {
     color: Qt.rgba(255, 0, 0, 1)
@@ -257,7 +266,7 @@ QDeclarativeEnginePrivate::QDeclarativeEnginePrivate(QDeclarativeEngine *e)
   objectClass(0), valueTypeClass(0), globalClass(0), cleanup(0), erroredBindings(0),
   inProgressCreations(0), scriptEngine(this), workerScriptEngine(0), componentAttached(0),
   inBeginCreate(false), networkAccessManager(0), networkAccessManagerFactory(0),
-  typeManager(e), importDatabase(e), uniqueId(1)
+  typeLoader(e), importDatabase(e), uniqueId(1)
 {
     if (!qt_QmlQtModule_registered) {
         qt_QmlQtModule_registered = true;
@@ -270,8 +279,8 @@ QDeclarativeEnginePrivate::QDeclarativeEnginePrivate(QDeclarativeEngine *e)
 }
 
 /*!
-  \qmlmethod url Qt::resolvedUrl(url)
-  Returns \c url resolved relative to the URL of the caller.
+  \qmlmethod url Qt::resolvedUrl(url url)
+  Returns \a url resolved relative to the URL of the caller.
 */
 QUrl QDeclarativeScriptEngine::resolvedUrl(QScriptContext *context, const QUrl& url)
 {
@@ -301,7 +310,9 @@ QDeclarativeScriptEngine::QDeclarativeScriptEngine(QDeclarativeEnginePrivate *pr
         + QDir::separator() + QLatin1String("OfflineStorage");
 #endif
 
+#ifndef QT_NO_XMLSTREAMREADER
     qt_add_qmlxmlhttprequest(this);
+#endif
     qt_add_qmlsqldatabase(this);
     // XXX A Multimedia "Qt.Sound" class also needs to be made available,
     // XXX but we don't want a dependency in that cirection.
@@ -329,7 +340,7 @@ QDeclarativeScriptEngine::QDeclarativeScriptEngine(QDeclarativeEnginePrivate *pr
         qtObject.setProperty(QLatin1String("tint"), newFunction(QDeclarativeEnginePrivate::tint, 2));
     }
 
-#ifndef QT_NO_TEXTDATE
+#ifndef QT_NO_DATESTRING
     //date/time formatting
     qtObject.setProperty(QLatin1String("formatDate"),newFunction(QDeclarativeEnginePrivate::formatDate, 2));
     qtObject.setProperty(QLatin1String("formatTime"),newFunction(QDeclarativeEnginePrivate::formatTime, 2));
@@ -434,8 +445,6 @@ void QDeclarativeEnginePrivate::clear(SimpleList<QDeclarativeParserStatus> &pss)
     pss.clear();
 }
 
-Q_GLOBAL_STATIC(QDeclarativeEngineDebugServer, qmlEngineDebugServer);
-
 void QDeclarativePrivate::qdeclarativeelement_destructor(QObject *o)
 {
     QObjectPrivate *p = QObjectPrivate::get(o);
@@ -477,9 +486,8 @@ void QDeclarativeEnginePrivate::init()
 
     if (QCoreApplication::instance()->thread() == q->thread() &&
         QDeclarativeEngineDebugServer::isDebuggingEnabled()) {
-        qmlEngineDebugServer();
         isDebugging = true;
-        QDeclarativeEngineDebugServer::addEngine(q);
+        QDeclarativeEngineDebugServer::instance()->addEngine(q);
     }
 }
 
@@ -509,7 +517,7 @@ QDeclarativeWorkerScriptEngine *QDeclarativeEnginePrivate::getWorkerScriptEngine
   \code
   QDeclarativeEngine engine;
   QDeclarativeComponent component(&engine);
-  component.setData("import Qt 4.7\nText { text: \"Hello world!\" }", QUrl());
+  component.setData("import QtQuick 1.0\nText { text: \"Hello world!\" }", QUrl());
   QDeclarativeItem *item = qobject_cast<QDeclarativeItem *>(component.create());
 
   //add item to view, etc
@@ -543,11 +551,11 @@ QDeclarativeEngine::~QDeclarativeEngine()
 {
     Q_D(QDeclarativeEngine);
     if (d->isDebugging)
-        QDeclarativeEngineDebugServer::remEngine(this);
+        QDeclarativeEngineDebugServer::instance()->remEngine(this);
 }
 
 /*! \fn void QDeclarativeEngine::quit()
-    This signal is emitted when the QDeclarativeEngine quits.
+    This signal is emitted when the QML loaded by the engine would like to quit.
  */
 
 /*! \fn void QDeclarativeEngine::warnings(const QList<QDeclarativeError> &warnings)
@@ -564,7 +572,7 @@ QDeclarativeEngine::~QDeclarativeEngine()
 void QDeclarativeEngine::clearComponentCache()
 {
     Q_D(QDeclarativeEngine);
-    d->typeManager.clearCache();
+    d->typeLoader.clearCache();
 }
 
 /*!
@@ -670,7 +678,7 @@ void QDeclarativeEngine::addImageProvider(const QString &providerId, QDeclarativ
 {
     Q_D(QDeclarativeEngine);
     QMutexLocker locker(&d->mutex);
-    d->imageProviders.insert(providerId, provider);
+    d->imageProviders.insert(providerId, QSharedPointer<QDeclarativeImageProvider>(provider));
 }
 
 /*!
@@ -680,7 +688,7 @@ QDeclarativeImageProvider *QDeclarativeEngine::imageProvider(const QString &prov
 {
     Q_D(const QDeclarativeEngine);
     QMutexLocker locker(&d->mutex);
-    return d->imageProviders.value(providerId);
+    return d->imageProviders.value(providerId).data();
 }
 
 /*!
@@ -694,13 +702,14 @@ void QDeclarativeEngine::removeImageProvider(const QString &providerId)
 {
     Q_D(QDeclarativeEngine);
     QMutexLocker locker(&d->mutex);
-    delete d->imageProviders.take(providerId);
+    d->imageProviders.take(providerId);
 }
 
 QDeclarativeImageProvider::ImageType QDeclarativeEnginePrivate::getImageProviderType(const QUrl &url)
 {
     QMutexLocker locker(&mutex);
-    QDeclarativeImageProvider *provider = imageProviders.value(url.host());
+    QSharedPointer<QDeclarativeImageProvider> provider = imageProviders.value(url.host());
+    locker.unlock();
     if (provider)
         return provider->imageType();
     return static_cast<QDeclarativeImageProvider::ImageType>(-1);
@@ -710,7 +719,8 @@ QImage QDeclarativeEnginePrivate::getImageFromProvider(const QUrl &url, QSize *s
 {
     QMutexLocker locker(&mutex);
     QImage image;
-    QDeclarativeImageProvider *provider = imageProviders.value(url.host());
+    QSharedPointer<QDeclarativeImageProvider> provider = imageProviders.value(url.host());
+    locker.unlock();
     if (provider)
         image = provider->requestImage(url.path().mid(1), size, req_size);
     return image;
@@ -720,7 +730,8 @@ QPixmap QDeclarativeEnginePrivate::getPixmapFromProvider(const QUrl &url, QSize 
 {
     QMutexLocker locker(&mutex);
     QPixmap pixmap;
-    QDeclarativeImageProvider *provider = imageProviders.value(url.host());
+    QSharedPointer<QDeclarativeImageProvider> provider = imageProviders.value(url.host());
+    locker.unlock();
     if (provider)
         pixmap = provider->requestPixmap(url.path().mid(1), size, req_size);
     return pixmap;
@@ -902,7 +913,7 @@ QDeclarativeEngine::ObjectOwnership QDeclarativeEngine::objectOwnership(QObject 
         return ddata->indestructible?CppOwnership:JavaScriptOwnership;
 }
 
-void qmlExecuteDeferred(QObject *object)
+Q_AUTOTEST_EXPORT void qmlExecuteDeferred(QObject *object)
 {
     QDeclarativeData *data = QDeclarativeData::get(object);
 
@@ -1294,7 +1305,7 @@ QScriptValue QDeclarativeEnginePrivate::vector3d(QScriptContext *ctxt, QScriptEn
 \qmlmethod string Qt::formatDate(datetime date, variant format)
 Returns the string representation of \c date, formatted according to \c format.
 */
-#ifndef QT_NO_TEXTDATE
+#ifndef QT_NO_DATESTRING
 QScriptValue QDeclarativeEnginePrivate::formatDate(QScriptContext*ctxt, QScriptEngine*engine)
 {
     int argCount = ctxt->argumentCount();
@@ -1435,7 +1446,7 @@ QScriptValue QDeclarativeEnginePrivate::formatDateTime(QScriptContext*ctxt, QScr
     }
     return engine->newVariant(qVariantFromValue(date.toString(enumFormat)));
 }
-#endif // QT_NO_TEXTDATE
+#endif // QT_NO_DATESTRING
 
 /*!
 \qmlmethod color Qt::rgba(real red, real green, real blue, real alpha)
@@ -1712,6 +1723,9 @@ void QDeclarativeEnginePrivate::sendQuit()
 {
     Q_Q(QDeclarativeEngine);
     emit q->quit();
+    if (q->receivers(SIGNAL(quit())) == 0) {
+        qWarning("Signal QDeclarativeEngine::quit() emitted, but no receivers connected to handle it.");
+    }
 }
 
 static void dumpwarning(const QDeclarativeError &error)
@@ -2072,7 +2086,7 @@ void QDeclarativeEnginePrivate::registerCompositeType(QDeclarativeCompiledData *
     QByteArray name = data->root->className();
 
     QByteArray ptr = name + '*';
-    QByteArray lst = "QDeclarativeListProperty<" + name + ">";
+    QByteArray lst = "QDeclarativeListProperty<" + name + '>';
 
     int ptr_type = QMetaType::registerType(ptr.constData(), voidptr_destructor,
                                            voidptr_constructor);
@@ -2106,7 +2120,7 @@ bool QDeclarativeEnginePrivate::isQObject(int t)
 QObject *QDeclarativeEnginePrivate::toQObject(const QVariant &v, bool *ok) const
 {
     int t = v.userType();
-    if (m_compositeTypes.contains(t)) {
+    if (t == QMetaType::QObjectStar || m_compositeTypes.contains(t)) {
         if (ok) *ok = true;
         return *(QObject **)(v.constData());
     } else {

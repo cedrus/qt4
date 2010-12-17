@@ -275,6 +275,7 @@ private slots:
 #endif
     void taskQTBUG_7395_readOnlyShortcut();
     void QTBUG697_paletteCurrentColorGroup();
+    void QTBUG13520_textNotVisible();
 
 #ifdef QT3_SUPPORT
     void validateAndSet_data();
@@ -3034,6 +3035,8 @@ public:
     };
 
     State state;
+
+    friend class tst_QLineEdit;
 };
 
 Q_DECLARE_METATYPE(LineEdit::State);
@@ -3716,19 +3719,46 @@ void tst_QLineEdit::taskQTBUG_7395_readOnlyShortcut()
 
 void tst_QLineEdit::QTBUG697_paletteCurrentColorGroup()
 {
-    testWidget->setText("               ");
-    QPalette p = testWidget->palette();
+#ifndef Q_WS_X11
+    QSKIP("Only tested on X11", SkipAll);
+#endif
+    QLineEdit le;
+    le.setText("               ");
+    QPalette p = le.palette();
     p.setBrush(QPalette::Active, QPalette::Highlight, Qt::green);
     p.setBrush(QPalette::Inactive, QPalette::Highlight, Qt::red);
-    testWidget->setPalette(p);
-    testWidget->selectAll();
-    QImage img(testWidget->rect().size(),QImage::Format_ARGB32 );
-    testWidget->render(&img);
-    QCOMPARE(img.pixel(10, testWidget->height()/2), QColor(Qt::green).rgb());
+    le.setPalette(p);
+
+    le.show();
+    QApplication::setActiveWindow(&le);
+    QTest::qWaitForWindowShown(&le);
+    le.setFocus();
+    QTRY_VERIFY(le.hasFocus());
+    le.selectAll();
+
+    QImage img(le.size(),QImage::Format_ARGB32 );
+    le.render(&img);
+    QCOMPARE(img.pixel(10, le.height()/2), QColor(Qt::green).rgb());
     QApplication::setActiveWindow(0);
-    testWidget->render(&img);
-    QCOMPARE(img.pixel(10, testWidget->height()/2), QColor(Qt::red).rgb());
+    le.render(&img);
+    QCOMPARE(img.pixel(10, le.height()/2), QColor(Qt::red).rgb());
 }
+
+void tst_QLineEdit::QTBUG13520_textNotVisible()
+{
+    LineEdit le;
+    le.setAlignment( Qt::AlignRight | Qt::AlignVCenter);
+    le.show();
+    QTest::qWaitForWindowShown(&le);
+    le.setText("01-ST16-01SIL-MPL001wfgsdfgsdgsdfgsdfgsdfgsdfgsdfg");
+    le.setCursorPosition(0);
+    QTest::qWait(100); //just make sure we get he lineedit correcly painted
+
+    QVERIFY(le.cursorRect().center().x() < le.width() / 2);
+
+
+}
+
 
 QTEST_MAIN(tst_QLineEdit)
 #include "tst_qlineedit.moc"

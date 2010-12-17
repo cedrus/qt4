@@ -58,12 +58,12 @@
 #include <AknsSkinInstance.h>
 #include <AknsBasicBackgroundControlContext.h>
 #include <avkon.mbg>
-#include <aknfontaccess.h>
-#include <aknlayoutfont.h>
+#include <AknFontAccess.h>
+#include <AknLayoutFont.h>
 #include <AknUtils.h>
 #include <aknnavi.h>
 #include <gulicon.h>
-#include <aknbitmapanimation.h>
+#include <AknBitmapAnimation.h>
 
 #if !defined(QT_NO_STYLE_S60) || defined(QT_PLUGIN)
 
@@ -1150,6 +1150,12 @@ QS60StylePrivate::QS60StylePrivate()
     m_animations()->append(progressBarAnimation);
     // No need to set active layout, if dynamic metrics API is available
     setActiveLayout();
+}
+
+void QS60StylePrivate::removeAnimations()
+{
+    //currently only one animation in the list.
+    m_animations()->removeFirst();
 }
 
 QColor QS60StylePrivate::s60Color(QS60StyleEnums::ColorLists list,

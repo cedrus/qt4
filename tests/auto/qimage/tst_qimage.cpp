@@ -83,6 +83,8 @@ private slots:
     void convertToFormat_data();
     void convertToFormat();
 
+    void convertToFormatRgb888ToRGB32();
+
     void createAlphaMask_data();
     void createAlphaMask();
 #ifndef QT_NO_IMAGE_HEURISTIC_MASK
@@ -137,6 +139,9 @@ private slots:
     void premultipliedAlphaConsistency();
 
     void compareIndexed();
+
+    void rgbSwapped_data();
+    void rgbSwapped();
 };
 
 tst_QImage::tst_QImage()
@@ -151,14 +156,14 @@ void tst_QImage::create()
 {
     bool cr = true;
 #if !defined(Q_WS_QWS) && !defined(Q_OS_WINCE)
-    try {
+    QT_TRY {
 #endif
 	//QImage image(7000000, 7000000, 8, 256, QImage::IgnoreEndian);
     QImage image(7000000, 7000000, QImage::Format_Indexed8);
     image.setColorCount(256);
         cr = !image.isNull();
 #if !defined(Q_WS_QWS) && !defined(Q_OS_WINCE)
-    } catch (...) {
+    } QT_CATCH (...) {
     }
 #endif
     QVERIFY( !cr );
@@ -799,6 +804,26 @@ void tst_QImage::convertToFormat()
     QFile::remove(QLatin1String("expected2.xpm"));
 }
 
+void tst_QImage::convertToFormatRgb888ToRGB32()
+{
+    // 545 so width % 4 != 0. This ensure there is padding at the end of the scanlines
+    const int height = 545;
+    const int width = 545;
+    QImage source(width, height, QImage::Format_RGB888);
+    for (int y = 0; y < height; ++y) {
+        uchar *srcPixels = source.scanLine(y);
+        for (int x = 0; x < width * 3; ++x)
+            srcPixels[x] = x;
+    }
+
+    QImage rgb32Image = source.convertToFormat(QImage::Format_RGB888);
+    QCOMPARE(rgb32Image.format(), QImage::Format_RGB888);
+    for (int x = 0; x < width; ++x) {
+        for (int y = 0; y < height; ++y)
+            QCOMPARE(rgb32Image.pixel(x, y), source.pixel(x, y));
+    }
+}
+
 void tst_QImage::createAlphaMask_data()
 {
     QTest::addColumn<int>("x");
@@ -1426,11 +1451,6 @@ static inline int rand8()
     return int(256. * (qrand() / (RAND_MAX + 1.0)));
 }
 
-static inline bool compare(int a, int b, int tolerance)
-{
-    return qAbs(a - b) <= tolerance;
-}
-
 // compares img.scale against the bilinear filtering used by QPainter
 void tst_QImage::smoothScale3()
 {
@@ -1458,6 +1478,7 @@ void tst_QImage::smoothScale3()
         p.scale(scales[i], scales[i]);
         p.drawImage(0, 0, img);
         p.end();
+        int err = 0;
 
         for (int y = 0; y < a.height(); ++y) {
             for (int x = 0; x < a.width(); ++x) {
@@ -1465,11 +1486,15 @@ void tst_QImage::smoothScale3()
                 QRgb cb = b.pixel(x, y);
 
                 // tolerate a little bit of rounding errors
-                QVERIFY(compare(qRed(ca), qRed(cb), 3));
-                QVERIFY(compare(qGreen(ca), qGreen(cb), 3));
-                QVERIFY(compare(qBlue(ca), qBlue(cb), 3));
+                bool r = true;
+                r &= qAbs(qRed(ca) - qRed(cb)) <= 18;
+                r &= qAbs(qGreen(ca) - qGreen(cb)) <= 18;
+                r &= qAbs(qBlue(ca) - qBlue(cb)) <= 18;
+                if (!r)
+                    err++;
             }
         }
+        QCOMPARE(err, 0);
     }
 }
 
@@ -1796,6 +1821,69 @@ void tst_QImage::compareIndexed()
     }
 
     QCOMPARE(img, imgInverted);
+}
+
+void tst_QImage::rgbSwapped_data()
+{
+    QTest::addColumn<QImage::Format>("format");
+
+    QTest::newRow("Format_Indexed8") << QImage::Format_Indexed8;
+    QTest::newRow("Format_RGB32") << QImage::Format_RGB32;
+    QTest::newRow("Format_ARGB32") << QImage::Format_ARGB32;
+    QTest::newRow("Format_ARGB32_Premultiplied") << QImage::Format_ARGB32_Premultiplied;
+    QTest::newRow("Format_RGB16") << QImage::Format_RGB16;
+    QTest::newRow("Format_ARGB8565_Premultiplied") << QImage::Format_ARGB8565_Premultiplied;
+    QTest::newRow("Format_ARGB6666_Premultiplied") << QImage::Format_ARGB6666_Premultiplied;
+    QTest::newRow("Format_ARGB4444_Premultiplied") << QImage::Format_ARGB4444_Premultiplied;
+    QTest::newRow("Format_RGB666") << QImage::Format_RGB666;
+    QTest::newRow("Format_RGB555") << QImage::Format_RGB555;
+    QTest::newRow("Format_ARGB8555_Premultiplied") << QImage::Format_ARGB8555_Premultiplied;
+    QTest::newRow("Format_RGB888") << QImage::Format_RGB888;
+    QTest::newRow("Format_RGB444") << QImage::Format_RGB444;
+}
+
+void tst_QImage::rgbSwapped()
+{
+    QFETCH(QImage::Format, format);
+
+    QImage image(100, 1, format);
+    image.fill(0);
+
+    QVector<QColor> testColor(image.width());
+
+    for (int i = 0; i < image.width(); ++i)
+        testColor[i] = QColor(i, 10 + i, 20 + i * 2, 30 + i);
+
+    if (format != QImage::Format_Indexed8) {
+        QPainter p(&image);
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        for (int i = 0; i < image.width(); ++i)
+            p.fillRect(QRect(i, 0, 1, 1), testColor[i].rgb());
+    } else {
+        image.setColorCount(image.width());
+        for (int i = 0; i < image.width(); ++i) {
+            image.setColor(0, testColor[i].rgba());
+            image.setPixel(i, 0, i);
+        }
+    }
+
+    QImage imageSwapped = image.rgbSwapped();
+
+    for (int i = 0; i < image.width(); ++i) {
+        QColor referenceColor = QColor(image.pixel(i, 0));
+        QColor swappedColor = QColor(imageSwapped.pixel(i, 0));
+
+        QCOMPARE(swappedColor.alpha(), referenceColor.alpha());
+        QCOMPARE(swappedColor.red(), referenceColor.blue());
+        QCOMPARE(swappedColor.green(), referenceColor.green());
+        QCOMPARE(swappedColor.blue(), referenceColor.red());
+    }
+
+    QImage imageSwappedTwice = imageSwapped.rgbSwapped();
+
+    QCOMPARE(image, imageSwappedTwice);
+
+    QCOMPARE(memcmp(image.constBits(), imageSwappedTwice.constBits(), image.numBytes()), 0);
 }
 
 QTEST_MAIN(tst_QImage)

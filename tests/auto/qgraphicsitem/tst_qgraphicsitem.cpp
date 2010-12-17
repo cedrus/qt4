@@ -422,6 +422,7 @@ private slots:
     void setGraphicsEffect();
     void panel();
     void addPanelToActiveScene();
+    void panelWithFocusItem();
     void activate();
     void setActivePanelOnInactiveScene();
     void activationOnShowHide();
@@ -443,6 +444,7 @@ private slots:
     void textItem_shortcuts();
     void scroll();
     void stopClickFocusPropagation();
+    void deviceCoordinateCache_simpleRotations();
 
     // task specific tests below me
     void task141694_textItemEnsureVisible();
@@ -4577,7 +4579,7 @@ void tst_QGraphicsItem::itemChange()
         QCOMPARE(tester.changes.at(tester.changes.size() - 1), QGraphicsItem::ItemFlagsHaveChanged);
         QVariant expectedFlags = qVariantFromValue<quint32>(QGraphicsItem::GraphicsItemFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemSendsGeometryChanges));
         QCOMPARE(tester.values.at(tester.values.size() - 2), expectedFlags);
-        QCOMPARE(tester.values.at(tester.values.size() - 1), qVariantFromValue<quint32>(QGraphicsItem::ItemIsSelectable));
+        QCOMPARE(tester.values.at(tester.values.size() - 1), qVariantFromValue<quint32>((quint32)QGraphicsItem::ItemIsSelectable));
     }
     {
         // ItemSelectedChange
@@ -8417,6 +8419,54 @@ void tst_QGraphicsItem::panel()
     QVERIFY(!panel1->isActive());
 }
 
+void tst_QGraphicsItem::panelWithFocusItem()
+{
+    QGraphicsScene scene;
+    QEvent activate(QEvent::WindowActivate);
+    QApplication::sendEvent(&scene, &activate);
+
+    QGraphicsRectItem *parentPanel = new QGraphicsRectItem;
+    QGraphicsRectItem *parentPanelFocusItem = new QGraphicsRectItem(parentPanel);
+    parentPanel->setFlag(QGraphicsItem::ItemIsPanel);
+    parentPanelFocusItem->setFlag(QGraphicsItem::ItemIsFocusable);
+    parentPanelFocusItem->setFocus();
+    scene.addItem(parentPanel);
+
+    QVERIFY(parentPanel->isActive());
+    QVERIFY(parentPanelFocusItem->hasFocus());
+    QCOMPARE(parentPanel->focusItem(), (QGraphicsItem *)parentPanelFocusItem);
+    QCOMPARE(parentPanelFocusItem->focusItem(), (QGraphicsItem *)parentPanelFocusItem);
+
+    QGraphicsRectItem *childPanel = new QGraphicsRectItem;
+    QGraphicsRectItem *childPanelFocusItem = new QGraphicsRectItem(childPanel);
+    childPanel->setFlag(QGraphicsItem::ItemIsPanel);
+    childPanelFocusItem->setFlag(QGraphicsItem::ItemIsFocusable);
+    childPanelFocusItem->setFocus();
+
+    QVERIFY(!childPanelFocusItem->hasFocus());
+    QCOMPARE(childPanel->focusItem(), (QGraphicsItem *)childPanelFocusItem);
+    QCOMPARE(childPanelFocusItem->focusItem(), (QGraphicsItem *)childPanelFocusItem);
+
+    childPanel->setParentItem(parentPanel);
+
+    QVERIFY(!parentPanel->isActive());
+    QVERIFY(!parentPanelFocusItem->hasFocus());
+    QCOMPARE(parentPanel->focusItem(), (QGraphicsItem *)parentPanelFocusItem);
+    QCOMPARE(parentPanelFocusItem->focusItem(), (QGraphicsItem *)parentPanelFocusItem);
+
+    QVERIFY(childPanel->isActive());
+    QVERIFY(childPanelFocusItem->hasFocus());
+    QCOMPARE(childPanel->focusItem(), (QGraphicsItem *)childPanelFocusItem);
+    QCOMPARE(childPanelFocusItem->focusItem(), (QGraphicsItem *)childPanelFocusItem);
+
+    childPanel->hide();
+
+    QVERIFY(parentPanel->isActive());
+    QVERIFY(parentPanelFocusItem->hasFocus());
+    QCOMPARE(parentPanel->focusItem(), (QGraphicsItem *)parentPanelFocusItem);
+    QCOMPARE(parentPanelFocusItem->focusItem(), (QGraphicsItem *)parentPanelFocusItem);
+}
+
 void tst_QGraphicsItem::addPanelToActiveScene()
 {
     QGraphicsScene scene;
@@ -10321,6 +10371,81 @@ void tst_QGraphicsItem::stopClickFocusPropagation()
 
     sendMousePress(&scene, mousePressPoint);
     QVERIFY(itemWithFocus->hasFocus());
+}
+
+void tst_QGraphicsItem::deviceCoordinateCache_simpleRotations()
+{
+    // Make sure we don't invalidate the cache when applying simple
+    // (90, 180, 270, 360) rotation transforms to the item.
+    QGraphicsRectItem *item = new QGraphicsRectItem(0, 0, 300, 200);
+    item->setBrush(Qt::red);
+    item->setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+
+    QGraphicsScene scene;
+    scene.setSceneRect(0, 0, 300, 200);
+    scene.addItem(item);
+
+    MyGraphicsView view(&scene);
+    view.show();
+    QTest::qWaitForWindowShown(&view);
+    QTRY_VERIFY(view.repaints > 0);
+
+    QGraphicsItemCache *itemCache = QGraphicsItemPrivate::get(item)->extraItemCache();
+    Q_ASSERT(itemCache);
+    QPixmapCache::Key currentKey = itemCache->deviceData.value(view.viewport()).key;
+
+    // Trigger an update and verify that the cache is unchanged.
+    QPixmapCache::Key oldKey = currentKey;
+    view.reset();
+    view.viewport()->update();
+    QTRY_VERIFY(view.repaints > 0);
+    currentKey = itemCache->deviceData.value(view.viewport()).key;
+    QCOMPARE(currentKey, oldKey);
+
+    // Check 90, 180, 270 and 360 degree rotations.
+    for (int angle = 90; angle <= 360; angle += 90) {
+        // Rotate item and verify that the cache was invalidated.
+        oldKey = currentKey;
+        view.reset();
+        QTransform transform;
+        transform.translate(150, 100);
+        transform.rotate(angle);
+        transform.translate(-150, -100);
+        item->setTransform(transform);
+        QTRY_VERIFY(view.repaints > 0);
+        currentKey = itemCache->deviceData.value(view.viewport()).key;
+        QVERIFY(currentKey != oldKey);
+
+        // IMPORTANT PART:
+        // Trigger an update and verify that the cache is unchanged.
+        oldKey = currentKey;
+        view.reset();
+        view.viewport()->update();
+        QTRY_VERIFY(view.repaints > 0);
+        currentKey = itemCache->deviceData.value(view.viewport()).key;
+        QCOMPARE(currentKey, oldKey);
+    }
+
+    // 45 degree rotation.
+    oldKey = currentKey;
+    view.reset();
+    QTransform transform;
+    transform.translate(150, 100);
+    transform.rotate(45);
+    transform.translate(-150, -100);
+    item->setTransform(transform);
+    QTRY_VERIFY(view.repaints > 0);
+    currentKey = itemCache->deviceData.value(view.viewport()).key;
+    QVERIFY(currentKey != oldKey);
+
+    // Trigger an update and verify that the cache was invalidated.
+    // We should always invalidate the cache for non-trivial transforms.
+    oldKey = currentKey;
+    view.reset();
+    view.viewport()->update();
+    QTRY_VERIFY(view.repaints > 0);
+    currentKey = itemCache->deviceData.value(view.viewport()).key;
+    QVERIFY(currentKey != oldKey);
 }
 
 void tst_QGraphicsItem::QTBUG_5418_textItemSetDefaultColor()

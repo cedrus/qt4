@@ -366,7 +366,7 @@ void QWidgetPrivate::create_sys(WId window, bool /* initializeWindow */, bool de
 
         // Symbian windows are always created in an inactive state
         // We perform this assignment for the case where the window is being re-created
-        // as aa result of a call to setParent_sys, on either this widget or one of its
+        // as a result of a call to setParent_sys, on either this widget or one of its
         // ancestors.
         extra->activated = 0;
 
@@ -410,7 +410,7 @@ void QWidgetPrivate::create_sys(WId window, bool /* initializeWindow */, bool de
 
         // Symbian windows are always created in an inactive state
         // We perform this assignment for the case where the window is being re-created
-        // as aa result of a call to setParent_sys, on either this widget or one of its
+        // as a result of a call to setParent_sys, on either this widget or one of its
         // ancestors.
         extra->activated = 0;
 
@@ -486,7 +486,7 @@ void QWidgetPrivate::show_sys()
 
 #ifdef Q_WS_S60
         // Lazily initialize the S60 screen furniture when the first window is shown.
-        if (!QApplication::testAttribute(Qt::AA_S60DontConstructApplicationPanes)
+        if (q->isWindow() && !QApplication::testAttribute(Qt::AA_S60DontConstructApplicationPanes)
                 && !S60->buttonGroupContainer() && !S60->statusPane()) {
 
             if (!q->testAttribute(Qt::WA_DontShowOnScreen)) {
@@ -518,7 +518,7 @@ void QWidgetPrivate::show_sys()
             if (q->windowState() & Qt::WindowMaximized) {
                 TRect r = static_cast<CEikAppUi*>(S60->appUi())->ClientRect();
                 id->SetExtent(r.iTl, r.Size());
-            } else if (!q->testAttribute(Qt::WA_Moved)) {
+            } else if (!q->testAttribute(Qt::WA_Moved) && q->windowType() != Qt::Dialog) {
                 id->SetPosition(static_cast<CEikAppUi*>(S60->appUi())->ClientRect().iTl);
             }
         }
@@ -956,7 +956,10 @@ void QWidgetPrivate::registerTouchWindow()
     Q_Q(QWidget);
     if (q->testAttribute(Qt::WA_WState_Created) && q->windowType() != Qt::Desktop) {
         RWindow *rwindow = static_cast<RWindow *>(q->effectiveWinId()->DrawableWindow());
-        rwindow->EnableAdvancedPointers();
+        QSymbianControl *window = static_cast<QSymbianControl *>(q->effectiveWinId());
+        //Enabling advanced pointer events for controls that already have active windows causes a panic.
+        if (!window->isControlActive())
+            rwindow->EnableAdvancedPointers();
     }
 #endif
 }

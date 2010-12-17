@@ -90,6 +90,10 @@ Qt {
     Q_ENUMS(InputMethodHint)
     Q_FLAGS(WindowFlags WindowStates InputMethodHints)
     Q_ENUMS(ConnectionType)
+#ifndef QT_NO_GESTURES
+    Q_ENUMS(GestureState)
+    Q_ENUMS(GestureType)
+#endif
 #endif // (defined(Q_MOC_RUN) || defined(QT_JAMBI_RUN))
 
 #if defined(Q_MOC_RUN)

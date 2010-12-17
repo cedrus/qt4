@@ -416,6 +416,9 @@ void QScriptContext::setReturnValue(const QScriptValue &result)
   object provides access to the local variables associated with this
   context.
 
+  \note The activation object might not be available if there is no
+  active QScriptEngineAgent, as it might be optimized.
+
   \sa argument(), argumentsObject()
 */
 
@@ -475,6 +478,10 @@ QScriptValue QScriptContext::activationObject() const
   activation.
 
   If \a activation is not an object, this function does nothing.
+
+  \note For a context corresponding to a JavaScript function, this is only
+  guaranteed to work if there was an QScriptEngineAgent active on the
+  engine while the function was evaluated.
 */
 void QScriptContext::setActivationObject(const QScriptValue &activation)
 {

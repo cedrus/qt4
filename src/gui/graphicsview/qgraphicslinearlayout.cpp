@@ -275,13 +275,17 @@ void QGraphicsLinearLayout::insertItem(int index, QGraphicsLayoutItem *item)
         qWarning("QGraphicsLinearLayout::insertItem: cannot insert itself");
         return;
     }
+    Q_ASSERT(item);
+
+    //the order of the following instructions is very important because
+    //invalidating the layout before adding the child item will make the layout happen
+    //before we try to paint the item
+    invalidate();
     d->addChildLayoutItem(item);
 
-    Q_ASSERT(item);
     d->fixIndex(&index);
     d->engine.insertRow(index, d->orientation);
     new QGridLayoutItem(&d->engine, item, d->gridRow(index), d->gridColumn(index), 1, 1, 0, index);
-    invalidate();
 }
 
 /*!
@@ -528,7 +532,8 @@ QSizeF QGraphicsLinearLayout::sizeHint(Qt::SizeHint which, const QSizeF &constra
     Q_D(const QGraphicsLinearLayout);
     qreal left, top, right, bottom;
     getContentsMargins(&left, &top, &right, &bottom);
-    return d->engine.sizeHint(d->styleInfo(), which , constraint) + QSizeF(left + right, top + bottom);
+    const QSizeF extraMargins(left + right, top + bottom);
+    return d->engine.sizeHint(d->styleInfo(), which , constraint - extraMargins) + extraMargins;
 }
 
 /*!

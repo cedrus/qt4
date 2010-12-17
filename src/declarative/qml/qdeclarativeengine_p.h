@@ -56,7 +56,7 @@
 #include "qdeclarativeengine.h"
 
 #include "private/qdeclarativeclassfactory_p.h"
-#include "private/qdeclarativecompositetypemanager_p.h"
+#include "private/qdeclarativetypeloader_p.h"
 #include "private/qdeclarativeimport_p.h"
 #include "private/qpodvector_p.h"
 #include "qdeclarative.h"
@@ -232,14 +232,14 @@ public:
     mutable QNetworkAccessManager *networkAccessManager;
     mutable QDeclarativeNetworkAccessManagerFactory *networkAccessManagerFactory;
 
-    QHash<QString,QDeclarativeImageProvider*> imageProviders;
+    QHash<QString,QSharedPointer<QDeclarativeImageProvider> > imageProviders;
     QDeclarativeImageProvider::ImageType getImageProviderType(const QUrl &url);
     QImage getImageFromProvider(const QUrl &url, QSize *size, const QSize& req_size);
     QPixmap getPixmapFromProvider(const QUrl &url, QSize *size, const QSize& req_size);
 
     mutable QMutex mutex;
 
-    QDeclarativeCompositeTypeManager typeManager;
+    QDeclarativeTypeLoader typeLoader;
     QDeclarativeImportDatabase importDatabase;
 
     QString offlineStoragePath;
@@ -304,7 +304,7 @@ public:
     static QScriptValue consoleLog(QScriptContext*, QScriptEngine*);
     static QScriptValue quit(QScriptContext*, QScriptEngine*);
 
-#ifndef QT_NO_TEXTDATE
+#ifndef QT_NO_DATESTRING
     static QScriptValue formatDate(QScriptContext*, QScriptEngine*);
     static QScriptValue formatTime(QScriptContext*, QScriptEngine*);
     static QScriptValue formatDateTime(QScriptContext*, QScriptEngine*);
@@ -322,6 +322,8 @@ public:
     static QString urlToLocalFileOrQrc(const QUrl& url);
 
     static void defineModule();
+
+    static bool qml_debugging_enabled;
 };
 
 /*!

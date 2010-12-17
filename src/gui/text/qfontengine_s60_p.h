@@ -54,7 +54,7 @@
 //
 
 #include "qconfig.h"
-#include "qfontengine_p.h"
+#include <private/qfontengine_p.h>
 #include "qsize.h"
 #include <openfont.h>
 
@@ -81,6 +81,7 @@ public:
     bool getSfntTableData(uint tag, uchar *buffer, uint *length) const;
     const uchar *cmap() const;
     CFont *fontOwner() const;
+    bool isSymbolCMap() const;
 
 private:
     CFont* m_cFont;
@@ -134,6 +135,7 @@ public:
 
 private:
     friend class QFontPrivate;
+    friend class QSymbianVGFontGlyphCache;
 
     QFixed glyphAdvance(HB_Glyph glyph) const;
     CFont *fontWithSize(qreal size) const;

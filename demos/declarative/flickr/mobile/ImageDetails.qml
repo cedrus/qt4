@@ -39,13 +39,13 @@
 **
 ****************************************************************************/
 
-import Qt 4.7
+import QtQuick 1.0
 import "../common" as Common
 
 Flipable {
     id: container
 
-    property variant frontContainer: containerFront
+    property alias frontContainer: containerFront
     property string photoTitle: ""
     property string photoTags: ""
     property int photoWidth
@@ -76,17 +76,17 @@ Flipable {
         Column {
             spacing: 10
             anchors {
-                left: parent.left; leftMargin: 20
-                right: parent.right; rightMargin: 20
-                top: parent.top; topMargin: 180
+                left: parent.left; leftMargin: 10
+                right: parent.right; rightMargin: 10
+                top: parent.top; topMargin: 120
             }
-            Text { font.bold: true; color: "white"; elide: Text.ElideRight; text: container.photoTitle }
-            Text { color: "white"; elide: Text.ElideRight; text: "<b>Size:</b> " + container.photoWidth + 'x' + container.photoHeight }
-            Text { color: "white"; elide: Text.ElideRight; text: "<b>Type:</b> " + container.photoType }
-            Text { color: "white"; elide: Text.ElideRight; text: "<b>Author:</b> " + container.photoAuthor }
-            Text { color: "white"; elide: Text.ElideRight; text: "<b>Published:</b> " + container.photoDate }
-            Text { color: "white"; elide: Text.ElideRight; text: container.photoTags == "" ? "" : "<b>Tags:</b> " }
-            Text { color: "white"; elide: Text.ElideRight; text: container.photoTags }
+            Text { font.bold: true; color: "white"; elide: Text.ElideRight; text: container.photoTitle; width: parent.width }
+            Text { color: "white"; elide: Text.ElideRight; text: "Size: " + container.photoWidth + 'x' + container.photoHeight; width: parent.width }
+            Text { color: "white"; elide: Text.ElideRight; text: "Type: " + container.photoType; width: parent.width }
+            Text { color: "white"; elide: Text.ElideRight; text: "Author: " + container.photoAuthor; width: parent.width }
+            Text { color: "white"; elide: Text.ElideRight; text: "Published: " + container.photoDate; width: parent.width }
+            Text { color: "white"; elide: Text.ElideRight; text: container.photoTags == "" ? "" : "Tags: "; width: parent.width }
+            Text { color: "white"; elide: Text.ElideRight; text: container.photoTags; width: parent.width }
         }
     }
 
@@ -96,13 +96,31 @@ Flipable {
         Rectangle { anchors.fill: parent; color: "black"; opacity: 0.4 }
 
         Common.Progress {
-            anchors.centerIn: parent; width: 200; height: 18
+            anchors.centerIn: parent; width: 200; height: 22
             progress: bigImage.progress; visible: bigImage.status != Image.Ready
         }
 
         Flickable {
             id: flickable; anchors.fill: parent; clip: true
             contentWidth: imageContainer.width; contentHeight: imageContainer.height
+
+            function updateMinimumScale() {
+                if (bigImage.status == Image.Ready && bigImage.width != 0) {
+                    slider.minimum = Math.min(flickable.width / bigImage.width, flickable.height / bigImage.height);
+                    if (bigImage.width * slider.value > flickable.width) {
+                        var xoff = (flickable.width/2 + flickable.contentX) * slider.value / prevScale;
+                        flickable.contentX = xoff - flickable.width/2;
+                    }
+                    if (bigImage.height * slider.value > flickable.height) {
+                        var yoff = (flickable.height/2 + flickable.contentY) * slider.value / prevScale;
+                        flickable.contentY = yoff - flickable.height/2;
+                    }
+                    prevScale = slider.value;
+                }
+            }
+
+            onWidthChanged: updateMinimumScale()
+            onHeightChanged: updateMinimumScale()
 
             Item {
                 id: imageContainer
@@ -114,8 +132,8 @@ Flipable {
                     anchors.centerIn: parent; smooth: !flickable.movingVertically
                     onStatusChanged : {
                         // Default scale shows the entire image.
-                        if (status == Image.Ready && width != 0) {
-                            slider.minimum = Math.min(flickable.width / width, flickable.height / height);
+                        if (bigImage.status == Image.Ready && bigImage.width != 0) {
+                            slider.minimum = Math.min(flickable.width / bigImage.width, flickable.height / bigImage.height);
                             prevScale = Math.min(slider.minimum, 1);
                             slider.value = prevScale;
                         }

@@ -125,7 +125,7 @@ QDBusConnectionManager::~QDBusConnectionManager()
     connectionHash.clear();
 }
 
-QDBUS_EXPORT void qDBusBindToApplication();
+Q_DBUS_EXPORT void qDBusBindToApplication();
 void qDBusBindToApplication()
 {
 }
@@ -172,6 +172,9 @@ void QDBusConnectionManager::setConnection(const QString &name, QDBusConnectionP
 
     The connection is then torn down using the disconnectFromBus()
     function.
+
+    Once disconnected, calling connectToBus() will not reestablish a
+    connection, you must create a new QDBusConnection instance.
 
     As a convenience for the two most common connection types, the
     sessionBus() and systemBus() functions return open connections to
@@ -228,10 +231,6 @@ void QDBusConnectionManager::setConnection(const QString &name, QDBusConnectionP
     \value ExportAllInvokables                  export all of this object's invokables
     \value ExportAllContents                    export all of this object's contents
     \value ExportChildObjects                   export this object's child objects
-
-    \value ExportScriptableInvokables           export this object's scriptable methods
-    \value ExportNonScriptableInvokables        export this object's non-scriptable methods
-    \value ExportAllInvokables                  export all of this object's methods
 
     \sa registerObject(), QDBusAbstractAdaptor, {usingadaptors.html}{Using adaptors}
 */
@@ -859,10 +858,6 @@ QDBusConnectionInterface *QDBusConnection::interface() const
 
 /*!
     Returns true if this QDBusConnection object is connected.
-
-    If it isn't connected, calling connectToBus() on the same
-    connection name will not make be connected. You need to call the
-    QDBusConnection constructor again.
 */
 bool QDBusConnection::isConnected() const
 {

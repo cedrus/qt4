@@ -10,8 +10,8 @@ contains(CONFIG, static) {
     INCLUDEPATH *= $$QT_SOURCE_TREE/tools/shared/qtpropertybrowser
     INCLUDEPATH *= $$QT_SOURCE_TREE/tools/shared/qtgradienteditor
 } else {
-    include($$QT_SOURCE_TREE/tools/shared/qtpropertybrowser/qtpropertybrowser.pri)
-    include($$QT_SOURCE_TREE/tools/shared/qtgradienteditor/qtcolorbutton.pri)
+    include(../../../../shared/qtpropertybrowser/qtpropertybrowser.pri)
+    include(../../../../shared/qtgradienteditor/qtcolorbutton.pri)
 }
 
 FORMS += $$PWD/paletteeditor.ui \
@@ -45,10 +45,8 @@ SOURCES += $$PWD/propertyeditor.cpp \
 
 HEADERS += \
     $$PWD/propertyeditor_global.h \
-    $$PWD/defs.h \
     $$PWD/qlonglongvalidator.h
 
-SOURCES += $$PWD/defs.cpp \
-    $$PWD/qlonglongvalidator.cpp
+SOURCES += $$PWD/qlonglongvalidator.cpp
 
 RESOURCES += $$PWD/propertyeditor.qrc

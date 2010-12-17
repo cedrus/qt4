@@ -94,7 +94,8 @@ QRuntimePixmapData::QRuntimePixmapData(const QRuntimeGraphicsSystem *gs, PixelTy
 
 QRuntimePixmapData::~QRuntimePixmapData()
 {
-    m_graphicsSystem->removePixmapData(this);
+    if (QApplicationPrivate::graphics_system)
+        m_graphicsSystem->removePixmapData(this);
     delete m_data;
 }
 
@@ -258,7 +259,8 @@ QRuntimeWindowSurface::QRuntimeWindowSurface(const QRuntimeGraphicsSystem *gs, Q
 
 QRuntimeWindowSurface::~QRuntimeWindowSurface()
 {
-    m_graphicsSystem->removeWindowSurface(this);
+    if (QApplicationPrivate::graphics_system)
+        m_graphicsSystem->removeWindowSurface(this);
 }
 
 QPaintDevice *QRuntimeWindowSurface::paintDevice()
@@ -323,11 +325,14 @@ QRuntimeGraphicsSystem::QRuntimeGraphicsSystem()
     QApplicationPrivate::graphics_system_name = QLatin1String("runtime");
     QApplicationPrivate::runtime_graphics_system = true;
 
+#ifdef QT_DEFAULT_RUNTIME_SYSTEM
+    m_graphicsSystemName = QLatin1String(QT_DEFAULT_RUNTIME_SYSTEM);
+    if (m_graphicsSystemName.isNull())
+#endif
+        m_graphicsSystemName = QLatin1String("raster");
+
 #ifdef Q_OS_SYMBIAN
-    m_graphicsSystemName = QLatin1String("openvg");
     m_windowSurfaceDestroyPolicy = DestroyAfterFirstFlush;
-#else
-    m_graphicsSystemName = QLatin1String("raster");
 #endif
 
     m_graphicsSystem = QGraphicsSystemFactory::create(m_graphicsSystemName);
@@ -363,7 +368,7 @@ void QRuntimeGraphicsSystem::setGraphicsSystem(const QString &name)
 #ifdef QT_DEBUG
     qDebug() << "QRuntimeGraphicsSystem::setGraphicsSystem( " << name << " )";
 #endif
-    delete m_graphicsSystem;
+    QGraphicsSystem *oldSystem = m_graphicsSystem;
     m_graphicsSystem = QGraphicsSystemFactory::create(name);
     m_graphicsSystemName = name;
 
@@ -390,6 +395,8 @@ void QRuntimeGraphicsSystem::setGraphicsSystem(const QString &name)
         proxy->m_windowSurface.reset(m_graphicsSystem->createWindowSurface(widget));
         qt_widget_private(widget)->invalidateBuffer(widget->rect());
     }
+
+    delete oldSystem;
 }
 
 void QRuntimeGraphicsSystem::removePixmapData(QRuntimePixmapData *pixmapData) const

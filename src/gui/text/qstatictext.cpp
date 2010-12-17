@@ -109,10 +109,18 @@ QT_BEGIN_NAMESPACE
     QPainter::drawStaticText() and can change from call to call with a minimal impact on
     performance.
 
-    QStaticText will attempt to guess the format of the input text using Qt::mightBeRichText().
-    To force QStaticText to display its contents as either plain text or rich text, use the
-    function QStaticText::setTextFormat() and pass in, respectively, Qt::PlainText and
-    Qt::RichText.
+    For extra convenience, it is possible to apply formatting to the text using the HTML subset
+    supported by QTextDocument. QStaticText will attempt to guess the format of the input text using
+    Qt::mightBeRichText(), and interpret it as rich text if this function returns true. To force
+    QStaticText to display its contents as either plain text or rich text, use the function
+    QStaticText::setTextFormat() and pass in, respectively, Qt::PlainText and Qt::RichText.
+
+    QStaticText can only represent text, so only HTML tags which alter the layout or appearance of
+    the text will be respected. Adding an image to the input HTML, for instance, will cause the
+    image to be included as part of the layout, affecting the positions of the text glyphs, but it
+    will not be displayed. The result will be an empty area the size of the image in the output.
+    Similarly, using tables will cause the text to be laid out in table format, but the borders
+    will not be drawn.
 
     If it's the first time the static text is drawn, or if the static text, or the painter's font
     has been altered since the last time it was drawn, the text's layout has to be
@@ -440,7 +448,6 @@ namespace {
             currentItem.font = ti.font();
             currentItem.charOffset = m_chars.size();
             currentItem.numChars = ti.num_chars;
-            currentItem.numGlyphs = ti.glyphs.numGlyphs;
             currentItem.glyphOffset = m_glyphs.size(); // Store offset into glyph pool
             currentItem.positionOffset = m_glyphs.size(); // Offset into position pool
             currentItem.useBackendOptimizations = m_useBackendOptimizations;
@@ -455,21 +462,21 @@ namespace {
             ti.fontEngine->getGlyphPositions(ti.glyphs, matrix, ti.flags, glyphs, positions);
 
             int size = glyphs.size();
-            Q_ASSERT(size == ti.glyphs.numGlyphs);
             Q_ASSERT(size == positions.size());
+            currentItem.numGlyphs = size;
 
             m_glyphs.resize(m_glyphs.size() + size);
             m_positions.resize(m_glyphs.size());
             m_chars.resize(m_chars.size() + ti.num_chars);
 
             glyph_t *glyphsDestination = m_glyphs.data() + currentItem.glyphOffset;
-            qMemCopy(glyphsDestination, glyphs.constData(), sizeof(glyph_t) * currentItem.numGlyphs);
+            memcpy(glyphsDestination, glyphs.constData(), sizeof(glyph_t) * currentItem.numGlyphs);
 
             QFixedPoint *positionsDestination = m_positions.data() + currentItem.positionOffset;
-            qMemCopy(positionsDestination, positions.constData(), sizeof(QFixedPoint) * currentItem.numGlyphs);
+            memcpy(positionsDestination, positions.constData(), sizeof(QFixedPoint) * currentItem.numGlyphs);
 
             QChar *charsDestination = m_chars.data() + currentItem.charOffset;
-            qMemCopy(charsDestination, ti.chars, sizeof(QChar) * currentItem.numChars);
+            memcpy(charsDestination, ti.chars, sizeof(QChar) * currentItem.numChars);
 
             m_items.append(currentItem);
         }
@@ -684,13 +691,13 @@ void QStaticTextPrivate::init()
     items = new QStaticTextItem[itemCount];
 
     glyphPool = new glyph_t[glyphs.size()];
-    qMemCopy(glyphPool, glyphs.constData(), glyphs.size() * sizeof(glyph_t));
+    memcpy(glyphPool, glyphs.constData(), glyphs.size() * sizeof(glyph_t));
 
     positionPool = new QFixedPoint[positions.size()];
-    qMemCopy(positionPool, positions.constData(), positions.size() * sizeof(QFixedPoint));
+    memcpy(positionPool, positions.constData(), positions.size() * sizeof(QFixedPoint));
 
     charPool = new QChar[chars.size()];
-    qMemCopy(charPool, chars.constData(), chars.size() * sizeof(QChar));
+    memcpy(charPool, chars.constData(), chars.size() * sizeof(QChar));
 
     for (int i=0; i<itemCount; ++i) {
         items[i] = deviceItems.at(i);

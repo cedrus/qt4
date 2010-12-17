@@ -250,6 +250,7 @@ void QGridLayoutRowData::calculateGeometries(int start, int end, qreal targetSiz
 
         sumAvailable = targetSize - totalBox.q_preferredSize;
         if (sumAvailable > 0.0) {
+            qreal sumCurrentAvailable = sumAvailable;
             bool somethingHasAMaximumSize = false;
 
             qreal sumPreferredSizes = 0.0;
@@ -305,23 +306,22 @@ void QGridLayoutRowData::calculateGeometries(int start, int end, qreal targetSiz
                         ultimatePreferredSize = ultimatePreferredSize * 3 / 2;
                         ultimateSumPreferredSizes = ultimateSumPreferredSizes * 3 / 2;
 
-                        qreal ultimateFactor = (stretch * ultimateSumPreferredSizes
-                                                / sumStretches)
-                                               - (box.q_preferredSize);
-                        qreal transitionalFactor = sumAvailable
-                                                   * (ultimatePreferredSize - box.q_preferredSize)
-                                                   / (ultimateSumPreferredSizes
-                                                      - sumPreferredSizes);
-
-                        qreal alpha = qMin(sumAvailable,
-                                           ultimateSumPreferredSizes - sumPreferredSizes);
                         qreal beta = ultimateSumPreferredSizes - sumPreferredSizes;
+                        if (!beta) {
+                            factors[i] = 1;
+                        } else {
+                            qreal alpha = qMin(sumCurrentAvailable, beta);
+                            qreal ultimateFactor = (stretch * ultimateSumPreferredSizes / sumStretches)
+                                                   - (box.q_preferredSize);
+                            qreal transitionalFactor = sumCurrentAvailable * (ultimatePreferredSize - box.q_preferredSize) / beta;
 
-                        factors[i] = ((alpha * ultimateFactor)
-                                      + ((beta - alpha) * transitionalFactor)) / beta;
+                            factors[i] = ((alpha * ultimateFactor)
+                                          + ((beta - alpha) * transitionalFactor)) / beta;
+                        }
+
                     }
                     sumFactors += factors[i];
-                    if (desired < sumAvailable)
+                    if (desired < sumCurrentAvailable)
                         somethingHasAMaximumSize = true;
 
                     newSizes[i] = -1.0;
@@ -337,12 +337,12 @@ void QGridLayoutRowData::calculateGeometries(int start, int end, qreal targetSiz
                         continue;
 
                     const QGridLayoutBox &box = boxes.at(start + i);
-                    qreal avail = sumAvailable * factors[i] / sumFactors;
+                    qreal avail = sumCurrentAvailable * factors[i] / sumFactors;
                     if (sizes[i] + avail >= box.q_maximumSize) {
                         newSizes[i] = box.q_maximumSize;
-                        sumAvailable -= box.q_maximumSize - sizes[i];
+                        sumCurrentAvailable -= box.q_maximumSize - sizes[i];
                         sumFactors -= factors[i];
-                        keepGoing = (sumAvailable > 0.0);
+                        keepGoing = (sumCurrentAvailable > 0.0);
                         if (!keepGoing)
                             break;
                     }
@@ -352,7 +352,7 @@ void QGridLayoutRowData::calculateGeometries(int start, int end, qreal targetSiz
             for (int i = 0; i < n; ++i) {
                 if (newSizes[i] < 0.0) {
                     qreal delta = (sumFactors == 0.0) ? 0.0
-                                                      : sumAvailable * factors[i] / sumFactors;
+                                                      : sumCurrentAvailable * factors[i] / sumFactors;
                     newSizes[i] = sizes[i] + delta;
                 }
             }

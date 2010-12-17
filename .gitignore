@@ -6,6 +6,7 @@ examples/*/*/*
 !examples/*/*/README
 examples/*/*/*[.]app
 !examples/declarative/*
+!examples/tutorials/*
 !examples/ja_JP/*/*
 demos/*/*
 !demos/spectrum/*
@@ -114,6 +115,7 @@ tools/qtestlib/chart/chart*
 tools/qtestlib/updater/updater*
 tools/activeqt/testcon/testcon.tlb
 translations/*.qm
+translations/*_untranslated.ts
 qrc_*.cpp
 
 # xemacs temporary files

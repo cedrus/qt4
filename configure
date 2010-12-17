@@ -685,6 +685,7 @@ CFG_MULTIMEDIA=auto
 CFG_AUDIO_BACKEND=auto
 CFG_SVG=auto
 CFG_DECLARATIVE=auto
+CFG_DECLARATIVE_DEBUG=yes
 CFG_WEBKIT=auto # (yes|no|auto)
 CFG_JAVASCRIPTCORE_JIT=auto
 
@@ -728,18 +729,23 @@ CFG_GLIB=auto
 CFG_GSTREAMER=auto
 CFG_QGTKSTYLE=auto
 CFG_QS60STYLE=auto
-CFG_LARGEFILE=yes
+CFG_LARGEFILE=auto
 CFG_OPENSSL=auto
 CFG_PTMALLOC=no
 CFG_STL=auto
 CFG_PRECOMPILE=auto
-CFG_SEPARATE_DEBUG_INFO=auto
+CFG_SEPARATE_DEBUG_INFO=no
 CFG_SEPARATE_DEBUG_INFO_NOCOPY=no
 CFG_REDUCE_EXPORTS=auto
 CFG_MMX=auto
 CFG_3DNOW=auto
 CFG_SSE=auto
 CFG_SSE2=auto
+CFG_SSE3=auto
+CFG_SSSE3=auto
+CFG_SSE4_1=auto
+CFG_SSE4_2=auto
+CFG_AVX=auto
 CFG_REDUCE_RELOCATIONS=no
 CFG_IPV6=auto
 CFG_NAS=no
@@ -789,6 +795,7 @@ OPT_VERBOSE=no
 OPT_HELP=
 CFG_SILENT=no
 CFG_GRAPHICS_SYSTEM=default
+CFG_RUNTIME_SYSTEM=
 CFG_ALSA=auto
 CFG_PULSEAUDIO=auto
 CFG_COREWLAN=auto
@@ -818,6 +825,7 @@ QT_LFLAGS_MYSQL_R=
 QT_CFLAGS_SQLITE=
 QT_LFLAGS_SQLITE=
 QT_LFLAGS_ODBC="-lodbc"
+QT_LFLAGS_TDS=
 
 # flags for libdbus-1
 QT_CFLAGS_DBUS=
@@ -831,9 +839,9 @@ QT_LIBS_GLIB=
 QT_CFLAGS_GSTREAMER=
 QT_LIBS_GSTREAMER=
 
-# flags for icd (Maemo Internet Connection Daemon)
-QT_CFLAGS_ICD=
-QT_LIBS_ICD=
+# flags for libconnsettings0 (used for Maemo ICD bearer management plugin)
+QT_CFLAGS_CONNSETTINGS=
+QT_LIBS_CONNSETTINGS=
 
 #-------------------------------------------------------------------------------
 # check SQL drivers, mouse drivers and decorations available in this package
@@ -1028,6 +1036,11 @@ while [ "$#" -gt 0 ]; do
         ;;
     -graphicssystem)
 	VAR="graphicssystem"
+	shift
+	VAL=$1
+	;;
+    -runtimegraphicssystem)
+	VAR="runtimegraphicssystem"
 	shift
 	VAL=$1
 	;;
@@ -1275,9 +1288,16 @@ while [ "$#" -gt 0 ]; do
                 CFG_GRAPHICS_SYSTEM="openvg"
             elif [ "$VAL" = "raster" ]; then
                 CFG_GRAPHICS_SYSTEM="raster"
+            elif [ "$VAL" = "runtime" ]; then
+                CFG_GRAPHICS_SYSTEM="runtime"
             else
                 UNKNOWN_OPT=yes
             fi
+        fi
+	;;
+    runtimegraphicssystem)
+        if  [ "$VAL" != "runtime" ]; then
+            CFG_RUNTIME_SYSTEM="$VAL"
         fi
 	;;
 
@@ -1411,9 +1431,6 @@ while [ "$#" -gt 0 ]; do
             ;;
         reliant-64)
             PLATFORM=reliant-cds-64
-            ;;
-        solaris-64)
-            PLATFORM=solaris-cc-64
             ;;
         solaris-64)
             PLATFORM=solaris-cc-64
@@ -1638,6 +1655,41 @@ while [ "$#" -gt 0 ]; do
     sse2)
         if [ "$VAL" = "no" ]; then
             CFG_SSE2="$VAL"
+        else
+            UNKNOWN_OPT=yes
+        fi
+        ;;
+    sse3)
+        if [ "$VAL" = "no" ]; then
+            CFG_SSE3="$VAL"
+        else
+            UNKNOWN_OPT=yes
+        fi
+        ;;
+    ssse3)
+        if [ "$VAL" = "no" ]; then
+            CFG_SSSE3="$VAL"
+        else
+            UNKNOWN_OPT=yes
+        fi
+        ;;
+    sse4.1)
+        if [ "$VAL" = "no" ]; then
+            CFG_SSE4_1="$VAL"
+        else
+            UNKNOWN_OPT=yes
+        fi
+        ;;
+    sse4.2)
+        if [ "$VAL" = "no" ]; then
+            CFG_SSE4_2="$VAL"
+        else
+            UNKNOWN_OPT=yes
+        fi
+        ;;
+    avx)
+        if [ "$VAL" = "no" ]; then
+            CFG_AVX="$VAL"
         else
             UNKNOWN_OPT=yes
         fi
@@ -1946,6 +1998,17 @@ while [ "$#" -gt 0 ]; do
             fi
         fi
 	;;
+    declarative-debug)
+        if [ "$VAL" = "yes" ]; then
+            CFG_DECLARATIVE_DEBUG="yes"
+        else
+            if [ "$VAL" = "no" ]; then
+                CFG_DECLARATIVE_DEBUG="no"
+            else
+                UNKNOWN_OPT=yes
+            fi
+        fi
+        ;;
     webkit)
         if [ "$VAL" = "yes" ] || [ "$VAL" = "auto" ]; then
             CFG_WEBKIT="yes"
@@ -2047,7 +2110,7 @@ while [ "$#" -gt 0 ]; do
                 [ "$VAR" = "decoration" ] && QMakeVar del "${VAR}s" "$VAL"
                 [ "$VAR" = "decoration" ] && CFG_DECORATION_ON=`echo "${CFG_DECORATION_ON} " | sed "s,${VAL} ,,g"` && CFG_DECORATION_PLUGIN="$CFG_DECORATION_PLUGIN ${VAL}"
                 [ "$VAR" = "kbd" ] && QMakeVar del "${VAR}s" "$VAL"
-                [ "$VAR" = "kbd" ] && CFG_KBD_ON=`echo "${CFG_MOUSE_ON} " | sed "s,${VAL} ,,g"` && CFG_KBD_PLUGIN="$CFG_KBD_PLUGIN ${VAL}"
+                [ "$VAR" = "kbd" ] && CFG_KBD_ON=`echo "${CFG_KBD_ON} " | sed "s,${VAL} ,,g"` && CFG_KBD_PLUGIN="$CFG_KBD_PLUGIN ${VAL}"
                 [ "$VAR" = "mouse" ] && QMakeVar del "${VAR}s" "$VAL"
                 [ "$VAR" = "mouse" ] && CFG_MOUSE_ON=`echo "${CFG_MOUSE_ON} " | sed "s,${VAL} ,,g"` && CFG_MOUSE_PLUGIN="$CFG_MOUSE_PLUGIN ${VAL}"
                 [ "$VAR" = "gfx" ] && QMakeVar del "${VAR}s" "$VAL"
@@ -2267,14 +2330,14 @@ fi
 if [ "$PLATFORM_X11" = "yes" -o "$PLATFORM_QWS" = "yes" ] && [ "$CFG_DEBUG_RELEASE" = "yes" ]; then
     echo
     echo "WARNING: -debug-and-release is not supported anymore on Qt/X11 and Qt for Embedded Linux"
-    echo "By default, Qt is built in release mode with separate debug information, so"
+    echo "Qt can be built in release mode with separate debug information, so"
     echo "-debug-and-release is not necessary anymore"
     echo
 fi
 
 # detect build style
 if [ "$CFG_DEBUG" = "auto" ]; then
-    if [ "$PLATFORM_MAC" = "yes" ]; then
+    if [ "$PLATFORM_MAC" = "yes" -o "$XPLATFORM_MINGW" = "yes" ]; then
         CFG_DEBUG_RELEASE=yes
         CFG_DEBUG=yes
     elif [ "$CFG_DEV" = "yes" ]; then
@@ -2357,13 +2420,26 @@ if [ "$OPT_SHADOW" = "yes" ]; then
     ln -s "$relpath"/mkspecs/* "$outpath/mkspecs"
     rm -f "$outpath/mkspecs/default"
 
+    ShadowMkspecs()
+    {
+        rm -rf "$outpath/mkspecs/$1"
+        if [ "$UNAME_SYSTEM" = "Linux" ]; then
+            # This works with GNU coreutils, and is needed for ScratchBox
+            cp -rs "$relpath/mkspecs/$1" "$outpath/mkspecs/$1"
+        else
+            # A simple "cp -rs" doesn't work on Mac. :(
+            find "$relpath/mkspecs/$1" -type d | sed "s,^$relpath,$outpath," | xargs mkdir -p
+            find "$relpath/mkspecs/$1" -type f | sed "s,^$relpath/,," | xargs -n 1 -I % ln -s "$relpath/%" "$outpath/%"
+        fi
+    }
+
     # Special case for mkspecs/features directory.
     # To be able to place .prf files into a shadow build directory,
     # we're creating links for files only. The directory structure is reproduced.
-    # A simple "cp -rs" doesn't work on Mac. :(
-    rm -rf "$outpath/mkspecs/features"
-    find "$relpath/mkspecs/features" -type d | sed "s,^$relpath,$outpath," | xargs mkdir -p
-    find "$relpath/mkspecs/features" -type f | sed "s,^$relpath/,," | xargs -n 1 -I % ln -s "$relpath/%" "$outpath/%"
+    ShadowMkspecs features
+
+    # The modules dir is special, too.
+    ShadowMkspecs modules
 
     # symlink the doc directory
     rm -rf "$outpath/doc"
@@ -2803,7 +2879,7 @@ if [ -z "${CFG_HOST_ARCH}" ]; then
             ;;
         i86pc)
 	    case "$PLATFORM" in
-	    *-64)
+	    *-64*)
                 if [ "$OPT_VERBOSE" = "yes" ]; then
 	            echo "    64-bit AMD 80x86 (x86_64)"
                 fi
@@ -3069,11 +3145,16 @@ fi
 
 QMAKE_CONF_COMPILER=`getQMakeConf "$XQMAKESPEC" | grep "^QMAKE_CXX[^_A-Z0-9]" | sed "s,.* *= *\(.*\)$,\1," | tail -1`
 TEST_COMPILER="$CXX"
+
 [ -z "$TEST_COMPILER" ] && TEST_COMPILER=$QMAKE_CONF_COMPILER
-if [ -z "$TEST_COMPILER" ]; then
-    echo "ERROR: Cannot set the compiler for the configuration tests"
-    exit 1
+if [ "$XPLATFORM" != "symbian-sbsv2" ]; then
+    #for Symbian we don't need this checking
+    if [ -z "$TEST_COMPILER" ]; then
+        echo "ERROR: Cannot set the compiler for the configuration tests"
+        exit 1
+    fi
 fi
+
 
 # auto-detect precompiled header support
 if [ "$CFG_PRECOMPILE" = "auto" ]; then
@@ -3245,122 +3326,137 @@ if [ -z "$QT_INSTALL_PREFIX" ]; then
 fi
 QT_INSTALL_PREFIX=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_PREFIX"`
 
-#docs
-if [ -z "$QT_INSTALL_DOCS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-	if [ "$PLATFORM_MAC" = "yes" ]; then
-	    QT_INSTALL_DOCS="/Developer/Documentation/Qt"
-        fi
-    fi
-    [ -z "$QT_INSTALL_DOCS" ] && QT_INSTALL_DOCS="$QT_INSTALL_PREFIX/doc" #fallback
-
-fi
-QT_INSTALL_DOCS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DOCS"`
-
-#headers
-if [ -z "$QT_INSTALL_HEADERS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-	if [ "$PLATFORM_MAC" = "yes" ]; then
-	    if [ "$CFG_FRAMEWORK" = "yes" ]; then
-		QT_INSTALL_HEADERS=
+if echo $XPLATFORM | grep symbian > /dev/null; then
+    [ -z "$QT_HOST_PREFIX" ] && QT_HOST_PREFIX="$QT_INSTALL_PREFIX"
+    [ -z "$QT_INSTALL_DOCS" ] && QT_INSTALL_DOCS=
+    [ -z "$QT_INSTALL_HEADERS" ] && QT_INSTALL_HEADERS=
+    [ -z "$QT_INSTALL_LIBS" ] && QT_INSTALL_LIBS=
+    [ -z "$QT_INSTALL_BINS" ] && QT_INSTALL_BINS=
+    [ -z "$QT_INSTALL_PLUGINS" ] && QT_INSTALL_PLUGINS="\\\\resource\\\\qt$QT_LIBINFIX\\\\plugins"
+    [ -z "$QT_INSTALL_IMPORTS" ] && QT_INSTALL_IMPORTS="\\\\resource\\\\qt$QT_LIBINFIX\\\\imports"
+    [ -z "$QT_INSTALL_DATA" ] && QT_INSTALL_DATA=
+    [ -z "$QT_INSTALL_TRANSLATIONS" ] && QT_INSTALL_TRANSLATIONS="\\\\resource\\\\qt$QT_LIBINFIX\\\\translations"
+    [ -z "$QT_INSTALL_SETTINGS" ] && QT_INSTALL_SETTINGS=
+    [ -z "$QT_INSTALL_EXAMPLES" ] && QT_INSTALL_EXAMPLES=
+    [ -z "$QT_INSTALL_DEMOS" ] && QT_INSTALL_DEMOS=
+else
+    #docs
+    if [ -z "$QT_INSTALL_DOCS" ]; then #default
+        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
+	    if [ "$PLATFORM_MAC" = "yes" ]; then
+	        QT_INSTALL_DOCS="/Developer/Documentation/Qt"
             fi
         fi
+        [ -z "$QT_INSTALL_DOCS" ] && QT_INSTALL_DOCS="$QT_INSTALL_PREFIX/doc" #fallback
+
     fi
-    [ -z "$QT_INSTALL_HEADERS" ] && QT_INSTALL_HEADERS="$QT_INSTALL_PREFIX/include"
+    QT_INSTALL_DOCS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DOCS"`
 
-fi
-QT_INSTALL_HEADERS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_HEADERS"`
-
-#libs
-if [ -z "$QT_INSTALL_LIBS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-	if [ "$PLATFORM_MAC" = "yes" ]; then
-	    if [ "$CFG_FRAMEWORK" = "yes" ]; then
-		QT_INSTALL_LIBS="/Libraries/Frameworks"
+    #headers
+    if [ -z "$QT_INSTALL_HEADERS" ]; then #default
+        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
+	    if [ "$PLATFORM_MAC" = "yes" ]; then
+	        if [ "$CFG_FRAMEWORK" = "yes" ]; then
+		    QT_INSTALL_HEADERS=
+                fi
             fi
         fi
-    fi
-    [ -z "$QT_INSTALL_LIBS" ] && QT_INSTALL_LIBS="$QT_INSTALL_PREFIX/lib" #fallback
-fi
-QT_INSTALL_LIBS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_LIBS"`
+        [ -z "$QT_INSTALL_HEADERS" ] && QT_INSTALL_HEADERS="$QT_INSTALL_PREFIX/include"
 
-#bins
-if [ -z "$QT_INSTALL_BINS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-	if [ "$PLATFORM_MAC" = "yes" ]; then
-	    QT_INSTALL_BINS="/Developer/Applications/Qt"
+    fi
+    QT_INSTALL_HEADERS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_HEADERS"`
+
+    #libs
+    if [ -z "$QT_INSTALL_LIBS" ]; then #default
+        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
+	    if [ "$PLATFORM_MAC" = "yes" ]; then
+	        if [ "$CFG_FRAMEWORK" = "yes" ]; then
+		    QT_INSTALL_LIBS="/Libraries/Frameworks"
+                fi
+            fi
+        fi
+        [ -z "$QT_INSTALL_LIBS" ] && QT_INSTALL_LIBS="$QT_INSTALL_PREFIX/lib" #fallback
+    fi
+    QT_INSTALL_LIBS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_LIBS"`
+
+    #bins
+    if [ -z "$QT_INSTALL_BINS" ]; then #default
+        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
+	    if [ "$PLATFORM_MAC" = "yes" ]; then
+	        QT_INSTALL_BINS="/Developer/Applications/Qt"
+            fi
+        fi
+        [ -z "$QT_INSTALL_BINS" ] && QT_INSTALL_BINS="$QT_INSTALL_PREFIX/bin" #fallback
+
+    fi
+    QT_INSTALL_BINS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_BINS"`
+
+    #plugins
+    if [ -z "$QT_INSTALL_PLUGINS" ]; then #default
+        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
+	    if [ "$PLATFORM_MAC" = "yes" ]; then
+	        QT_INSTALL_PLUGINS="/Developer/Applications/Qt/plugins"
+            fi
+        fi
+        [ -z "$QT_INSTALL_PLUGINS" ] && QT_INSTALL_PLUGINS="$QT_INSTALL_PREFIX/plugins" #fallback
+    fi
+    QT_INSTALL_PLUGINS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_PLUGINS"`
+
+    #imports
+    if [ -z "$QT_INSTALL_IMPORTS" ]; then #default
+        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
+	    if [ "$PLATFORM_MAC" = "yes" ]; then
+	        QT_INSTALL_IMPORTS="/Developer/Applications/Qt/imports"
+            fi
+        fi
+        [ -z "$QT_INSTALL_IMPORTS" ] && QT_INSTALL_IMPORTS="$QT_INSTALL_PREFIX/imports" #fallback
+    fi
+    QT_INSTALL_IMPORTS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_IMPORTS"`
+
+    #data
+    if [ -z "$QT_INSTALL_DATA" ]; then #default
+        QT_INSTALL_DATA="$QT_INSTALL_PREFIX"
+    fi
+    QT_INSTALL_DATA=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DATA"`
+
+    #translations
+    if [ -z "$QT_INSTALL_TRANSLATIONS" ]; then #default
+        QT_INSTALL_TRANSLATIONS="$QT_INSTALL_PREFIX/translations"
+    fi
+    QT_INSTALL_TRANSLATIONS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_TRANSLATIONS"`
+
+    #settings
+    if [ -z "$QT_INSTALL_SETTINGS" ]; then #default
+        if [ "$PLATFORM_MAC" = "yes" ]; then
+	    QT_INSTALL_SETTINGS=/Library/Preferences/Qt
+        else
+	    QT_INSTALL_SETTINGS=/etc/xdg
         fi
     fi
-    [ -z "$QT_INSTALL_BINS" ] && QT_INSTALL_BINS="$QT_INSTALL_PREFIX/bin" #fallback
+    QT_INSTALL_SETTINGS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_SETTINGS"`
 
-fi
-QT_INSTALL_BINS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_BINS"`
-
-#plugins
-if [ -z "$QT_INSTALL_PLUGINS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-	if [ "$PLATFORM_MAC" = "yes" ]; then
-	    QT_INSTALL_PLUGINS="/Developer/Applications/Qt/plugins"
+    #examples
+    if [ -z "$QT_INSTALL_EXAMPLES" ]; then #default
+        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
+	    if [ "$PLATFORM_MAC" = "yes" ]; then
+	        QT_INSTALL_EXAMPLES="/Developer/Examples/Qt"
+            fi
         fi
+        [ -z "$QT_INSTALL_EXAMPLES" ] && QT_INSTALL_EXAMPLES="$QT_INSTALL_PREFIX/examples" #fallback
     fi
-    [ -z "$QT_INSTALL_PLUGINS" ] && QT_INSTALL_PLUGINS="$QT_INSTALL_PREFIX/plugins" #fallback
-fi
-QT_INSTALL_PLUGINS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_PLUGINS"`
+    QT_INSTALL_EXAMPLES=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_EXAMPLES"`
 
-#imports
-if [ -z "$QT_INSTALL_IMPORTS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-	if [ "$PLATFORM_MAC" = "yes" ]; then
-	    QT_INSTALL_IMPORTS="/Developer/Applications/Qt/imports"
+    #demos
+    if [ -z "$QT_INSTALL_DEMOS" ]; then #default
+        if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
+	    if [ "$PLATFORM_MAC" = "yes" ]; then
+	        QT_INSTALL_DEMOS="/Developer/Examples/Qt/Demos"
+            fi
         fi
+        [ -z "$QT_INSTALL_DEMOS" ] && QT_INSTALL_DEMOS="$QT_INSTALL_PREFIX/demos"
     fi
-    [ -z "$QT_INSTALL_IMPORTS" ] && QT_INSTALL_IMPORTS="$QT_INSTALL_PREFIX/imports" #fallback
+    QT_INSTALL_DEMOS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DEMOS"`
 fi
-QT_INSTALL_IMPORTS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_IMPORTS"`
-
-#data
-if [ -z "$QT_INSTALL_DATA" ]; then #default
-    QT_INSTALL_DATA="$QT_INSTALL_PREFIX"
-fi
-QT_INSTALL_DATA=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DATA"`
-
-#translations
-if [ -z "$QT_INSTALL_TRANSLATIONS" ]; then #default
-    QT_INSTALL_TRANSLATIONS="$QT_INSTALL_PREFIX/translations"
-fi
-QT_INSTALL_TRANSLATIONS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_TRANSLATIONS"`
-
-#settings
-if [ -z "$QT_INSTALL_SETTINGS" ]; then #default
-    if [ "$PLATFORM_MAC" = "yes" ]; then
-	QT_INSTALL_SETTINGS=/Library/Preferences/Qt
-    else
-	QT_INSTALL_SETTINGS=/etc/xdg
-    fi
-fi
-QT_INSTALL_SETTINGS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_SETTINGS"`
-
-#examples
-if [ -z "$QT_INSTALL_EXAMPLES" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-	if [ "$PLATFORM_MAC" = "yes" ]; then
-	    QT_INSTALL_EXAMPLES="/Developer/Examples/Qt"
-        fi
-    fi
-    [ -z "$QT_INSTALL_EXAMPLES" ] && QT_INSTALL_EXAMPLES="$QT_INSTALL_PREFIX/examples" #fallback
-fi
-QT_INSTALL_EXAMPLES=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_EXAMPLES"`
-
-#demos
-if [ -z "$QT_INSTALL_DEMOS" ]; then #default
-    if [ "$CFG_PREFIX_INSTALL" = "no" ]; then
-	if [ "$PLATFORM_MAC" = "yes" ]; then
-	    QT_INSTALL_DEMOS="/Developer/Examples/Qt/Demos"
-        fi
-    fi
-    [ -z "$QT_INSTALL_DEMOS" ] && QT_INSTALL_DEMOS="$QT_INSTALL_PREFIX/demos"
-fi
-QT_INSTALL_DEMOS=`"$relpath/config.tests/unix/makeabs" "$QT_INSTALL_DEMOS"`
 
 #-------------------------------------------------------------------------------
 # help - interactive parts of the script _after_ this section please
@@ -3433,13 +3529,15 @@ Usage:  $relconf [-h] [-prefix <dir>] [-prefix-install] [-bindir <dir>] [-libdir
         [-verbose] [-v] [-silent] [-no-nis] [-nis] [-no-cups] [-cups] [-no-iconv]
         [-iconv] [-no-pch] [-pch] [-no-dbus] [-dbus] [-dbus-linked] [-no-gui]
         [-no-separate-debug-info] [-no-mmx] [-no-3dnow] [-no-sse] [-no-sse2]
+        [-no-sse3] [-no-ssse3] [-no-sse4.1] [-no-sse4.2] [-no-avx]
         [-qtnamespace <namespace>] [-qtlibinfix <infix>] [-separate-debug-info] [-armfpa]
         [-no-optimized-qmake] [-optimized-qmake] [-no-xmlpatterns] [-xmlpatterns]
         [-no-multimedia] [-multimedia] [-no-phonon] [-phonon] [-no-phonon-backend] [-phonon-backend]
         [-no-media-backend] [-media-backend] [-no-audio-backend] [-audio-backend] 
         [-no-openssl] [-openssl] [-openssl-linked]
         [-no-gtkstyle] [-gtkstyle] [-no-svg] [-svg] [-no-webkit] [-webkit] [-no-javascript-jit] [-javascript-jit]
-        [-no-script] [-script] [-no-scripttools] [-scripttools] [-no-declarative] [-declarative]
+        [-no-script] [-script] [-no-scripttools] [-scripttools] 
+	[-no-declarative] [-declarative][-no-declarative-debug] [-declarative-debug]
 
         [additional platform specific options (see below)]
 
@@ -3602,8 +3700,11 @@ fi
     -no-scripttools .... Do not build the QtScriptTools module.
  +  -scripttools ....... Build the QtScriptTools module.
 
-    -no-declarative .....Do not build the declarative module.
+    -no-declarative ..... Do not build the declarative module.
  +  -declarative ....... Build the declarative module.
+
+    -no-declarative-debug ..... Do not build the declarative debugging support.
+ +  -declarative-debug ....... Build the declarative debugging support.
 
     -platform target ... The operating system and compiler you are building
                          on ($PLATFORM).
@@ -3616,6 +3717,8 @@ cat << EOF
     -graphicssystem <sys> Sets an alternate graphics system. Available options are:
                            raster - Software rasterizer
                            opengl - Rendering via OpenGL, Experimental!
+                           openvg - Rendering via OpenVG, Experimental!
+
 EOF
 fi
 cat << EOF
@@ -3624,6 +3727,11 @@ cat << EOF
     -no-3dnow .......... Do not compile with use of 3DNOW instructions.
     -no-sse ............ Do not compile with use of SSE instructions.
     -no-sse2 ........... Do not compile with use of SSE2 instructions.
+    -no-sse3 ........... Do not compile with use of SSE3 instructions.
+    -no-ssse3 .......... Do not compile with use of SSSE3 instructions.
+    -no-sse4.1.......... Do not compile with use of SSE4.1 instructions.
+    -no-sse4.2.......... Do not compile with use of SSE4.2 instructions.
+    -no-avx ............ Do not compile with use of AVX instructions.
 
     -qtnamespace <name>  Wraps all Qt library code in 'namespace <name> {...}'.
     -qtlibinfix <infix>  Renames all libQt*.so to libQt*<infix>.so.
@@ -4489,8 +4597,13 @@ if true; then ###[ '!' -f "$outpath/bin/qmake" ];
     mv -f "$QMAKE_QCONFIG_H" "$QCONFIG_H"
 
     #mkspecs/default is used as a (gasp!) default mkspec so QMAKESPEC needn't be set once configured
-    rm -f mkspecs/default
-    ln -s `echo $XQMAKESPEC | sed "s,^${relpath}/mkspecs/,,"` mkspecs/default
+    rm -rf mkspecs/default
+    if echo "$XPLATFORM" | grep "symbian-sbsv2" > /dev/null ; then
+#Link is not supported for Symbian build system
+        cp -a mkspecs/`echo $XQMAKESPEC | sed "s,^${relpath}/mkspecs/,,"` mkspecs/default
+    else
+        ln -s `echo $XQMAKESPEC | sed "s,^${relpath}/mkspecs/,,"` mkspecs/default
+    fi
     # fix makefiles
     for mkfile in GNUmakefile Makefile; do
         EXTRA_LFLAGS=
@@ -4673,6 +4786,51 @@ if [ "${CFG_SSE2}" = "auto" ]; then
     fi
 fi
 
+# detect sse3 support
+if [ "${CFG_SSE3}" = "auto" ]; then
+    if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/sse3 "sse3" $L_FLAGS $I_FLAGS $l_FLAGS "-msse3"; then
+       CFG_SSE3=yes
+    else
+       CFG_SSE3=no
+    fi
+fi
+
+# detect ssse3 support
+if [ "${CFG_SSSE3}" = "auto" ]; then
+    if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/ssse3 "ssse3" $L_FLAGS $I_FLAGS $l_FLAGS "-mssse3"; then
+       CFG_SSSE3=yes
+    else
+       CFG_SSSE3=no
+    fi
+fi
+
+# detect sse4.1 support
+if [ "${CFG_SSE4_1}" = "auto" ]; then
+    if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/sse4_1 "sse4_1" $L_FLAGS $I_FLAGS $l_FLAGS "-msse4.1"; then
+       CFG_SSE4_1=yes
+    else
+       CFG_SSE4_1=no
+    fi
+fi
+
+# detect sse4.2 support
+if [ "${CFG_SSE4_2}" = "auto" ]; then
+    if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/sse4_2 "sse4_2" $L_FLAGS $I_FLAGS $l_FLAGS "-msse4.2"; then
+       CFG_SSE4_2=yes
+    else
+       CFG_SSE4_2=no
+    fi
+fi
+
+# detect avx support
+if [ "${CFG_AVX}" = "auto" ]; then
+    if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/avx "avx" $L_FLAGS $I_FLAGS $l_FLAGS "-mavx"; then
+       CFG_AVX=yes
+    else
+       CFG_AVX=no
+    fi
+fi
+
 # check iWMMXt support
 if [ "$CFG_IWMMXT" = "yes" ]; then
     "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/iwmmxt "iwmmxt" $L_FLAGS $I_FLAGS $l_FLAGS "-mcpu=iwmmxt"
@@ -4720,6 +4878,10 @@ case "$XPLATFORM" in *symbian*)
     QMakeVar set styles "windows s60"   #overwrite previous default
     CFG_LIBFREETYPE=no
 
+    if [ "$CFG_LARGEFILE" = auto ]; then
+        CFG_LARGEFILE=no
+    fi
+
     if test -z "$EPOCROOT"; then
         echo "Please export EPOCROOT. It should point to the sdk install dir"
         exit 1
@@ -4729,29 +4891,39 @@ case "$XPLATFORM" in *symbian*)
         exit 1
     fi
 
-    # the main commands needed to compile;
-    (cd config.tests/symbian
-        mkdir -p rcomp
-        cd rcomp
-        rm -f rcomp_test.rsg
-        touch rcomp_test.rpp rcomp_test.rsc rcomp_test.rss
-        rcomp -u -m045,046,047 -s./rcomp_test.rpp -o./rcomp_test.rsc -h./rcomp_test.rsg -i./rcomp_test.rss 2>&1 > /dev/null
-        if test ! -f rcomp_test.rsg; then
-            echo "Finding a working rcomp in your PATH failed."
-            echo "Fatal error. Make sure you have the epoc tools working and in your PATH";
+    if ! echo $XPLATFORM | grep symbian-sbsv2 > /dev/null; then
+        # Raptor does not support configure tests.
+
+        # the main commands needed to compile;
+        (cd config.tests/symbian
+            mkdir -p rcomp
+            cd rcomp
+            rm -f rcomp_test.rsg
+            touch rcomp_test.rpp rcomp_test.rsc rcomp_test.rss
+            rcomp -u -m045,046,047 -s./rcomp_test.rpp -o./rcomp_test.rsc -h./rcomp_test.rsg -i./rcomp_test.rss 2>&1 > /dev/null
+            if test ! -f rcomp_test.rsg; then
+                echo "Finding a working rcomp in your PATH failed."
+                echo "Fatal error. Make sure you have the epoc tools working and in your PATH";
+                exit 1;
+            fi
+        )
+
+        # compile a simple main that uses printf
+        if ! "$symbiantests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/symbian/simple "simple" $L_FLAGS $I_FLAGS $l_FLAGS
+        then
+            echo "Testing your compiler failed. Could not compile a simple application."
+            echo "Fatal error; Rerun configure with -verbose to get more details."
             exit 1;
         fi
-    )
-
-    # compile a simple main that uses printf
-    if ! "$symbiantests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/symbian/simple "simple" $L_FLAGS $I_FLAGS $l_FLAGS
-    then
-        echo "Testing your compiler failed. Could not compile a simple application."
-        echo "Fatal error; Rerun configure with -verbose to get more details."
-        exit 1;
     fi
     ;;
 esac
+
+if [ "$CFG_LARGEFILE" = "auto" ]; then
+    #Large files should be enabled for all Linux systems
+    CFG_LARGEFILE=yes
+fi
+
 
 if [ "$CFG_S60" = "auto" ]; then
     if echo "$XPLATFORM" | grep symbian > /dev/null; then
@@ -4990,7 +5162,9 @@ for _SQLDR in $CFG_SQL_AVAILABLE; do
             ;;
         tds)
             if [ "$CFG_SQL_tds" != "no" ]; then
-                if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/tds "TDS" $L_FLAGS $I_FLAGS $l_FLAGS $MAC_CONFIG_TEST_COMMANDLINE; then
+                [ -z "$SYBASE" ] || QT_LFLAGS_TDS="-L$SYBASE/lib"
+                [ -z "$SYBASE_LIBS" ] || QT_LFLAGS_TDS="$QT_LFLAGS_TDS $SYBASE_LIBS"
+                if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/tds "TDS" $QT_LFLAGS_TDS $L_FLAGS $I_FLAGS $l_FLAGS $MAC_CONFIG_TEST_COMMANDLINE; then
                     if [ "$CFG_SQL_tds" = "auto" ]; then
                         CFG_SQL_tds=plugin
                     fi
@@ -5068,8 +5242,11 @@ for _SQLDR in $CFG_SQL_AVAILABLE; do
             if [ "$CFG_SQL_sqlite" = "auto" ]; then # the default
                 case "$XPLATFORM" in
                     symbian*)
-                    # sqlite on symbian is typically not build in Qt but deployed as a pre-existing sis file.
-                    CFG_SQL_sqlite=no
+                    # sqlite on symbian is typically not build in Qt but deployed as a pre-existing sis file and should be marked as driver.
+                    # Configuration parameters should be set
+                    CFG_SQL_sqlite=qt
+                    QT_LFLAGS_SQLITE=-lsqlite3
+                    QMAKE_CONFIG="$QMAKE_CONFIG system-sqlite"
                     ;;
                 esac
             fi
@@ -5250,7 +5427,7 @@ if [ "$PLATFORM_X11" = "yes" -o "$PLATFORM_QWS" = "yes" ]; then
         fi
     fi
 
-    # Auto-detect GStreamer support (needed for both Phonon & QtMultimedia)
+    # Auto-detect GStreamer support (needed for Phonon)
     if [ "$CFG_PHONON" != "no" ]; then
         if [ "$CFG_GLIB" = "yes" -a "$CFG_GSTREAMER" != "no" ]; then
             if [ -n "$PKG_CONFIG" ]; then
@@ -5301,49 +5478,21 @@ if [ "$PLATFORM_X11" = "yes" -o "$PLATFORM_QWS" = "yes" ]; then
 
     # auto-detect icd support
     if [ "$CFG_GLIB" = "yes" -a "$CFG_ICD" != "no" ]; then
-        # ICD support has a cyclic dependency on Qt.
         if [ -n "$PKG_CONFIG" ]; then
-            QT_CFLAGS_ICD=`$PKG_CONFIG --cflags osso-ic conninet 2>/dev/null`
-            QT_LIBS_ICD=`$PKG_CONFIG --libs osso-ic conninet 2>/dev/null`
-            QT_CFLAGS_QTNETWORK=`$PKG_CONFIG --cflags QtNetwork 2>/dev/null`
-            QT_LIBS_QTNETWORK=`$PKG_CONFIG --libs QtNetwork 2>/dev/null`
-        else
-            QT_CFLAGS_QTNETWORK=
-            QT_LIBS_QTNETWORK=
+            QT_CFLAGS_CONNSETTINGS=`$PKG_CONFIG --cflags connsettings 2>/dev/null`
+            QT_LIBS_CONNSETTINGS=`$PKG_CONFIG --libs connsettings 2>/dev/null`
         fi
-        if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/icd "ICD" $L_FLAGS $I_FLAGS $l_FLAGS $QT_CFLAGS_ICD $QT_LIBS_ICD $QT_CFLAGS_QTNETWORK $QT_LIBS_QTNETWORK; then
+        if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/icd "ICD" $L_FLAGS $I_FLAGS $l_FLAGS $QT_CFLAGS_CONNSETTINGS $QT_LIBS_CONNSETTINGS; then
             [ "$CFG_ICD" = "auto" ] && CFG_ICD=yes
-            # remove system Qt includes and libraries
-            QT_CFLAGS_ICD_TRIMMED=
-            for i in $QT_CFLAGS_ICD; do
-                case $i in
-                    *qt*)
-                        ;;
-                    *)
-                        QT_CFLAGS_ICD_TRIMMED="$QT_CFLAGS_ICD_TRIMMED $i"
-                        ;;
-                esac
-            done
-            QT_LIBS_ICD_TRIMMED=
-            for i in $QT_LIBS_ICD; do
-                case $i in
-                    *qt*|-lQt*)
-                        ;;
-                    *)
-                        QT_LIBS_ICD_TRIMMED="$QT_LIBS_ICD_TRIMMED $i"
-                        ;;
-                esac
-            done
-
-            QMakeVar set QT_CFLAGS_ICD "$QT_CFLAGS_ICD_TRIMMED"
-            QMakeVar set QT_LIBS_ICD "$QT_LIBS_ICD_TRIMMED"
+            QMakeVar set QT_CFLAGS_CONNSETTINGS "$QT_CFLAGS_CONNSETTINGS"
+            QMakeVar set QT_LIBS_CONNSETTINGS "$QT_LIBS_CONNSETTINGS"
         else
             if [ "$CFG_ICD" = "auto" ]; then
                 CFG_ICD=no
             elif [ "$CFG_CONFIGURE_EXIT_ON_ERROR" = "yes" ]; then
                 # CFG_ICD is "yes"
 
-                echo "The ICD Bearer Management plugin cannot be enabled because osso-ic or conninet was not found."
+                echo "The ICD Bearer Management plugin cannot be enabled because connsettings was not found."
                 echo " Turn on verbose messaging (-v) to $0 to see the final report."
                 echo " If you believe this message is in error you may use the continue"
                 echo " switch (-continue) to $0 to continue."
@@ -6075,7 +6224,14 @@ fi
 
 # find if the platform supports IPv6
 if [ "$CFG_IPV6" != "no" ]; then
-    if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/ipv6 "IPv6" $L_FLAGS $I_FLAGS $l_FLAGS $MAC_CONFIG_TEST_COMMANDLINE; then
+    #
+    # We accidently enabled IPv6 for Qt Symbian in 4.6.x. However the underlying OpenC does not fully support IPV6.
+    # Therefore for 4.7.1 and following we disable it until OpenC either supports it or we have the native Qt
+    # symbian socket engine.
+    #
+    if echo "$XPLATFORM" | grep symbian > /dev/null; then
+        CFG_IPV6=no
+    elif "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/ipv6 "IPv6" $L_FLAGS $I_FLAGS $l_FLAGS $MAC_CONFIG_TEST_COMMANDLINE; then
         CFG_IPV6=yes
     else
         if [ "$CFG_IPV6" = "yes" ] && [ "$CFG_CONFIGURE_EXIT_ON_ERROR" = "yes" ]; then
@@ -6188,7 +6344,7 @@ if [ "$CFG_GETIFADDRS" != "no" ]; then
 fi
 
 # detect OpenSSL
-if [ "$CFG_OPENSSL" != "no" ]; then
+if [ "$CFG_OPENSSL" != "no" ] && [ "$XPLATFORM" != "symbian-sbsv2" ]; then
     if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/openssl "OpenSSL" $L_FLAGS $I_FLAGS $l_FLAGS $MAC_CONFIG_TEST_COMMANDLINE; then
         if [ "$CFG_OPENSSL" = "auto" ]; then
             CFG_OPENSSL=yes
@@ -6203,6 +6359,11 @@ if [ "$CFG_OPENSSL" != "no" ]; then
         else
             CFG_OPENSSL=no
         fi
+    fi
+else
+    if [ "$CFG_OPENSSL" = "auto" ] && [ "$XPLATFORM" = "symbian-sbsv2" ]; then
+        #OpenSSl should be enabled for Symbian release
+        CFG_OPENSSL=yes
     fi
 fi
 
@@ -6250,6 +6411,11 @@ if [ "$CFG_GRAPHICS_SYSTEM" = "openvg" ] && [ "$CFG_OPENVG" = "no" ]; then
     CFG_GRAPHICS_SYSTEM=default
 fi
 
+if [ -n "$CFG_RUNTIME_SYSTEM" -a "$CFG_GRAPHICS_SYSTEM" != "runtime" ] || [ "$CFG_RUNTIME_SYSTEM" = "runtime" ]; then
+    echo "Argument to -runtimegraphicssystem is invalid so ignoring..."
+    CFG_RUNTIME_SYSTEM=
+fi
+
 if [ "$CFG_PTMALLOC" != "no" ]; then
     # build ptmalloc, copy .a file to lib/
     echo "Building ptmalloc. Please wait..."
@@ -6259,12 +6425,15 @@ if [ "$CFG_PTMALLOC" != "no" ]; then
     QMakeVar add QMAKE_LFLAGS "$outpath/lib/libptmalloc3.a"
 fi
 
-if [ "$CFG_ALSA" = "auto" ]; then
+if [ "$CFG_ALSA" = "auto" ] && [ "$XPLATFORM" != "symbian-sbsv2" ]; then
     if "$unixtests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/unix/alsa "alsa" $L_FLAGS $I_FLAGS $l_FLAGS; then
         CFG_ALSA=yes
     else
         CFG_ALSA=no
     fi
+elif [ "$XPLATFORM" = "symbian-sbsv2" ]; then
+    # Disabled for Symbian release
+    CFG_ALSA=no
 fi
 
 if [ "$CFG_JAVASCRIPTCORE_JIT" = "yes" ] || [ "$CFG_JAVASCRIPTCORE_JIT" = "auto" ]; then 
@@ -6284,7 +6453,9 @@ fi
 
 if [ "$CFG_AUDIO_BACKEND" = "auto" ]; then
     if echo "$XPLATFORM" | grep symbian > /dev/null 2>&1; then
-        "$symbiantests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/symbian/audio "audio" $L_FLAGS $I_FLAGS $l_FLAGS
+         if "$symbiantests/compile.test" "$XQMAKESPEC" "$QMAKE_CONFIG" $OPT_VERBOSE "$relpath" "$outpath" config.tests/symbian/audio "audio" $L_FLAGS $I_FLAGS $l_FLAGS ; then
+            CFG_AUDIO_BACKEND=yes
+         fi
     else
         CFG_AUDIO_BACKEND=yes
     fi
@@ -6293,6 +6464,9 @@ fi
 if [ "$CFG_LARGEFILE" != "yes" ] && [ "$XPLATFORM_MINGW" = "yes" ]; then
     echo "Warning: largefile support cannot be disabled for win32."
     CFG_LARGEFILE="yes"
+elif [ "$CFG_LARGEFILE" != "no" ] && echo "$XPLATFORM" | grep "symbian" > /dev/null; then
+    echo "Warning: largefile support cannot be enabled for symbian."
+    CFG_LARGEFILE="no"
 fi
 
 #-------------------------------------------------------------------------------
@@ -6533,7 +6707,11 @@ if [ "$PLATFORM_QWS" = "yes" ]; then
     QT_CONFIG="$QT_CONFIG embedded"
     rm -f "src/.moc/$QMAKE_OUTDIR/allmoc.cpp" # needs remaking if config changes
 fi
-QMakeVar set PRECOMPILED_DIR ".pch/$QMAKE_OUTDIR"
+if [ "$XPLATFORM_MINGW" != "yes" ]; then
+    # Do not set this here for Windows. Let qmake do it so
+    # debug and release precompiled headers are kept separate.
+    QMakeVar set PRECOMPILED_DIR ".pch/$QMAKE_OUTDIR"
+fi
 QMakeVar set OBJECTS_DIR ".obj/$QMAKE_OUTDIR"
 QMakeVar set MOC_DIR ".moc/$QMAKE_OUTDIR"
 QMakeVar set RCC_DIR ".rcc/$QMAKE_OUTDIR"
@@ -6564,6 +6742,11 @@ fi
 [ "$CFG_3DNOW" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG 3dnow"
 [ "$CFG_SSE" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG sse"
 [ "$CFG_SSE2" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG sse2"
+[ "$CFG_SSE3" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG sse3"
+[ "$CFG_SSSE3" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG ssse3"
+[ "$CFG_SSE4_1" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG sse4_1"
+[ "$CFG_SSE4_2" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG sse4_2"
+[ "$CFG_AVX" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG avx"
 [ "$CFG_IWMMXT" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG iwmmxt"
 [ "$CFG_NEON" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG neon"
 [ "$PLATFORM_MAC" = "yes" ] && QMAKE_CONFIG="$QMAKE_CONFIG $CFG_MAC_ARCHS"
@@ -6639,6 +6822,7 @@ elif [ "$CFG_TIFF" = "yes" ]; then
 fi
 if [ "$CFG_LIBFREETYPE" = "no" ]; then
     QT_CONFIG="$QT_CONFIG no-freetype"
+    QCONFIG_FLAGS="$QCONFIG_FLAGS QT_NO_FREETYPE"
 elif [ "$CFG_LIBFREETYPE" = "system" ]; then
     QT_CONFIG="$QT_CONFIG system-freetype"
 else
@@ -6670,9 +6854,9 @@ if [ "$CFG_S60" = "yes" ]; then
 fi
 
 if [ "$CFG_SYMBIAN_DEFFILES" = "yes" ]; then
-    QMAKE_CONFIG="$QMAKE_CONFIG def_files"
+    QTCONFIG_CONFIG="$QTCONFIG_CONFIG def_files"
 else
-    QMAKE_CONFIG="$QMAKE_CONFIG def_files_disabled"
+    QTCONFIG_CONFIG="$QTCONFIG_CONFIG def_files_disabled"
 fi
 
 [ "$CFG_NIS" = "yes" ] && QT_CONFIG="$QT_CONFIG nis"
@@ -6883,7 +7067,7 @@ case "$XPLATFORM" in
                 canBuildQtXmlPatterns="no"
                 canBuildQtConcurrent="no"
                 ;;
-            5.9)
+            5.*)
                 canBuildWebKit="no"
                 canBuildQtConcurrent="no"
                 ;;
@@ -6936,6 +7120,13 @@ EOF
         canBuildWebKit="no"
         canBuildQtConcurrent="no"
 	;;
+    symbian/*-gcce)
+        canBuildWebKit="no"
+        canBuildQtConcurrent="no"
+        ;;
+    symbian/*-armcc)
+        canBuildQtConcurrent="no"
+        ;;
 esac
 
 if [ "$CFG_GUI" = "no" ]; then
@@ -7001,10 +7192,12 @@ if [ "$CFG_WEBKIT" = "auto" ]; then
 fi
 
 if [ "$CFG_WEBKIT" = "yes" ]; then
-    QT_CONFIG="$QT_CONFIG webkit"
+    # This include takes care of adding "webkit" to QT_CONFIG.
+    cp -f "$relpath/src/3rdparty/webkit/WebKit/qt/qt_webkit_version.pri" "$outpath/mkspecs/modules/qt_webkit_version.pri"
     # The reason we set CFG_WEBKIT, is such that the printed overview of what will be enabled, shows correctly.
     CFG_WEBKIT="yes"
 else
+    rm -f "$outpath/mkspecs/modules/qt_webkit_version.pri"
     CFG_WEBKIT="no"
     QCONFIG_FLAGS="$QCONFIG_FLAGS QT_NO_WEBKIT"
 fi
@@ -7052,6 +7245,9 @@ fi
 
 if [ "$CFG_DECLARATIVE" = "yes" ]; then
     QT_CONFIG="$QT_CONFIG declarative"
+    if [ "$CFG_DECLARATIVE_DEBUG" = "no" ]; then
+        QCONFIG_FLAGS="$QCONFIG_FLAGS QDECLARATIVE_NO_DEBUG_PROTOCOL"
+    fi
 else
     QCONFIG_FLAGS="$QCONFIG_FLAGS QT_NO_DECLARATIVE"
 fi
@@ -7115,6 +7311,7 @@ fi
 
 # some compilers generate binary incompatible code between different versions,
 # so we need to generate a build key that is different between these compilers
+COMPAT_COMPILER=
 case "$COMPILER" in
 g++*)
     # GNU C++
@@ -7147,6 +7344,22 @@ g++*)
         ;;
     esac
     [ '!' -z "$COMPILER_VERSION" ] && COMPILER="g++-${COMPILER_VERSION}"
+    ;;
+icc*)
+    # The Intel CC compiler on Unix systems matches the ABI of the g++
+    # that is found on PATH
+    COMPILER="icc"
+    COMPAT_COMPILER="g++-4"
+    case "`g++ -dumpversion` 2>/dev/null" in
+    2.95.*)
+        COMPAT_COMPILER="g++-2.95.*"
+        ;;
+    3.*)
+        COMPAT_COMPILER="g++-3.*"
+        ;;
+    *)
+        ;;
+    esac
     ;;
 *)
     #
@@ -7290,9 +7503,20 @@ if [ "$QT_CROSS_COMPILE" = "no" ]; then
         QT_BUILD_KEY_COMPAT="$QT_BUILD_KEY_COMPAT $QT_NAMESPACE"
     fi
 fi
+
+# is this compiler compatible with some other "standard" build key
+QT_BUILD_KEY_COMPAT_COMPILER=
+if [ ! -z "$COMPAT_COMPILER" ]; then
+    QT_BUILD_KEY_COMPAT_COMPILER="$CFG_USER_BUILD_KEY $CFG_ARCH $TARGET_OPERATING_SYSTEM $COMPAT_COMPILER $BUILD_OPTIONS"
+    if [ -n "$QT_NAMESPACE" ]; then
+        QT_BUILD_KEY_COMPAT_COMPILER="$QT_BUILD_KEY_COMPAT_COMPILER $QT_NAMESPACE"
+    fi
+fi
+
 # strip out leading/trailing/extra whitespace
 QT_BUILD_KEY=`echo $QT_BUILD_KEY | sed -e "s,  *, ,g" -e "s,^  *,," -e "s,  *$,,"`
 QT_BUILD_KEY_COMPAT=`echo $QT_BUILD_KEY_COMPAT | sed -e "s,  *, ,g" -e "s,^  *,," -e "s,  *$,,"`
+QT_BUILD_KEY_COMPAT_COMPILER=`echo $QT_BUILD_KEY_COMPAT_COMPILER | sed -e "s,  *, ,g" -e "s,^  *,," -e "s,  *$,,"`
 
 #-------------------------------------------------------------------------------
 # part of configuration information goes into qconfig.h
@@ -7339,6 +7563,10 @@ fi
 
 if [ -n "$QT_BUILD_KEY_COMPAT" ]; then
     echo "#define QT_BUILD_KEY_COMPAT \"$QT_BUILD_KEY_COMPAT\"" \
+        >> "$outpath/src/corelib/global/qconfig.h.new"
+fi
+if [ -n "$QT_BUILD_KEY_COMPAT_COMPILER" ]; then
+    echo "#define QT_BUILD_KEY_COMPAT2 \"$QT_BUILD_KEY_COMPAT_COMPILER\"" \
         >> "$outpath/src/corelib/global/qconfig.h.new"
 fi
 echo "" >>"$outpath/src/corelib/global/qconfig.h.new"
@@ -7532,6 +7760,7 @@ if [ "$PLATFORM_QWS" != "yes" ]; then
     [ "$CFG_GRAPHICS_SYSTEM" = "raster" ] && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_GRAPHICSSYSTEM_RASTER"
     [ "$CFG_GRAPHICS_SYSTEM" = "opengl" ] && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_GRAPHICSSYSTEM_OPENGL"
     [ "$CFG_GRAPHICS_SYSTEM" = "openvg" ] && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_GRAPHICSSYSTEM_OPENVG"
+    [ "$CFG_GRAPHICS_SYSTEM" = "runtime" ] && QCONFIG_FLAGS="$QCONFIG_FLAGS QT_GRAPHICSSYSTEM_RUNTIME"
 fi
 
 # X11/Unix/Mac only configs
@@ -7645,6 +7874,13 @@ cat >>"$outpath/src/corelib/global/qconfig.h.new" << EOF
 EOF
 fi
 
+if [ -n "$CFG_RUNTIME_SYSTEM" ]; then
+cat >>"$outpath/src/corelib/global/qconfig.h.new" << EOF
+#define QT_DEFAULT_RUNTIME_SYSTEM "$CFG_RUNTIME_SYSTEM"
+
+EOF
+fi
+
 # avoid unecessary rebuilds by copying only if qconfig.h has changed
 if cmp -s "$outpath/src/corelib/global/qconfig.h" "$outpath/src/corelib/global/qconfig.h.new"; then
     rm -f "$outpath/src/corelib/global/qconfig.h.new"
@@ -7653,12 +7889,14 @@ else
     mv "$outpath/src/corelib/global/qconfig.h.new" "$outpath/src/corelib/global/qconfig.h"
     chmod -w "$outpath/src/corelib/global/qconfig.h"
     for conf in "$outpath/include/QtCore/qconfig.h" "$outpath/include/Qt/qconfig.h"; do
-        if [ '!' -f "$conf" ]; then
+        if echo "$XPLATFORM" | grep "symbian-sbsv2" > /dev/null 2>&1 ; then
+            [ -e "$conf" ] && rm -rf "$conf"
+            cp -a "$outpath/src/corelib/global/qconfig.h" "$conf"
+        elif [ '!' -f "$conf" ]; then
             ln -s "$outpath/src/corelib/global/qconfig.h" "$conf"
         fi
     done
 fi
-
 #-------------------------------------------------------------------------------
 # save configuration into qconfig.pri
 #-------------------------------------------------------------------------------
@@ -7728,6 +7966,10 @@ if [ -n "$QT_GCC_MAJOR_VERSION" ]; then
     echo "QT_GCC_MINOR_VERSION = $QT_GCC_MINOR_VERSION" >> "$QTCONFIG.tmp"
     echo "QT_GCC_PATCH_VERSION = $QT_GCC_PATCH_VERSION" >> "$QTCONFIG.tmp"
 fi
+if echo "$XPLATFORM" | grep "symbian-sbsv2" > /dev/null 2>&1; then
+    echo "#Qt for symbian FPU settings" >> "$QTCONFIG.tmp"
+    echo "MMP_RULES += \"ARMFPU softvfp\"" >> "$QTCONFIG.tmp"
+fi
 # replace qconfig.pri if it differs from the newly created temp file
 if cmp -s "$QTCONFIG.tmp" "$QTCONFIG"; then
     rm -f "$QTCONFIG.tmp"
@@ -7785,6 +8027,9 @@ if [ -n "$QT_LFLAGS_SQLITE" ]; then
 fi
 if [ -n "$QT_LFLAGS_ODBC" ]; then
     echo "QT_LFLAGS_ODBC   = $QT_LFLAGS_ODBC" >> "$CACHEFILE.tmp"
+fi
+if [ -n "$QT_LFLAGS_TDS" ]; then
+    echo "QT_LFLAGS_TDS   = $QT_LFLAGS_TDS" >> "$CACHEFILE.tmp"
 fi
 
 if [ "$QT_EDITION" != "QT_EDITION_OPENSOURCE" ]; then
@@ -7971,11 +8216,14 @@ if [ "$CFG_WEBKIT" = "yes" ]; then
     fi
 fi
 echo "Declarative module ..... $CFG_DECLARATIVE"
+echo "Declarative debugging ...$CFG_DECLARATIVE_DEBUG"
 echo "Support for S60 ........ $CFG_S60"
 echo "Symbian DEF files ...... $CFG_SYMBIAN_DEFFILES"
 echo "STL support ............ $CFG_STL"
 echo "PCH support ............ $CFG_PRECOMPILE"
-echo "MMX/3DNOW/SSE/SSE2...... ${CFG_MMX}/${CFG_3DNOW}/${CFG_SSE}/${CFG_SSE2}"
+echo "MMX/3DNOW/SSE/SSE2/SSE3. ${CFG_MMX}/${CFG_3DNOW}/${CFG_SSE}/${CFG_SSE2}/${CFG_SSE3}"
+echo "SSSE3/SSE4.1/SSE4.2..... ${CFG_SSSE3}/${CFG_SSE4_1}/${CFG_SSE4_2}"
+echo "AVX..................... ${CFG_AVX}"
 if [ "$CFG_ARCH" = "arm" ] || [ "$CFG_ARCH" = "armv6" ]; then
     echo "iWMMXt support ......... ${CFG_IWMMXT}"
     echo "NEON support ........... ${CFG_NEON}"
@@ -8302,7 +8550,9 @@ for file in .projects .projects.3; do
         *winmain/winmain.pro)
             [ "$XPLATFORM_MINGW" = "yes" ] || continue
             SPEC=$XQMAKESPEC ;;
-        *s60main/s60main.pro) continue ;;
+        *s60main/s60main.pro) if [ -z "`echo "$XPLATFORM" | grep "symbian" >/dev/null`" ]; then
+                continue
+            fi;;
         *examples/activeqt/*) continue ;;
         */qmake/qmake.pro) continue ;;
         *tools/bootstrap*|*tools/moc*|*tools/rcc*|*tools/uic*|*linguist/lrelease*) SPEC=$QMAKESPEC ;;

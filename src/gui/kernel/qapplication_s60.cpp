@@ -673,6 +673,9 @@ void QSymbianControl::HandleStatusPaneSizeChange()
 {
     QS60MainAppUi *s60AppUi = static_cast<QS60MainAppUi *>(S60->appUi());
     s60AppUi->HandleStatusPaneSizeChange();
+    // Send resize event to trigger desktopwidget workAreaResized signal
+    QResizeEvent e(qt_desktopWidget->size(), qt_desktopWidget->size());
+    QApplication::sendEvent(qt_desktopWidget, &e);
 }
 #endif
 
@@ -1113,17 +1116,19 @@ void QSymbianControl::Draw(const TRect& controlRect) const
         CFbsBitmap *bitmap = s60Surface->symbianBitmap();
         CWindowGc &gc = SystemGc();
 
-        switch(qwidget->d_func()->extraData()->nativePaintMode) {
+        QWExtra::NativePaintMode nativePaintMode = qwidget->d_func()->extraData()->nativePaintMode;
+        if(qwidget->d_func()->paintOnScreen())
+            nativePaintMode = QWExtra::Disable;
+
+        switch(nativePaintMode) {
         case QWExtra::Disable:
             // Do nothing
             break;
-
         case QWExtra::Blit:
             if (qwidget->d_func()->isOpaque)
                 gc.SetDrawMode(CGraphicsContext::EDrawModeWriteAlpha);
             gc.BitBlt(controlRect.iTl, bitmap, backingStoreRect);
             break;
-
         case QWExtra::ZeroFill:
             if (Window().DisplayMode() == EColor16MA
                 || Window().DisplayMode() == Q_SYMBIAN_ECOLOR16MAP) {
@@ -1136,7 +1141,6 @@ void QSymbianControl::Draw(const TRect& controlRect) const
                 gc.Clear(controlRect);
             };
             break;
-
         default:
             Q_ASSERT(false);
         }
@@ -1247,17 +1251,28 @@ void QSymbianControl::FocusChanged(TDrawNow /* aDrawNow */)
         S60->setStatusPaneAndButtonGroupVisibility(statusPaneVisibility, buttonGroupVisibility);
 #endif
     } else if (QApplication::activeWindow() == qwidget->window()) {
-        if (CCoeEnv::Static()->AppUi()->IsDisplayingMenuOrDialog() || S60->menuBeingConstructed) {
-            QWidget *fw = QApplication::focusWidget();
-            if (fw) {
-                QFocusEvent event(QEvent::FocusOut, Qt::PopupFocusReason);
-                QCoreApplication::sendEvent(fw, &event);
-            }
-            m_symbianPopupIsOpen = true;
-            return;
+        bool focusedControlFound = false;
+        WId winId = 0;
+        for (QWidget *w = qwidget->parentWidget(); w && (winId = w->internalWinId()); w = w->parentWidget()) {
+            if (winId->IsFocused() && winId->IsVisible()) {
+                focusedControlFound = true;
+                break;
+            } else if (w->isWindow())
+                break;
         }
+        if (!focusedControlFound) {
+            if (CCoeEnv::Static()->AppUi()->IsDisplayingMenuOrDialog() || S60->menuBeingConstructed) {
+                QWidget *fw = QApplication::focusWidget();
+                if (fw) {
+                    QFocusEvent event(QEvent::FocusOut, Qt::PopupFocusReason);
+                    QCoreApplication::sendEvent(fw, &event);
+                }
+                m_symbianPopupIsOpen = true;
+                return;
+            }
 
-        QApplication::setActiveWindow(0);
+            QApplication::setActiveWindow(0);
+        }
     }
     // else { We don't touch the active window unless we were explicitly activated or deactivated }
 }
@@ -1347,6 +1362,11 @@ void QSymbianControl::setFocusSafely(bool focus)
             lastFocusedControl = 0;
         this->SetFocus(false);
     }
+}
+
+bool QSymbianControl::isControlActive()
+{
+    return IsActivated() ? true : false;
 }
 
 /*!

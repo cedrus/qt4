@@ -2091,7 +2091,8 @@ QStringList QCoreApplication::arguments()
                 l1arg == "-stylesheet" ||
                 l1arg == "-widgetcount")
                 ;
-            else if (l1arg.startsWith("-style="))
+            else if (l1arg.startsWith("-style=") ||
+                     l1arg.startsWith("-qmljsdebugger="))
                 ;
             else if (l1arg == "-style" ||
                      l1arg == "-session" ||
@@ -2308,6 +2309,7 @@ void QCoreApplication::setLibraryPaths(const QStringList &paths)
     if (!coreappdata()->app_libpaths)
         coreappdata()->app_libpaths = new QStringList;
     *(coreappdata()->app_libpaths) = paths;
+    locker.unlock();
     QFactoryLoader::refreshAll();
 }
 
@@ -2341,6 +2343,7 @@ void QCoreApplication::addLibraryPath(const QString &path)
     if (!canonicalPath.isEmpty()
         && !coreappdata()->app_libpaths->contains(canonicalPath)) {
         coreappdata()->app_libpaths->prepend(canonicalPath);
+        locker.unlock();
         QFactoryLoader::refreshAll();
     }
 }

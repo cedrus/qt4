@@ -39,7 +39,7 @@
 **
 ****************************************************************************/
 
-import Qt 4.7
+import QtQuick 1.0
 import Qt.labs.particles 1.0
 
 Item { id:link
@@ -86,7 +86,6 @@ Item { id:link
         }
 
         opacity: 0
-        Behavior on opacity { NumberAnimation { duration: 200 } }
     }
 
 
@@ -114,4 +113,11 @@ Item { id:link
             PropertyChanges { target: img; opacity: 0 }
         }
     ]
+
+    transitions: [
+        Transition {
+            NumberAnimation { target: img; property: "opacity"; duration: 200 }
+        }
+    ]
+
 }

@@ -41,6 +41,7 @@
 
 #include "qgesture.h"
 #include "private/qgesture_p.h"
+#include "private/qstandardgestures_p.h"
 
 #ifndef QT_NO_GESTURES
 
@@ -57,6 +58,9 @@ QT_BEGIN_NAMESPACE
     Gesture objects are not constructed directly by developers. They are created by
     the QGestureRecognizer object that is registered with the application; see
     QGestureRecognizer::registerRecognizer().
+
+    For an overview of gesture handling in Qt and information on using gestures
+    in your applications, see the \l{Gestures Programming} document.
 
     \section1 Gesture Properties
 
@@ -218,7 +222,10 @@ QGesture::GestureCancelPolicy QGesture::gestureCancelPolicy() const
 
     \image pangesture.png
 
-    \sa {Gestures Programming}, QPinchGesture, QSwipeGesture
+    For an overview of gesture handling in Qt and information on using gestures
+    in your applications, see the \l{Gestures Programming} document.
+
+    \sa QPinchGesture, QSwipeGesture
 */
 
 /*!
@@ -313,6 +320,9 @@ void QPanGesture::setAcceleration(qreal value)
     them closer together or further apart to change the scale factor, zoom, or level
     of detail of the user interface.
 
+    For an overview of gesture handling in Qt and information on using gestures
+    in your applications, see the \l{Gestures Programming} document.
+
     \image pinchgesture.png
 
     Instead of repeatedly applying the same pinching gesture, the user may
@@ -321,7 +331,7 @@ void QPanGesture::setAcceleration(qreal value)
     will continue to be delivered to the target object, containing an instance
     of QPinchGesture in the Qt::GestureUpdated state.
 
-    \sa {Gestures Programming}, QPanGesture, QSwipeGesture
+    \sa QPanGesture, QSwipeGesture
 */
 
 /*!
@@ -571,7 +581,10 @@ void QPinchGesture::setRotationAngle(qreal value)
 
     \image swipegesture.png
 
-    \sa {Gestures Programming}, QPanGesture, QPinchGesture
+    For an overview of gesture handling in Qt and information on using gestures
+    in your applications, see the \l{Gestures Programming} document.
+
+    \sa QPanGesture, QPinchGesture
 */
 
 /*!
@@ -666,7 +679,10 @@ void QSwipeGesture::setSwipeAngle(qreal value)
     \brief The QTapGesture class describes a tap gesture made by the user.
     \ingroup gestures
 
-    \sa {Gestures Programming}, QPanGesture, QPinchGesture
+    For an overview of gesture handling in Qt and information on using gestures
+    in your applications, see the \l{Gestures Programming} document.
+
+    \sa QPanGesture, QPinchGesture
 */
 
 /*!
@@ -699,7 +715,10 @@ void QTapGesture::setPosition(const QPointF &value)
     gesture made by the user.
     \ingroup gestures
 
-    \sa {Gestures Programming}, QPanGesture, QPinchGesture
+    For an overview of gesture handling in Qt and information on using gestures
+    in your applications, see the \l{Gestures Programming} document.
+
+    \sa QPanGesture, QPinchGesture
 */
 
 /*!
@@ -726,6 +745,36 @@ void QTapAndHoldGesture::setPosition(const QPointF &value)
     d_func()->position = value;
 }
 
+/*!
+    Set the timeout, in milliseconds, before the gesture triggers.
+
+    The recognizer will detect a touch down and and if \a msecs
+    later the touch is still down, it will trigger the QTapAndHoldGesture.
+    The default value is 700 milliseconds.
+*/
+// static
+void QTapAndHoldGesture::setTimeout(int msecs)
+{
+    QTapAndHoldGesturePrivate::Timeout = msecs;
+}
+
+/*!
+    Gets the timeout, in milliseconds, before the gesture triggers.
+
+    The recognizer will detect a touch down and and if timeout()
+    later the touch is still down, it will trigger the QTapAndHoldGesture.
+    The default value is 700 milliseconds.
+*/
+// static
+int QTapAndHoldGesture::timeout()
+{
+    return QTapAndHoldGesturePrivate::Timeout;
+}
+
+int QTapAndHoldGesturePrivate::Timeout = 700; // in ms
+
 QT_END_NAMESPACE
+
+#include <moc_qgesture.cpp>
 
 #endif // QT_NO_GESTURES

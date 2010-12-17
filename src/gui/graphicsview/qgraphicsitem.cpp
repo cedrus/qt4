@@ -133,7 +133,8 @@
 
     \img graphicsview-parentchild.png
 
-    \section1 Transformation
+    \target Transformations
+    \section1 Transformations
 
     QGraphicsItem supports projective transformations in addition to its base
     position, pos(). There are several ways to change an item's transformation.
@@ -1271,29 +1272,47 @@ void QGraphicsItemPrivate::setParentItemHelper(QGraphicsItem *newParent, const Q
 
     Returns the bounding rect of this item's children (excluding itself).
 */
-void QGraphicsItemPrivate::childrenBoundingRectHelper(QTransform *x, QRectF *rect)
+void QGraphicsItemPrivate::childrenBoundingRectHelper(QTransform *x, QRectF *rect, QGraphicsItem *topMostEffectItem)
 {
+    Q_Q(QGraphicsItem);
+
+    QRectF childrenRect;
+    QRectF *result = rect;
+    rect = &childrenRect;
+    const bool setTopMostEffectItem = !topMostEffectItem;
+
     for (int i = 0; i < children.size(); ++i) {
         QGraphicsItem *child = children.at(i);
         QGraphicsItemPrivate *childd = child->d_ptr.data();
+        if (setTopMostEffectItem)
+            topMostEffectItem = child;
         bool hasPos = !childd->pos.isNull();
         if (hasPos || childd->transformData) {
             // COMBINE
             QTransform matrix = childd->transformToParent();
             if (x)
                 matrix *= *x;
-            *rect |= matrix.mapRect(child->d_ptr->effectiveBoundingRect());
+            *rect |= matrix.mapRect(child->d_ptr->effectiveBoundingRect(topMostEffectItem));
             if (!childd->children.isEmpty())
-                childd->childrenBoundingRectHelper(&matrix, rect);
+                childd->childrenBoundingRectHelper(&matrix, rect, topMostEffectItem);
         } else {
             if (x)
-                *rect |= x->mapRect(child->d_ptr->effectiveBoundingRect());
+                *rect |= x->mapRect(child->d_ptr->effectiveBoundingRect(topMostEffectItem));
             else
-                *rect |= child->d_ptr->effectiveBoundingRect();
+                *rect |= child->d_ptr->effectiveBoundingRect(topMostEffectItem);
             if (!childd->children.isEmpty())
-                childd->childrenBoundingRectHelper(x, rect);
+                childd->childrenBoundingRectHelper(x, rect, topMostEffectItem);
         }
     }
+
+    if (flags & QGraphicsItem::ItemClipsChildrenToShape){
+        if (x)
+            *rect &= x->mapRect(q->boundingRect());
+        else
+            *rect &= q->boundingRect();
+    }
+
+    *result |= *rect;
 }
 
 void QGraphicsItemPrivate::initStyleOption(QStyleOptionGraphicsItem *option, const QTransform &worldTransform,
@@ -1854,6 +1873,10 @@ void QGraphicsItem::setFlags(GraphicsItemFlags flags)
         // Item children clipping changes. Propagate the ancestor flag to
         // all children.
         d_ptr->updateAncestorFlag(ItemClipsChildrenToShape);
+        // The childrenBoundingRect is clipped to the boundingRect in case of ItemClipsChildrenToShape,
+        // which means we have to invalidate the cached childrenBoundingRect whenever this flag changes.
+        d_ptr->dirtyChildrenBoundingRect = 1;
+        d_ptr->markParentDirty(true);
     }
 
     if ((flags & ItemIgnoresTransformations) != (oldFlags & ItemIgnoresTransformations)) {
@@ -2784,6 +2807,8 @@ QRectF QGraphicsItemPrivate::effectiveBoundingRect(const QRectF &rect) const
     Q_Q(const QGraphicsItem);
     QGraphicsEffect *effect = graphicsEffect;
     if (scene && effect && effect->isEnabled()) {
+        if (scene->d_func()->views.isEmpty())
+            return effect->boundingRectFor(rect);
         QRectF sceneRect = q->mapRectToScene(rect);
         QRectF sceneEffectRect;
         foreach (QGraphicsView *view, scene->views()) {
@@ -2807,12 +2832,12 @@ QRectF QGraphicsItemPrivate::effectiveBoundingRect(const QRectF &rect) const
 
     \sa boundingRect()
 */
-QRectF QGraphicsItemPrivate::effectiveBoundingRect() const
+QRectF QGraphicsItemPrivate::effectiveBoundingRect(QGraphicsItem *topMostEffectItem) const
 {
 #ifndef QT_NO_GRAPHICSEFFECT
     Q_Q(const QGraphicsItem);
     QRectF brect = effectiveBoundingRect(q_ptr->boundingRect());
-    if (ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren)
+    if (ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren || topMostEffectItem == q)
         return brect;
 
     const QGraphicsItem *effectParent = parent;
@@ -2823,8 +2848,10 @@ QRectF QGraphicsItemPrivate::effectiveBoundingRect() const
             const QRectF effectRectInParentSpace = effectParent->d_ptr->effectiveBoundingRect(brectInParentSpace);
             brect = effectParent->mapRectToItem(q, effectRectInParentSpace);
         }
-        if (effectParent->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren)
+        if (effectParent->d_ptr->ancestorFlags & QGraphicsItemPrivate::AncestorClipsChildren
+            || topMostEffectItem == effectParent) {
             return brect;
+        }
         effectParent = effectParent->d_ptr->parent;
     }
 
@@ -3243,8 +3270,12 @@ void QGraphicsItemPrivate::setFocusHelper(Qt::FocusReason focusReason, bool clim
     QGraphicsItem *p = parent;
     while (p) {
         if (p->flags() & QGraphicsItem::ItemIsFocusScope) {
+            QGraphicsItem *oldFocusScopeItem = p->d_ptr->focusScopeItem;
             p->d_ptr->focusScopeItem = q_ptr;
             if (!p->focusItem() && !focusFromShow) {
+                if (oldFocusScopeItem)
+                    oldFocusScopeItem->d_ptr->focusScopeItemChange(false);
+                focusScopeItemChange(true);
                 // If you call setFocus on a child of a focus scope that
                 // doesn't currently have a focus item, then stop.
                 return;
@@ -4695,7 +4726,7 @@ QRectF QGraphicsItem::childrenBoundingRect() const
         return d_ptr->childrenBoundingRect;
 
     d_ptr->childrenBoundingRect = QRectF();
-    d_ptr->childrenBoundingRectHelper(0, &d_ptr->childrenBoundingRect);
+    d_ptr->childrenBoundingRectHelper(0, &d_ptr->childrenBoundingRect, 0);
     d_ptr->dirtyChildrenBoundingRect = 0;
     return d_ptr->childrenBoundingRect;
 }
@@ -5515,6 +5546,9 @@ void QGraphicsItemPrivate::setSubFocus(QGraphicsItem *rootItem)
     // Update focus child chain. Stop at panels, or if this item
     // is hidden, stop at the first item with a visible parent.
     QGraphicsItem *parent = rootItem ? rootItem : q_ptr;
+    if (parent->panel() != q_ptr->panel())
+        return;
+
     do {
         // Clear any existing ancestor's subFocusItem.
         if (parent != q_ptr && parent->d_ptr->subFocusItem) {
@@ -5576,6 +5610,7 @@ void QGraphicsItemPrivate::subFocusItemChange()
 */
 void QGraphicsItemPrivate::focusScopeItemChange(bool isSubFocusItem)
 {
+    Q_UNUSED(isSubFocusItem);
 }
 
 /*!
@@ -5641,9 +5676,6 @@ void QGraphicsItem::update(const QRectF &rect)
         if (d_ptr->fullUpdatePending)
             return;
     }
-
-    if (d_ptr->discardUpdateRequest())
-        return;
 
     if (d_ptr->scene)
         d_ptr->scene->d_func()->markDirty(this, rect);
@@ -7637,7 +7669,12 @@ void QGraphicsObject::updateMicroFocus()
 
 void QGraphicsItemPrivate::children_append(QDeclarativeListProperty<QGraphicsObject> *list, QGraphicsObject *item)
 {
-    QGraphicsItemPrivate::get(item)->setParentItemHelper(static_cast<QGraphicsObject *>(list->object), /*newParentVariant=*/0, /*thisPointerVariant=*/0);
+    QGraphicsObject *graphicsObject = static_cast<QGraphicsObject *>(list->object);
+    if (QGraphicsItemPrivate::get(graphicsObject)->sendParentChangeNotification) {
+        item->setParentItem(graphicsObject);
+    } else {
+        QGraphicsItemPrivate::get(item)->setParentItemHelper(graphicsObject, 0, 0);
+    }
 }
 
 int QGraphicsItemPrivate::children_count(QDeclarativeListProperty<QGraphicsObject> *list)
@@ -7655,6 +7692,19 @@ QGraphicsObject *QGraphicsItemPrivate::children_at(QDeclarativeListProperty<QGra
         return 0;
 }
 
+void QGraphicsItemPrivate::children_clear(QDeclarativeListProperty<QGraphicsObject> *list)
+{
+    QGraphicsItemPrivate *d = QGraphicsItemPrivate::get(static_cast<QGraphicsObject *>(list->object));
+    int childCount = d->children.count();
+    if (d->sendParentChangeNotification) {
+        for (int index = 0; index < childCount; index++)
+            d->children.at(0)->setParentItem(0);
+    } else {
+        for (int index = 0; index < childCount; index++)
+            QGraphicsItemPrivate::get(d->children.at(0))->setParentItemHelper(0, 0, 0);
+    }
+}
+
 /*!
     Returns a list of this item's children.
 
@@ -7668,7 +7718,7 @@ QDeclarativeListProperty<QGraphicsObject> QGraphicsItemPrivate::childrenList()
     if (isObject) {
         QGraphicsObject *that = static_cast<QGraphicsObject *>(q);
         return QDeclarativeListProperty<QGraphicsObject>(that, &children, children_append,
-                                                         children_count, children_at);
+                                                         children_count, children_at, children_clear);
     } else {
         //QGraphicsItem is not supported for this property
         return QDeclarativeListProperty<QGraphicsObject>();
@@ -7734,18 +7784,21 @@ void QGraphicsItemPrivate::resetHeight()
 }
 
 /*!
-  \property QGraphicsObject::children
-  \internal
+    \property QGraphicsObject::children
+    \since 4.7
+    \internal
 */
 
 /*!
-  \property QGraphicsObject::width
-  \internal
+    \property QGraphicsObject::width
+    \since 4.7
+    \internal
 */
 
 /*!
-  \property QGraphicsObject::height
-  \internal
+    \property QGraphicsObject::height
+    \since 4.7
+    \internal
 */
 
 /*!
@@ -7958,24 +8011,6 @@ void QGraphicsItemPrivate::resetHeight()
   \brief the effect attached to this item
 
   \sa QGraphicsItem::setGraphicsEffect(), QGraphicsItem::graphicsEffect()
-*/
-
-/*!
-    \property QGraphicsObject::children
-    \since 4.7
-    \internal
-*/
-
-/*!
-    \property QGraphicsObject::width
-    \since 4.7
-    \internal
-*/
-
-/*!
-    \property QGraphicsObject::height
-    \since 4.7
-    \internal
 */
 
 /*!
@@ -10894,8 +10929,8 @@ QVariant QGraphicsSimpleTextItem::extension(const QVariant &variant) const
 
 /*!
     \class QGraphicsItemGroup
-    \brief The QGraphicsItemGroup class provides treating a group of items as
-    one.
+    \brief The QGraphicsItemGroup class provides a container that treats
+    a group of items as a single item.
     \since 4.2
     \ingroup graphicsview-api
 

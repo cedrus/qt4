@@ -94,7 +94,7 @@ bool QSymbianTypeFaceExtras::getSfntTableData(uint tag, uchar *buffer, uint *len
     } else {
         *length = tableByteLength;
         if (buffer)
-            qMemCopy(buffer, fontTable.TableContent(), tableByteLength);
+            memcpy(buffer, fontTable.TableContent(), tableByteLength);
     }
 
     fontTable.Close();
@@ -146,7 +146,7 @@ bool QSymbianTypeFaceExtras::getSfntTableData(uint tag, uchar *buffer, uint *len
     } else {
         *length = tableByteLength;
         if (buffer)
-            qMemCopy(buffer, table, tableByteLength);
+            memcpy(buffer, table, tableByteLength);
     }
 
     m_trueTypeExtension->ReleaseTrueTypeTable(table);
@@ -164,6 +164,11 @@ const uchar *QSymbianTypeFaceExtras::cmap() const
         m_cmapTable = QByteArray(reinterpret_cast<const char *>(cmap), size);
     }
     return reinterpret_cast<const uchar *>(m_cmapTable.constData());
+}
+
+bool QSymbianTypeFaceExtras::isSymbolCMap() const
+{
+    return m_symbolCMap;
 }
 
 CFont *QSymbianTypeFaceExtras::fontOwner() const
@@ -256,7 +261,7 @@ bool QFontEngineS60::stringToCMap(const QChar *characters, int len, QGlyphLayout
     for (int i = 0; i < len; ++i) {
         const unsigned int uc = getChar(characters, i, len);
         *g++ = QFontEngine::getTrueTypeGlyphIndex(cmap,
-        		isRtl ? QChar::mirroredChar(uc) : uc);
+                        (isRtl && !m_extras->isSymbolCMap()) ? QChar::mirroredChar(uc) : uc);
     }
 
     glyphs->numGlyphs = g - glyphs->glyphs;
@@ -345,7 +350,7 @@ glyph_metrics_t QFontEngineS60::boundingBox(const QGlyphLayout &glyphs)
     for (int i = 0; i < glyphs.numGlyphs; ++i)
         w += glyphs.effectiveAdvance(i);
 
-    return glyph_metrics_t(0, -ascent(), w, ascent()+descent()+1, w, 0);
+    return glyph_metrics_t(0, -ascent(), w - lastRightBearing(glyphs), ascent()+descent()+1, w, 0);
 }
 
 glyph_metrics_t QFontEngineS60::boundingBox_const(glyph_t glyph) const

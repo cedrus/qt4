@@ -63,7 +63,7 @@ QT_BEGIN_NAMESPACE
 
 class QHttpResponseHeader;
 
-class QAuthenticatorPrivate
+class Q_AUTOTEST_EXPORT QAuthenticatorPrivate
 {
 public:
     enum Method { None, Basic, Plain, Login, Ntlm, CramMd5, DigestMd5 };
@@ -91,6 +91,7 @@ public:
 
     // ntlm specific
     QString workstation;
+    QString userDomain;
 
     QByteArray calculateResponse(const QByteArray &method, const QByteArray &path);
 

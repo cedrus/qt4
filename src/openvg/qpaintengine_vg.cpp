@@ -44,6 +44,7 @@
 #include "qpixmapfilter_vg_p.h"
 #include "qvgcompositionhelper_p.h"
 #include "qvgimagepool_p.h"
+#include "qvgfontglyphcache_p.h"
 #if !defined(QT_NO_EGL)
 #include <QtGui/private/qeglcontext_p.h>
 #include "qwindowsurface_vgegl_p.h"
@@ -54,6 +55,7 @@
 #include <QtGui/private/qfontengine_p.h>
 #include <QtGui/private/qpainterpath_p.h>
 #include <QtGui/private/qstatictext_p.h>
+#include <QtCore/qmath.h>
 #include <QDebug>
 #include <QSet>
 
@@ -75,28 +77,13 @@ QT_BEGIN_NAMESPACE
 
 #if !defined(QVG_NO_DRAW_GLYPHS)
 
+// use the same rounding as in qrasterizer.cpp (6 bit fixed point)
+static const qreal aliasedCoordinateDelta = 0.5 - 0.015625;
+
 Q_DECL_IMPORT extern int qt_defaultDpiX();
 Q_DECL_IMPORT extern int qt_defaultDpiY();
 
 class QVGPaintEnginePrivate;
-
-class QVGFontGlyphCache
-{
-public:
-    QVGFontGlyphCache();
-    ~QVGFontGlyphCache();
-
-    void cacheGlyphs(QVGPaintEnginePrivate *d, QFontEngine *fontEngine, const glyph_t *g, int count);
-
-    void setScaleFromText(const QFont &font, QFontEngine *fontEngine);
-
-    VGFont font;
-    VGfloat scaleX;
-    VGfloat scaleY;
-
-    uint cachedGlyphsMask[256 / 32];
-    QSet<glyph_t> cachedGlyphs;
-};
 
 typedef QHash<QFontEngine*, QVGFontGlyphCache*> QVGFontCache;
 
@@ -118,6 +105,7 @@ private:
 
 class QVGPaintEnginePrivate : public QPaintEngineExPrivate
 {
+    Q_DECLARE_PUBLIC(QVGPaintEngine)
 public:
     // Extra blending modes from VG_KHR_advanced_blending extension.
     // Use the QT_VG prefix to avoid conflicts with any definitions
@@ -148,7 +136,7 @@ public:
         QT_VG_BLEND_XOR_KHR           = 0x2026
     };
 
-    QVGPaintEnginePrivate();
+    QVGPaintEnginePrivate(QVGPaintEngine *q_ptr);
     ~QVGPaintEnginePrivate();
 
     void init();
@@ -169,6 +157,7 @@ public:
     void setBrushTransform(const QBrush& brush, VGMatrixMode mode);
     void setupColorRamp(const QGradient *grad, VGPaint paint);
     void setImageOptions();
+    void systemStateChanged();
 #if !defined(QVG_SCISSOR_CLIP)
     void ensureMask(QVGPaintEngine *engine, int width, int height);
     void modifyMask
@@ -257,7 +246,11 @@ public:
     inline void ensurePathTransform()
     {
         if (!pathTransformSet) {
-            setTransform(VG_MATRIX_PATH_USER_TO_SURFACE, pathTransform);
+            QTransform aliasedTransform = pathTransform;
+            if (renderingQuality == VG_RENDERING_QUALITY_NONANTIALIASED && currentPen != Qt::NoPen)
+                aliasedTransform = aliasedTransform
+                    * QTransform::fromTranslate(aliasedCoordinateDelta, -aliasedCoordinateDelta);
+            setTransform(VG_MATRIX_PATH_USER_TO_SURFACE, aliasedTransform);
             pathTransformSet = true;
         }
     }
@@ -297,6 +290,9 @@ public:
 
     // Clear all lazily-set modes.
     void clearModes();
+
+private:
+    QVGPaintEngine *q;
 };
 
 inline void QVGPaintEnginePrivate::setImageMode(VGImageMode mode)
@@ -312,6 +308,7 @@ inline void QVGPaintEnginePrivate::setRenderingQuality(VGRenderingQuality mode)
     if (renderingQuality != mode) {
         vgSeti(VG_RENDERING_QUALITY, mode);
         renderingQuality = mode;
+        pathTransformSet = false; // need to tweak transform for aliased stroking
     }
 }
 
@@ -348,7 +345,7 @@ void QVGPaintEnginePrivate::clearModes()
     imageQuality = (VGImageQuality)0;
 }
 
-QVGPaintEnginePrivate::QVGPaintEnginePrivate()
+QVGPaintEnginePrivate::QVGPaintEnginePrivate(QVGPaintEngine *q_ptr) : q(q_ptr)
 {
     init();
 }
@@ -966,7 +963,7 @@ VGPath QVGPaintEnginePrivate::roundedRectPath(const QRectF &rect, qreal xRadius,
         x1, y2 - (1 - KAPPA) * yRadius,
         x1, y2 - yRadius,
         x1, y1 + yRadius,                   // LineTo
-        x1, y1 + KAPPA * yRadius,           // CurveTo
+        x1, y1 + (1 - KAPPA) * yRadius,     // CurveTo
         x1 + (1 - KAPPA) * xRadius, y1,
         x1 + xRadius, y1
     };
@@ -1447,7 +1444,7 @@ QVGPainterState::~QVGPainterState()
 }
 
 QVGPaintEngine::QVGPaintEngine()
-    : QPaintEngineEx(*new QVGPaintEnginePrivate)
+    : QPaintEngineEx(*new QVGPaintEnginePrivate(this))
 {
 }
 
@@ -2990,6 +2987,11 @@ void QVGPaintEnginePrivate::setImageOptions()
     }
 }
 
+void QVGPaintEnginePrivate::systemStateChanged()
+{
+    q->updateScissor();
+}
+
 static void drawVGImage(QVGPaintEnginePrivate *d,
                         const QRectF& r, VGImage vgImg,
                         const QSize& imageSize, const QRectF& sr)
@@ -3292,6 +3294,7 @@ QVGFontGlyphCache::QVGFontGlyphCache()
 {
     font = vgCreateFont(0);
     scaleX = scaleY = 0.0;
+    invertedGlyphs = false;
     memset(cachedGlyphsMask, 0, sizeof(cachedGlyphsMask));
 }
 
@@ -3426,7 +3429,11 @@ void QVGPaintEngine::drawStaticTextItem(QStaticTextItem *textItem)
     if (it != d->fontCache.constEnd()) {
         glyphCache = it.value();
     } else {
+#ifdef Q_OS_SYMBIAN
+        glyphCache = new QSymbianVGFontGlyphCache();
+#else
         glyphCache = new QVGFontGlyphCache();
+#endif
         if (glyphCache->font == VG_INVALID_HANDLE) {
             qWarning("QVGPaintEngine::drawTextItem: OpenVG fonts are not supported by the OpenVG engine");
             delete glyphCache;
@@ -3442,10 +3449,22 @@ void QVGPaintEngine::drawStaticTextItem(QStaticTextItem *textItem)
 
     // Set the transformation to use for drawing the current glyphs.
     QTransform glyphTransform(d->pathTransform);
-    glyphTransform.translate(p.x(), p.y());
+    if (d->transform.type() <= QTransform::TxTranslate) {
+        // Prevent blurriness of unscaled, unrotated text by forcing integer coordinates.
+        glyphTransform.translate(
+                floor(p.x() + glyphTransform.dx() + aliasedCoordinateDelta) - glyphTransform.dx(),
+                floor(p.y() - glyphTransform.dy() + aliasedCoordinateDelta) + glyphTransform.dy());
+    } else {
+        glyphTransform.translate(p.x(), p.y());
+    }
 #if defined(QVG_NO_IMAGE_GLYPHS)
     glyphTransform.scale(glyphCache->scaleX, glyphCache->scaleY);
 #endif
+
+    // Some glyph caches can create the VGImage upright
+    if (glyphCache->invertedGlyphs)
+        glyphTransform.scale(1, -1);
+
     d->setTransform(VG_MATRIX_GLYPH_USER_TO_SURFACE, glyphTransform);
 
     // Add the glyphs from the text item into the glyph cache.

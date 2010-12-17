@@ -199,6 +199,7 @@ QGestureRecognizer::Result QPinchGestureRecognizer::recognize(QGesture *state,
                 d->startPosition[1] = p2.screenPos();
             }
             QLineF line(p1.screenPos(), p2.screenPos());
+            QLineF lastLine(p1.lastScreenPos(),  p2.lastScreenPos());
             QLineF tmp(line);
             tmp.setLength(line.length() / 2.);
             QPointF centerPoint = tmp.p2();
@@ -207,16 +208,15 @@ QGestureRecognizer::Result QPinchGestureRecognizer::recognize(QGesture *state,
             d->centerPoint = centerPoint;
             d->changeFlags |= QPinchGesture::CenterPointChanged;
 
-            const qreal scaleFactor =
-                    QLineF(p1.screenPos(), p2.screenPos()).length()
-                    / QLineF(d->startPosition[0],  d->startPosition[1]).length();
+            const qreal scaleFactor = line.length() / lastLine.length();
+
             if (d->isNewSequence) {
                 d->lastScaleFactor = scaleFactor;
             } else {
                 d->lastScaleFactor = d->scaleFactor;
             }
             d->scaleFactor = scaleFactor;
-            d->totalScaleFactor += d->scaleFactor - d->lastScaleFactor;
+            d->totalScaleFactor = d->totalScaleFactor * scaleFactor;
             d->changeFlags |= QPinchGesture::ScaleFactorChanged;
 
             qreal angle = QLineF(p1.screenPos(), p2.screenPos()).angle();
@@ -266,7 +266,7 @@ void QPinchGestureRecognizer::reset(QGesture *state)
     d->totalChangeFlags = d->changeFlags = 0;
 
     d->startCenterPoint = d->lastCenterPoint = d->centerPoint = QPointF();
-    d->totalScaleFactor = d->lastScaleFactor = d->scaleFactor = 0;
+    d->totalScaleFactor = d->lastScaleFactor = d->scaleFactor = 1;
     d->totalRotationAngle = d->lastRotationAngle = d->rotationAngle = 0;
 
     d->isNewSequence = true;
@@ -304,7 +304,7 @@ QGestureRecognizer::Result QSwipeGestureRecognizer::recognize(QGesture *state,
 
     switch (event->type()) {
     case QEvent::TouchBegin: {
-        d->speed = 1;
+        d->velocityValue = 1;
         d->time.start();
         d->started = true;
         result = QGestureRecognizer::MayBeGesture;
@@ -345,7 +345,7 @@ QGestureRecognizer::Result QSwipeGestureRecognizer::recognize(QGesture *state,
             int elapsedTime = d->time.restart();
             if (!elapsedTime)
                 elapsedTime = 1;
-            d->speed = 0.9 * d->speed + distance / elapsedTime;
+            d->velocityValue = 0.9 * d->velocityValue + distance / elapsedTime;
             d->swipeAngle = QLineF(p1.startScreenPos(), p1.screenPos()).angle();
 
             static const int MoveThreshold = 50;
@@ -407,7 +407,7 @@ void QSwipeGestureRecognizer::reset(QGesture *state)
 
     d->lastPositions[0] = d->lastPositions[1] = d->lastPositions[2] = QPoint();
     d->started = false;
-    d->speed = 0;
+    d->velocityValue = 0;
     d->time.invalidate();
 
     QGestureRecognizer::reset(state);
@@ -515,34 +515,39 @@ QTapAndHoldGestureRecognizer::recognize(QGesture *state, QObject *object,
 
     const QTouchEvent *ev = static_cast<const QTouchEvent *>(event);
     const QMouseEvent *me = static_cast<const QMouseEvent *>(event);
+#ifndef QT_NO_GRAPHICSVIEW
     const QGraphicsSceneMouseEvent *gsme = static_cast<const QGraphicsSceneMouseEvent *>(event);
+#endif
 
-    enum { TimerInterval = 2000 };
     enum { TapRadius = 40 };
 
     switch (event->type()) {
+#ifndef QT_NO_GRAPHICSVIEW
     case QEvent::GraphicsSceneMousePress:
         d->position = gsme->screenPos();
         q->setHotSpot(d->position);
         if (d->timerId)
             q->killTimer(d->timerId);
-        d->timerId = q->startTimer(TimerInterval);
+        d->timerId = q->startTimer(QTapAndHoldGesturePrivate::Timeout);
         return QGestureRecognizer::MayBeGesture; // we don't show a sign of life until the timeout
+#endif
     case QEvent::MouseButtonPress:
         d->position = me->globalPos();
         q->setHotSpot(d->position);
         if (d->timerId)
             q->killTimer(d->timerId);
-        d->timerId = q->startTimer(TimerInterval);
+        d->timerId = q->startTimer(QTapAndHoldGesturePrivate::Timeout);
         return QGestureRecognizer::MayBeGesture; // we don't show a sign of life until the timeout
     case QEvent::TouchBegin:
         d->position = ev->touchPoints().at(0).startScreenPos();
         q->setHotSpot(d->position);
         if (d->timerId)
             q->killTimer(d->timerId);
-        d->timerId = q->startTimer(TimerInterval);
+        d->timerId = q->startTimer(QTapAndHoldGesturePrivate::Timeout);
         return QGestureRecognizer::MayBeGesture; // we don't show a sign of life until the timeout
+#ifndef QT_NO_GRAPHICSVIEW
     case QEvent::GraphicsSceneMouseRelease:
+#endif
     case QEvent::MouseButtonRelease:
     case QEvent::TouchEnd:
         return QGestureRecognizer::CancelGesture; // get out of the MayBeGesture state
@@ -560,12 +565,14 @@ QTapAndHoldGestureRecognizer::recognize(QGesture *state, QObject *object,
             return QGestureRecognizer::MayBeGesture;
         return QGestureRecognizer::CancelGesture;
     }
+#ifndef QT_NO_GRAPHICSVIEW
     case QEvent::GraphicsSceneMouseMove: {
         QPoint delta = gsme->screenPos() - d->position.toPoint();
         if (d->timerId && delta.manhattanLength() <= TapRadius)
             return QGestureRecognizer::MayBeGesture;
         return QGestureRecognizer::CancelGesture;
     }
+#endif
     default:
         return QGestureRecognizer::Ignore;
     }

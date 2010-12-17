@@ -58,6 +58,7 @@
 #include <private/qmemrotate_p.h>
 #include <private/qpixmapdata_p.h>
 #include <private/qimagescale_p.h>
+#include <private/qsimd_p.h>
 
 #include <qhash.h>
 
@@ -209,7 +210,7 @@ QImageData * QImageData::create(const QSize &size, QImage::Format format, int nu
         break;
     }
 
-    const int bytes_per_line = ((width * depth + 31) >> 5) << 2; // bytes per scanline (must be multiple of 8)
+    const int bytes_per_line = ((width * depth + 31) >> 5) << 2; // bytes per scanline (must be multiple of 4)
 
     // sanity check for potential overflows
     if (INT_MAX/depth < width
@@ -2342,8 +2343,15 @@ static bool convert_indexed8_to_ARGB_PM_inplace(QImageData *data, Qt::ImageConve
         data->colortable.resize(256);
         for (int i = 0; i < 256; ++i)
             data->colortable[i] = qRgb(i, i, i);
+    } else {
+        for (int i = 0; i < data->colortable.size(); ++i)
+            data->colortable[i] = PREMUL(data->colortable.at(i));
+
+        // Fill the rest of the table in case src_data > colortable.size()
+        const int oldSize = data->colortable.size();
+        const QRgb lastColor = data->colortable.at(oldSize - 1);
+        data->colortable.insert(oldSize, 256 - oldSize, lastColor);
     }
-    const int tableSize = data->colortable.size() - 1;
 
     for (int i = 0; i < data->height; ++i) {
         src_data -= src_pad;
@@ -2351,11 +2359,11 @@ static bool convert_indexed8_to_ARGB_PM_inplace(QImageData *data, Qt::ImageConve
         for (int pixI = 0; pixI < width; ++pixI) {
             --src_data;
             --dest_data;
-            const uint pixel = data->colortable[qMin<int>(tableSize, *src_data)];
-            *dest_data = (quint32) PREMUL(pixel);
+            *dest_data = data->colortable.at(*src_data);
         }
     }
 
+    data->colortable = QVector<QRgb>();
     data->format = QImage::Format_ARGB32_Premultiplied;
     data->bytes_per_line = dst_bytes_per_line;
     data->depth = depth;
@@ -2387,8 +2395,12 @@ static bool convert_indexed8_to_RGB_inplace(QImageData *data, Qt::ImageConversio
         data->colortable.resize(256);
         for (int i = 0; i < 256; ++i)
             data->colortable[i] = qRgb(i, i, i);
+    } else {
+        // Fill the rest of the table in case src_data > colortable.size()
+        const int oldSize = data->colortable.size();
+        const QRgb lastColor = data->colortable.at(oldSize - 1);
+        data->colortable.insert(oldSize, 256 - oldSize, lastColor);
     }
-    const int tableSize = data->colortable.size() - 1;
 
     for (int i = 0; i < data->height; ++i) {
         src_data -= src_pad;
@@ -2396,10 +2408,11 @@ static bool convert_indexed8_to_RGB_inplace(QImageData *data, Qt::ImageConversio
         for (int pixI = 0; pixI < width; ++pixI) {
             --src_data;
             --dest_data;
-            *dest_data = (quint32) data->colortable[qMin<int>(tableSize, *src_data)];
+            *dest_data = (quint32) data->colortable.at(*src_data);
         }
     }
 
+    data->colortable = QVector<QRgb>();
     data->format = QImage::Format_RGB32;
     data->bytes_per_line = dst_bytes_per_line;
     data->depth = depth;
@@ -2427,12 +2440,23 @@ static bool convert_indexed8_to_RGB16_inplace(QImageData *data, Qt::ImageConvers
     const int width = data->width;
     const int src_pad = data->bytes_per_line - width;
     const int dest_pad = (dst_bytes_per_line >> 1) - width;
-    if (data->colortable.size() == 0) {
-        data->colortable.resize(256);
+
+    quint16 colorTableRGB16[256];
+    if (data->colortable.isEmpty()) {
         for (int i = 0; i < 256; ++i)
-            data->colortable[i] = qRgb(i, i, i);
+            colorTableRGB16[i] = qt_colorConvert<quint16, quint32>(qRgb(i, i, i), 0);
+    } else {
+        // 1) convert the existing colors to RGB16
+        const int tableSize = data->colortable.size();
+        for (int i = 0; i < tableSize; ++i)
+            colorTableRGB16[i] = qt_colorConvert<quint16, quint32>(data->colortable.at(i), 0);
+        data->colortable = QVector<QRgb>();
+
+        // 2) fill the rest of the table in case src_data > colortable.size()
+        const quint16 lastColor = colorTableRGB16[tableSize - 1];
+        for (int i = tableSize; i < 256; ++i)
+            colorTableRGB16[i] = lastColor;
     }
-    const int tableSize = data->colortable.size() - 1;
 
     for (int i = 0; i < data->height; ++i) {
         src_data -= src_pad;
@@ -2440,8 +2464,7 @@ static bool convert_indexed8_to_RGB16_inplace(QImageData *data, Qt::ImageConvers
         for (int pixI = 0; pixI < width; ++pixI) {
             --src_data;
             --dest_data;
-            const uint pixel = data->colortable[qMin<int>(tableSize, *src_data)];
-            *dest_data = qt_colorConvert<quint16, quint32>(pixel, 0);
+            *dest_data = colorTableRGB16[*src_data];
         }
     }
 
@@ -3331,7 +3354,7 @@ CONVERT_DECL(qargb4444, quint32)
 
 
 // first index source, second dest
-static const Image_Converter converter_map[QImage::NImageFormats][QImage::NImageFormats] =
+static Image_Converter converter_map[QImage::NImageFormats][QImage::NImageFormats] =
 {
     {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -3630,7 +3653,7 @@ static const Image_Converter converter_map[QImage::NImageFormats][QImage::NImage
     } // Format_ARGB4444_Premultiplied
 };
 
-static const InPlace_Image_Converter inplace_converter_map[QImage::NImageFormats][QImage::NImageFormats] =
+static InPlace_Image_Converter inplace_converter_map[QImage::NImageFormats][QImage::NImageFormats] =
 {
     {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -3726,6 +3749,35 @@ static const InPlace_Image_Converter inplace_converter_map[QImage::NImageFormats
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     } // Format_ARGB4444_Premultiplied
 };
+
+void qInitImageConversions()
+{
+    const uint features = qDetectCPUFeatures();
+    Q_UNUSED(features);
+
+#ifdef QT_HAVE_SSE2
+    if (features & SSE2) {
+        extern bool convert_ARGB_to_ARGB_PM_inplace_sse2(QImageData *data, Qt::ImageConversionFlags);
+        inplace_converter_map[QImage::Format_ARGB32][QImage::Format_ARGB32_Premultiplied] = convert_ARGB_to_ARGB_PM_inplace_sse2;
+    }
+#endif
+#ifdef QT_HAVE_SSSE3
+    if (features & SSSE3) {
+        extern void convert_RGB888_to_RGB32_ssse3(QImageData *dest, const QImageData *src, Qt::ImageConversionFlags);
+        converter_map[QImage::Format_RGB888][QImage::Format_RGB32] = convert_RGB888_to_RGB32_ssse3;
+        converter_map[QImage::Format_RGB888][QImage::Format_ARGB32] = convert_RGB888_to_RGB32_ssse3;
+        converter_map[QImage::Format_RGB888][QImage::Format_ARGB32_Premultiplied] = convert_RGB888_to_RGB32_ssse3;
+    }
+#endif
+#ifdef QT_HAVE_NEON
+    if (features & NEON) {
+        extern void convert_RGB888_to_RGB32_neon(QImageData *dest, const QImageData *src, Qt::ImageConversionFlags);
+        converter_map[QImage::Format_RGB888][QImage::Format_RGB32] = convert_RGB888_to_RGB32_neon;
+        converter_map[QImage::Format_RGB888][QImage::Format_ARGB32] = convert_RGB888_to_RGB32_neon;
+        converter_map[QImage::Format_RGB888][QImage::Format_ARGB32_Premultiplied] = convert_RGB888_to_RGB32_neon;
+    }
+#endif
+}
 
 /*!
     Returns a copy of the image in the given \a format.
@@ -4785,7 +4837,7 @@ QImage QImage::rgbSwapped() const
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             uint *q = (uint*)res.scanLine(i);
-            uint *p = (uint*)scanLine(i);
+            uint *p = (uint*)constScanLine(i);
             uint *end = p + d->width;
             while (p < end) {
                 *q = ((*p << 16) & 0xff0000) | ((*p >> 16) & 0xff) | (*p & 0xff00ff00);
@@ -4799,7 +4851,7 @@ QImage QImage::rgbSwapped() const
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             ushort *q = (ushort*)res.scanLine(i);
-            const ushort *p = (const ushort*)scanLine(i);
+            const ushort *p = (const ushort*)constScanLine(i);
             const ushort *end = p + d->width;
             while (p < end) {
                 *q = ((*p << 11) & 0xf800) | ((*p >> 11) & 0x1f) | (*p & 0x07e0);
@@ -4812,12 +4864,15 @@ QImage QImage::rgbSwapped() const
         res = QImage(d->width, d->height, d->format);
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
-            quint8 *p = (quint8*)scanLine(i);
+            const quint8 *p = constScanLine(i);
+            quint8 *q = res.scanLine(i);
             const quint8 *end = p + d->width * sizeof(qargb8565);
             while (p < end) {
-                quint16 *q = reinterpret_cast<quint16*>(p + 1);
-                *q = ((*q << 11) & 0xf800) | ((*q >> 11) & 0x1f) | (*q & 0x07e0);
+                q[0] = p[0];
+                q[1] = (p[1] & 0xe0) | (p[2] >> 3);
+                q[2] = (p[2] & 0x07) | (p[1] << 3);
                 p += sizeof(qargb8565);
+                q += sizeof(qargb8565);
             }
         }
         break;
@@ -4826,7 +4881,7 @@ QImage QImage::rgbSwapped() const
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
             qrgb666 *q = reinterpret_cast<qrgb666*>(res.scanLine(i));
-            const qrgb666 *p = reinterpret_cast<const qrgb666*>(scanLine(i));
+            const qrgb666 *p = reinterpret_cast<const qrgb666*>(constScanLine(i));
             const qrgb666 *end = p + d->width;
             while (p < end) {
                 const QRgb rgb = quint32(*p++);
@@ -4838,12 +4893,15 @@ QImage QImage::rgbSwapped() const
         res = QImage(d->width, d->height, d->format);
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
-            qargb6666 *q = reinterpret_cast<qargb6666*>(res.scanLine(i));
-            const qargb6666 *p = reinterpret_cast<const qargb6666*>(scanLine(i));
-            const qargb6666 *end = p + d->width;
+            const quint8 *p = constScanLine(i);
+            const quint8 *end = p + d->width * sizeof(qargb6666);
+            quint8 *q = res.scanLine(i);
             while (p < end) {
-                const QRgb rgb = quint32(*p++);
-                *q++ = qRgba(qBlue(rgb), qGreen(rgb), qRed(rgb), qAlpha(rgb));
+                q[0] = (p[1] >> 4) | ((p[2] & 0x3) << 4) | (p[0] & 0xc0);
+                q[1] = (p[1] & 0xf) | (p[0] << 4);
+                q[2] = (p[2] & 0xfc) | ((p[0] >> 4) & 0x3);
+                p += sizeof(qargb6666);
+                q += sizeof(qargb6666);
             }
         }
         break;
@@ -4851,11 +4909,11 @@ QImage QImage::rgbSwapped() const
         res = QImage(d->width, d->height, d->format);
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
-            ushort *q = (ushort*)res.scanLine(i);
-            const ushort *p = (const ushort*)scanLine(i);
-            const ushort *end = p + d->width;
+            quint16 *q = (quint16*)res.scanLine(i);
+            const quint16 *p = (const quint16*)constScanLine(i);
+            const quint16 *end = p + d->width;
             while (p < end) {
-                *q = ((*p << 10) & 0x7800) | ((*p >> 10) & 0x1f) | (*p & 0x83e0);
+                *q = ((*p << 10) & 0x7c00) | ((*p >> 10) & 0x1f) | (*p & 0x3e0);
                 p++;
                 q++;
             }
@@ -4865,12 +4923,15 @@ QImage QImage::rgbSwapped() const
         res = QImage(d->width, d->height, d->format);
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
-            quint8 *p = (quint8*)scanLine(i);
+            const quint8 *p = constScanLine(i);
+            quint8 *q = res.scanLine(i);
             const quint8 *end = p + d->width * sizeof(qargb8555);
             while (p < end) {
-                quint16 *q = reinterpret_cast<quint16*>(p + 1);
-                *q = ((*q << 10) & 0x7800) | ((*q >> 10) & 0x1f) | (*q & 0x83e0);
+                q[0] = p[0];
+                q[1] = (p[1] & 0xe0) | (p[2] >> 2);
+                q[2] = (p[2] & 0x03) | ((p[1] << 2) & 0x7f);
                 p += sizeof(qargb8555);
+                q += sizeof(qargb8555);
             }
         }
         break;
@@ -4878,8 +4939,8 @@ QImage QImage::rgbSwapped() const
         res = QImage(d->width, d->height, d->format);
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
-            quint8 *q = reinterpret_cast<quint8*>(res.scanLine(i));
-            const quint8 *p = reinterpret_cast<const quint8*>(scanLine(i));
+            quint8 *q = res.scanLine(i);
+            const quint8 *p = constScanLine(i);
             const quint8 *end = p + d->width * sizeof(qrgb888);
             while (p < end) {
                 q[0] = p[2];
@@ -4891,32 +4952,17 @@ QImage QImage::rgbSwapped() const
         }
         break;
     case Format_RGB444:
-        res = QImage(d->width, d->height, d->format);
-        QIMAGE_SANITYCHECK_MEMORY(res);
-        for (int i = 0; i < d->height; i++) {
-            quint8 *q = reinterpret_cast<quint8*>(res.scanLine(i));
-            const quint8 *p = reinterpret_cast<const quint8*>(scanLine(i));
-            const quint8 *end = p + d->width * sizeof(qrgb444);
-            while (p < end) {
-                q[0] = (p[0] & 0xf0) | ((p[1] & 0x0f) << 8);
-                q[1] = ((p[0] & 0x0f) >> 8) | (p[1] & 0xf0);
-                q += sizeof(qrgb444);
-                p += sizeof(qrgb444);
-            }
-        }
-        break;
     case Format_ARGB4444_Premultiplied:
         res = QImage(d->width, d->height, d->format);
         QIMAGE_SANITYCHECK_MEMORY(res);
         for (int i = 0; i < d->height; i++) {
-            quint8 *q = reinterpret_cast<quint8*>(res.scanLine(i));
-            const quint8 *p = reinterpret_cast<const quint8*>(scanLine(i));
-            const quint8 *end = p + d->width * sizeof(qargb4444);
+            quint16 *q = reinterpret_cast<quint16*>(res.scanLine(i));
+            const quint16 *p = reinterpret_cast<const quint16*>(constScanLine(i));
+            const quint16 *end = p + d->width;
             while (p < end) {
-                q[0] = (p[0] & 0xf0) | ((p[1] & 0x0f) << 8);
-                q[1] = ((p[0] & 0x0f) >> 8) | (p[1] & 0xf0);
-                q += sizeof(qargb4444);
-                p += sizeof(qargb4444);
+                *q = (*p & 0xf0f0) | ((*p & 0x0f) << 8) | ((*p & 0xf00) >> 8);
+                p++;
+                q++;
             }
         }
         break;
@@ -6560,6 +6606,10 @@ bool QImageData::convertInPlace(QImage::Format newFormat, Qt::ImageConversionFla
 {
     if (format == newFormat)
         return true;
+
+    // No in-place conversion if we have to detach
+    if (ref > 1)
+        return false;
 
     const InPlace_Image_Converter *const converterPtr = &inplace_converter_map[format][newFormat];
     InPlace_Image_Converter converter = *converterPtr;

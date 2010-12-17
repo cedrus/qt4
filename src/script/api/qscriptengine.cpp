@@ -44,7 +44,6 @@
 
 #include "CodeBlock.h"
 #include "Error.h"
-#include "JSLock.h"
 #include "Interpreter.h"
 
 #include "PrototypeFunction.h"
@@ -152,8 +151,7 @@ QT_BEGIN_NAMESPACE
   evaluation caused an exception by calling hasUncaughtException(). In
   that case, you can call toString() on the error object to obtain an
   error message. The current uncaught exception is also available
-  through uncaughtException(). You can obtain a human-readable
-  backtrace of the exception with uncaughtExceptionBacktrace().
+  through uncaughtException().
   Calling clearExceptions() will cause any uncaught exceptions to be
   cleared.
 
@@ -784,6 +782,8 @@ static JSC::JSValue JSC_HOST_CALL functionQsTranslate(JSC::ExecState*, JSC::JSOb
 static JSC::JSValue JSC_HOST_CALL functionQsTranslateNoOp(JSC::ExecState*, JSC::JSObject*, JSC::JSValue, const JSC::ArgList&);
 static JSC::JSValue JSC_HOST_CALL functionQsTr(JSC::ExecState*, JSC::JSObject*, JSC::JSValue, const JSC::ArgList&);
 static JSC::JSValue JSC_HOST_CALL functionQsTrNoOp(JSC::ExecState*, JSC::JSObject*, JSC::JSValue, const JSC::ArgList&);
+static JSC::JSValue JSC_HOST_CALL functionQsTrId(JSC::ExecState*, JSC::JSObject*, JSC::JSValue, const JSC::ArgList&);
+static JSC::JSValue JSC_HOST_CALL functionQsTrIdNoOp(JSC::ExecState*, JSC::JSObject*, JSC::JSValue, const JSC::ArgList&);
 
 JSC::JSValue JSC_HOST_CALL functionQsTranslate(JSC::ExecState *exec, JSC::JSObject*, JSC::JSValue, const JSC::ArgList &args)
 {
@@ -888,6 +888,28 @@ JSC::JSValue JSC_HOST_CALL functionQsTr(JSC::ExecState *exec, JSC::JSObject*, JS
 }
 
 JSC::JSValue JSC_HOST_CALL functionQsTrNoOp(JSC::ExecState *, JSC::JSObject*, JSC::JSValue, const JSC::ArgList &args)
+{
+    if (args.size() < 1)
+        return JSC::jsUndefined();
+    return args.at(0);
+}
+
+JSC::JSValue JSC_HOST_CALL functionQsTrId(JSC::ExecState *exec, JSC::JSObject*, JSC::JSValue, const JSC::ArgList &args)
+{
+    if (args.size() < 1)
+        return JSC::throwError(exec, JSC::GeneralError, "qsTrId() requires at least one argument");
+    if (!args.at(0).isString())
+        return JSC::throwError(exec, JSC::TypeError, "qsTrId(): first argument (id) must be a string");
+    if ((args.size() > 1) && !args.at(1).isNumber())
+        return JSC::throwError(exec, JSC::TypeError, "qsTrId(): second argument (n) must be a number");
+    JSC::UString id = args.at(0).toString(exec);
+    int n = -1;
+    if (args.size() > 1)
+        n = args.at(1).toInt32(exec);
+    return JSC::jsString(exec, qtTrId(QScript::convertToLatin1(id).constData(), n));
+}
+
+JSC::JSValue JSC_HOST_CALL functionQsTrIdNoOp(JSC::ExecState *, JSC::JSObject*, JSC::JSValue, const JSC::ArgList &args)
 {
     if (args.size() < 1)
         return JSC::jsUndefined();
@@ -1003,7 +1025,6 @@ QScriptEnginePrivate::~QScriptEnginePrivate()
     detachAllRegisteredScriptStrings();
     qDeleteAll(m_qobjectData);
     qDeleteAll(m_typeInfos);
-    JSC::JSLock lock(false);
     globalData->heap.destroy();
     globalData->deref();
     while (freeScriptValues) {
@@ -1292,7 +1313,6 @@ bool QScriptEnginePrivate::isCollecting() const
 
 void QScriptEnginePrivate::collectGarbage()
 {
-    JSC::JSLock lock(false);
     QScript::APIShim shim(this);
     globalData->heap.collectAllGarbage();
 }
@@ -1322,7 +1342,6 @@ JSC::JSValue QScriptEnginePrivate::evaluateHelper(JSC::ExecState *exec, intptr_t
                                                   bool &compile)
 {
     Q_Q(QScriptEngine);
-    JSC::JSLock lock(false); // ### hmmm
     QBoolBlocker inEvalBlocker(inEval, true);
     q->currentContext()->activationObject(); //force the creation of a context for native function;
 
@@ -2799,8 +2818,7 @@ void QScriptEnginePrivate::popContext()
 
   The exception state is cleared when evaluate() is called.
 
-  \sa uncaughtException(), uncaughtExceptionLineNumber(),
-      uncaughtExceptionBacktrace()
+  \sa uncaughtException(), uncaughtExceptionLineNumber()
 */
 bool QScriptEngine::hasUncaughtException() const
 {
@@ -2818,7 +2836,6 @@ bool QScriptEngine::hasUncaughtException() const
   message.
 
   \sa hasUncaughtException(), uncaughtExceptionLineNumber(),
-      uncaughtExceptionBacktrace()
 */
 QScriptValue QScriptEngine::uncaughtException() const
 {
@@ -2838,7 +2855,7 @@ QScriptValue QScriptEngine::uncaughtException() const
   Line numbers are 1-based, unless a different base was specified as
   the second argument to evaluate().
 
-  \sa hasUncaughtException(), uncaughtExceptionBacktrace()
+  \sa hasUncaughtException()
 */
 int QScriptEngine::uncaughtExceptionLineNumber() const
 {
@@ -2850,7 +2867,7 @@ int QScriptEngine::uncaughtExceptionLineNumber() const
 /*!
   Returns a human-readable backtrace of the last uncaught exception.
 
-  Each line is of the form \c{<function-name>(<arguments>)@<file-name>:<line-number>}.
+  It is in the form \c{<function-name>()@<file-name>:<line-number>}.
 
   \sa uncaughtException()
 */
@@ -3441,6 +3458,8 @@ void QScriptEngine::registerCustomType(int type, MarshalFunction mf,
     \row    \o QT_TR_NOOP() \o QT_TR_NOOP()
     \row    \o qsTranslate() \o QCoreApplication::translate()
     \row    \o QT_TRANSLATE_NOOP() \o QT_TRANSLATE_NOOP()
+    \row    \o qsTrId() (since 4.7) \o qtTrId()
+    \row    \o QT_TRID_NOOP() (since 4.7) \o QT_TRID_NOOP()
     \endtable
 
   \sa {Internationalization with Qt}
@@ -3459,6 +3478,8 @@ void QScriptEngine::installTranslatorFunctions(const QScriptValue &object)
     JSC::asObject(jscObject)->putDirectFunction(exec, new (exec)JSC::NativeFunctionWrapper(exec, glob->prototypeFunctionStructure(), 2, JSC::Identifier(exec, "QT_TRANSLATE_NOOP"), QScript::functionQsTranslateNoOp));
     JSC::asObject(jscObject)->putDirectFunction(exec, new (exec)JSC::NativeFunctionWrapper(exec, glob->prototypeFunctionStructure(), 3, JSC::Identifier(exec, "qsTr"), QScript::functionQsTr));
     JSC::asObject(jscObject)->putDirectFunction(exec, new (exec)JSC::NativeFunctionWrapper(exec, glob->prototypeFunctionStructure(), 1, JSC::Identifier(exec, "QT_TR_NOOP"), QScript::functionQsTrNoOp));
+    JSC::asObject(jscObject)->putDirectFunction(exec, new (exec)JSC::NativeFunctionWrapper(exec, glob->prototypeFunctionStructure(), 1, JSC::Identifier(exec, "qsTrId"), QScript::functionQsTrId));
+    JSC::asObject(jscObject)->putDirectFunction(exec, new (exec)JSC::NativeFunctionWrapper(exec, glob->prototypeFunctionStructure(), 1, JSC::Identifier(exec, "QT_TRID_NOOP"), QScript::functionQsTrIdNoOp));
 
     glob->stringPrototype()->putDirectFunction(exec, new (exec)JSC::NativeFunctionWrapper(exec, glob->prototypeFunctionStructure(), 1, JSC::Identifier(exec, "arg"), QScript::stringProtoFuncArg));
 }
@@ -4195,6 +4216,7 @@ void QScriptEngine::setAgent(QScriptEngineAgent *agent)
                  "cannot set agent belonging to different engine");
         return;
     }
+    QScript::APIShim shim(d);
     if (d->activeAgent)
         QScriptEngineAgentPrivate::get(d->activeAgent)->detach();
     d->activeAgent = agent;

@@ -1167,6 +1167,7 @@ void tst_QAbstractItemModel::testMoveToGrandParent_data()
 
     // Moving everything from one parent to another
     QTest::newRow("move12") << 0 << 9 << 10;
+    QTest::newRow("move13") << 0 << 9 << 0;
 }
 
 void tst_QAbstractItemModel::testMoveToGrandParent()
@@ -1208,6 +1209,7 @@ void tst_QAbstractItemModel::testMoveToGrandParent()
     QSignalSpy beforeSpy(m_model, SIGNAL(rowsAboutToBeMoved(const QModelIndex &, int, int, const QModelIndex &, int)));
     QSignalSpy afterSpy(m_model, SIGNAL(rowsMoved(const QModelIndex &, int, int, const QModelIndex &, int)));
 
+    QPersistentModelIndex persistentSource = sourceIndex;
 
     ModelMoveCommand *moveCommand = new ModelMoveCommand(m_model, this);
     moveCommand->setAncestorRowNumbers(QList<int>() << 5);
@@ -1228,7 +1230,7 @@ void tst_QAbstractItemModel::testMoveToGrandParent()
     QCOMPARE(beforeSignal.at(4).toInt(), destRow);
 
     QCOMPARE(afterSignal.size(), 5);
-    QCOMPARE(afterSignal.at(0).value<QModelIndex>(), sourceIndex);
+    QCOMPARE(afterSignal.at(0).value<QModelIndex>(), static_cast<QModelIndex>(persistentSource));
     QCOMPARE(afterSignal.at(1).toInt(), startRow);
     QCOMPARE(afterSignal.at(2).toInt(), endRow);
     QCOMPARE(afterSignal.at(3).value<QModelIndex>(), QModelIndex());
@@ -1313,6 +1315,11 @@ void tst_QAbstractItemModel::testMoveToSibling_data()
     QTest::newRow("move09") << 8 << 8 << 4;
     QTest::newRow("move10") << 8 << 8 << 5;
     QTest::newRow("move11") << 8 << 8 << 6;
+
+    // Move such that the destination parent no longer valid after the move.
+    // The destination parent is always QMI(5, 0), but after this move the
+    // row count is 5, so (5, 0) (used internally in QAIM) no longer refers to a valid index.
+    QTest::newRow("move12") << 0 << 4 << 0;
 }
 
 void tst_QAbstractItemModel::testMoveToSibling()
@@ -1351,6 +1358,7 @@ void tst_QAbstractItemModel::testMoveToSibling()
     QSignalSpy beforeSpy(m_model, SIGNAL(rowsAboutToBeMoved(const QModelIndex &, int, int, const QModelIndex &, int)));
     QSignalSpy afterSpy(m_model, SIGNAL(rowsMoved(const QModelIndex &, int, int, const QModelIndex &, int)));
 
+    QPersistentModelIndex persistentDest = destIndex;
 
     ModelMoveCommand *moveCommand = new ModelMoveCommand(m_model, this);
     moveCommand->setNumCols(4);
@@ -1374,7 +1382,7 @@ void tst_QAbstractItemModel::testMoveToSibling()
     QCOMPARE(afterSignal.at(0).value<QModelIndex>(), sourceIndex);
     QCOMPARE(afterSignal.at(1).toInt(), startRow);
     QCOMPARE(afterSignal.at(2).toInt(), endRow);
-    QCOMPARE(afterSignal.at(3).value<QModelIndex>(), destIndex);
+    QCOMPARE(afterSignal.at(3).value<QModelIndex>(), static_cast<QModelIndex>(persistentDest));
     QCOMPARE(afterSignal.at(4).toInt(), destRow);
 
     for (int i = 0; i < indexList.size(); i++)

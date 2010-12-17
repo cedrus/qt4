@@ -81,11 +81,14 @@ Where supported options are as follows:
      [-o|only-unsigned]      = Creates only unsigned package.
      [-s|stub]               = Generates stub sis for ROM.
      [-n|sisname <name>]     = Specifies the final sis name.
+     [-g|gcce-is-armv5]      = Convert gcce platform to armv5.
 Where parameters are as follows:
      templatepkg             = Name of .pkg file template
      target                  = Either debug or release
      platform                = One of the supported platform
                                winscw | gcce | armv5 | armv6 | armv7
+                               Note that when packaging binaries built using gcce and symbian-sbsv2
+                               mkspec, armv5 must be used for platform instead of gcce.
      certificate             = The certificate file used for signing
      key                     = The certificate's private key file
      passphrase              = The passphrase of the certificate's private key file
@@ -123,6 +126,7 @@ my $preserveUnsigned = "";
 my $stub = "";
 my $signed_sis_name = "";
 my $onlyUnsigned = "";
+my $convertGcce = "";
 
 unless (GetOptions('i|install' => \$install,
                    'p|preprocess' => \$preprocessonly,
@@ -130,9 +134,13 @@ unless (GetOptions('i|install' => \$install,
                    'u|unsigned' => \$preserveUnsigned,
                    'o|only-unsigned' => \$onlyUnsigned,
                    's|stub' => \$stub,
-                   'n|sisname=s' => \$signed_sis_name,)) {
+                   'n|sisname=s' => \$signed_sis_name,
+                   'g|gcce-is-armv5' => \$convertGcce,)) {
     Usage();
 }
+
+my $epocroot = $ENV{EPOCROOT};
+$epocroot =~ s,[\\/]$,,x;
 
 my $certfilepath = abs_path(dirname($certfile));
 
@@ -140,11 +148,25 @@ my $certfilepath = abs_path(dirname($certfile));
 my $templatepkg = $ARGV[0];
 my $targetplatform = lc $ARGV[1];
 
+if ($targetplatform eq "") {
+    $targetplatform = "-";
+}
+
 my @tmpvalues = split('-', $targetplatform);
 my $target;
 $target = $tmpvalues[0] or $target = "";
 my $platform;
 $platform = $tmpvalues[1] or $platform = "";
+
+if ($platform =~ m/^gcce$/i) {
+    if (($convertGcce ne "")) {
+        $platform = "armv5";
+    } elsif ($ENV{SBS_HOME}) {
+        # Print a informative note in case suspected misuse is detected.
+        print "\nNote: You should use armv5 as platform or specify -g parameter to convert platform\n";
+        print "      when packaging gcce binaries built using symbian-sbsv2 mkspec.\n\n";
+    }
+}
 
 # Convert visual target to real target (debug->udeb and release->urel)
 $target =~ s/debug/udeb/i;
@@ -161,11 +183,11 @@ $passphrase = $ARGV[4] or $passphrase = "";
 my $pkgoutputbasename = $templatepkg;
 my $preservePkgOutput = "";
 $pkgoutputbasename =~ s/_template/_$targetplatform/g;
+$pkgoutputbasename =~ s/_installer\.pkg/_installer___temp\.pkg/g;
 if ($pkgoutputbasename eq $templatepkg) {
     $preservePkgOutput = "1";
 }
 $pkgoutputbasename =~ s/\.pkg//g;
-$pkgoutputbasename = $pkgoutputbasename;
 
 # Store output file names to variables
 my $pkgoutput = $pkgoutputbasename.".pkg";
@@ -173,6 +195,7 @@ my $sisoutputbasename;
 if ($signed_sis_name eq "") {
     $sisoutputbasename = $pkgoutputbasename;
     $sisoutputbasename =~ s/_$targetplatform//g;
+    $sisoutputbasename =~ s/_installer___temp/_installer/g;
     $signed_sis_name = $sisoutputbasename.".sis";
 } else {
     $sisoutputbasename = $signed_sis_name;
@@ -181,6 +204,16 @@ if ($signed_sis_name eq "") {
     } else {
         $signed_sis_name = $signed_sis_name.".sis";
     }
+}
+
+my $installer_unsigned_app_sis_name = "";
+my $installer_app_sis_name = "";
+
+if ($templatepkg =~ m/_installer\.pkg$/i && $onlyUnsigned) {
+    $installer_unsigned_app_sis_name = $templatepkg;
+    $installer_unsigned_app_sis_name =~ s/_installer.pkg$/_unsigned.sis/i;
+    $installer_app_sis_name = $installer_unsigned_app_sis_name;
+    $installer_app_sis_name =~ s/_unsigned.sis$/.sis/;
 }
 
 my $unsigned_sis_name = $sisoutputbasename."_unsigned.sis";
@@ -253,7 +286,9 @@ if (length($certfile)) {
 
 # Remove any existing .sis packages
 unlink $unsigned_sis_name;
-unlink $signed_sis_name;
+if (!$onlyUnsigned) {
+    unlink $signed_sis_name;
+}
 if (!$preservePkgOutput) {
     unlink $pkgoutput;
 }
@@ -278,6 +313,10 @@ if (m/\$\(PLATFORM\)/) {
 s/\$\(PLATFORM\)/$platform/gm;
 s/\$\(TARGET\)/$target/gm;
 
+if ($installer_unsigned_app_sis_name ne "") {
+    s/$installer_app_sis_name\"/$installer_unsigned_app_sis_name\"/;
+}
+
 #write the output
 open( OUTPUT, ">$pkgoutput" ) or die "Error '$pkgoutput' $!\n";
 print OUTPUT $_;
@@ -288,24 +327,29 @@ if ($preprocessonly) {
 }
 
 if($stub) {
-    if(!($ENV{EPOCROOT})) { die("EPOCROOT must be set to create stub sis files"); }
-    my $systeminstall = "$ENV{EPOCROOT}epoc32/data/z/system/install";
+    if(!($epocroot)) { die("EPOCROOT must be set to create stub sis files"); }
+    my $systeminstall = "$epocroot/epoc32/data/z/system/install";
     mkpath($systeminstall);
     my $stub_sis_name = $systeminstall."/".$stub_sis_name;
     # Create stub SIS.
-    system ("makesis -s $pkgoutput $stub_sis_name");
+    system ("$epocroot/epoc32/tools/makesis -s $pkgoutput $stub_sis_name");
 } else {
     if ($certtext eq "Self Signed"
         && !@certificates
         && $templatepkg !~ m/_installer\.pkg$/i
         && !$onlyUnsigned) {
         print("Auto-patching capabilities for self signed package.\n");
-        system ("patch_capabilities $pkgoutput");
+        my $patch_capabilities = File::Spec->catfile(dirname($0), "patch_capabilities");
+        system ("$patch_capabilities $pkgoutput");
     }
 
     # Create SIS.
     # The 'and' is because system uses 0 to indicate success.
-    system ("makesis $pkgoutput $unsigned_sis_name") and die ("makesis failed");
+    if($epocroot) {
+        system ("$epocroot/epoc32/tools/makesis $pkgoutput $unsigned_sis_name") and die ("makesis failed");
+    } else {
+        system ("makesis $pkgoutput $unsigned_sis_name") and die ("makesis failed");
+    }
     print("\n");
 
     my $targetInsert = "";
@@ -324,6 +368,7 @@ if($stub) {
         if (!$preservePkgOutput) {
             unlink $pkgoutput;
         }
+        print ("\n");
         exit;
     }
 
@@ -365,6 +410,7 @@ if($stub) {
         # Lets leave the generated PKG for problem solving purposes
         print ("\nSIS creation failed!\n");
     }
+    print ("\n");
 }
 
 #end of file

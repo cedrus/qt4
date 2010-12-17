@@ -847,6 +847,7 @@ void tst_QGL::graphicsViewClipping()
     scene.addWidget(widget)->setPos(0, 0);
 
     QGraphicsView view(&scene);
+    view.setBackgroundBrush(Qt::white);
 #ifdef Q_WS_QWS
     view.setWindowFlags(Qt::FramelessWindowHint);
 #endif
@@ -1835,7 +1836,7 @@ void tst_QGL::clipTest()
     // Sample pixels in a grid pattern which avoids false failures due to
     // off-by-one pixel errors on some buggy GL implementations
     for (int x = 2; x < reference.width(); x += 5) {
-        for (int y = 2; y < reference.width(); y += 5) {
+        for (int y = 2; y < reference.height(); y += 5) {
             QFUZZY_COMPARE_PIXELS(widgetFB.pixel(x, y), reference.pixel(x, y));
         }
     }
@@ -2252,5 +2253,30 @@ void tst_QGL::textureCleanup()
 #endif
 }
 
-QTEST_MAIN(tst_QGL)
+class tst_QGLDummy : public QObject
+{
+Q_OBJECT
+
+public:
+    tst_QGLDummy() {}
+
+private slots:
+    void qglSkipTests() {
+	QSKIP("QGL not supported on this system.", SkipAll);
+    }
+};
+
+int main(int argc, char **argv)
+{
+    QApplication app(argc, argv);
+    QTEST_DISABLE_KEYPAD_NAVIGATION \
+    QGLWidget glWidget;
+    if (!glWidget.isValid()) {
+	tst_QGLDummy tc;
+	return QTest::qExec(&tc, argc, argv);
+    }
+    tst_QGL tc;
+    return QTest::qExec(&tc, argc, argv);
+}
+
 #include "tst_qgl.moc"
