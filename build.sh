@@ -26,7 +26,7 @@ then
 	exit $?;
 fi
 
-./configure -opensource -framework -universal -arch x86 -arch ppc -arch x86_64 -sdk /Developer/SDKs/MacOSX10.5.sdk -debug-and-release -prefix $DEST_DIR -qt-sql-odbc -qt-sql-sqlite -buildkey Cedrus-Qt-4.7.0 -no-sql-mysql -no-sql-odbc -no-qt3support -nomake demos -nomake examples
+./configure -opensource -framework -arch x86 -sdk /Developer/SDKs/MacOSX10.5.sdk -release -prefix $DEST_DIR -qt-sql-odbc -qt-sql-sqlite -buildkey Cedrus-Qt-4.7.1 -no-sql-mysql -no-sql-odbc -no-qt3support -nomake demos -nomake examples
 
 MAKE_FLAGS="-j`sysctl hw.ncpu | awk '// {print $2*1.5}'`"
 
